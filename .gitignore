@@ -53,6 +53,7 @@ cover/
 
 # Translations
 *.mo
+
 *.pot
 
 # Django stuff:
@@ -131,6 +132,10 @@ __pypackages__/
 celerybeat-schedule
 celerybeat.pid
 
+*.db
+__pycache__/
+*.pyc
+uploads/
 # Redis
 *.rdb
 *.aof

@@ -1,5 +1,10 @@
 import streamlit as st
+import plotly.express as px
+import pandas as pd
 
+from modules.student_profile import student_profile
+from modules.progress import progress_management
+from database import query_dataframe
 from modules.students import student_management
 from modules.payments import payment_management
 from modules.homework import homework_management
@@ -20,100 +25,367 @@ def admin_page():
     )
 
 
+    default_option = st.session_state.get(
+    "admin_option",
+    "Dashboard"
+)
+
+
     option = st.sidebar.radio(
 
-        "Choose Module",
+        "Admin Menu",
 
         [
-        "Dashboard",
 
-        "Students",
+            "Dashboard",
+            "Students",
+            "Student Profile",
+            "Progress Notes",
+            "Payments",
+            "Homework",
+            "Schedule",
+            "Attendance",
+            "Reports"
 
-        "Payments",
+        ],
 
-        "Homework",
+        index=[
 
-        "Schedule",
+            "Dashboard",
 
-        "Attendance",
+            "Students",
 
-        "Reports"
-    ]
+            "Student Profile",
+
+            "Payments",
+
+            "Homework",
+
+            "Schedule",
+
+            "Attendance",
+
+            "Reports"
+
+        ].index(default_option)
 
     )
 
 
-    if option=="Dashboard":
+    st.session_state.admin_option=option
 
 
-        st.title(
-            "Teacher Dashboard"
-        )
+    if option == "Dashboard":
 
+        st.title("📊 Apex Tutoring Dashboard")
 
-        students=query_dataframe(
-            """
+        # ----------------------------
+        # KPI Queries
+        # ----------------------------
+
+        student_count = query_dataframe("""
             SELECT COUNT(*) AS total
             FROM students
-            """
-        )
+        """)
 
-
-        revenue=query_dataframe(
-            """
-            SELECT SUM(amount) AS total
+        payment_total = query_dataframe("""
+            SELECT
+                COALESCE(SUM(amount),0) AS total
             FROM payments
-            """
-        )
+        """)
 
+        homework_waiting = query_dataframe("""
+            SELECT COUNT(*) AS total
+            FROM homework
+            WHERE status='Submitted'
+        """)
 
-        sessions=query_dataframe(
-            """
+        today_sessions = query_dataframe("""
             SELECT COUNT(*) AS total
             FROM sessions
-            """
-        )
+            WHERE session_date=date('now')
+        """)
 
-
-        col1,col2,col3=st.columns(3)
-
+        col1,col2,col3,col4 = st.columns(4)
 
         col1.metric(
-            "Students",
-            int(students.iloc[0]["total"])
+            "👨‍🎓 Students",
+            int(student_count.iloc[0]["total"])
         )
-
-
-        total=revenue.iloc[0]["total"]
-
-        if total is None:
-            total=0
-
 
         col2.metric(
-            "Revenue",
-            f"${total:,.2f}"
+            "📅 Today's Sessions",
+            int(today_sessions.iloc[0]["total"])
         )
-
 
         col3.metric(
-            "Scheduled Sessions",
-            int(sessions.iloc[0]["total"])
+            "💰 Revenue",
+            f"${payment_total.iloc[0]['total']:,.2f}"
+        )
+
+        col4.metric(
+            "📚 Homework Waiting",
+            int(homework_waiting.iloc[0]["total"])
+        )
+
+        st.divider()
+
+
+        st.subheader("📅 Today's Schedule")
+
+        today=query_dataframe("""
+
+        SELECT
+
+        s.first_name || ' ' || s.last_name AS Student,
+
+        ss.session_time AS Time,
+
+        ss.topic AS Lesson,
+
+        ss.notes AS Notes
+
+
+        FROM sessions ss
+
+
+        JOIN students s
+
+
+        ON ss.student_id=s.id
+
+
+        WHERE ss.session_date=date('now')
+
+
+        ORDER BY ss.session_time
+
+
+        """)
+
+        st.subheader(
+            "📅 Upcoming Sessions"
         )
 
 
+        upcoming=query_dataframe("""
+
+        SELECT
+
+        s.first_name || ' ' || s.last_name AS Student,
+
+        ss.session_date AS Date,
+
+        ss.session_time AS Time,
+
+        ss.topic AS Lesson
+
+
+        FROM sessions ss
+
+
+        JOIN students s
+
+
+        ON ss.student_id=s.id
+
+
+        WHERE ss.session_date >= date('now')
+
+
+        ORDER BY ss.session_date, ss.session_time
+
+
+        LIMIT 10
+
+
+        """)
+
+
+        if len(upcoming)==0:
+
+            st.info(
+                "No upcoming sessions."
+            )
+
+        else:
+
+            st.dataframe(
+
+                upcoming,
+
+                hide_index=True,
+
+                use_container_width=True
+
+            )
+
+        if len(today)==0:
+
+            st.info("No sessions today.")
+
+        else:
+
+            st.dataframe(
+                today,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        st.subheader("📚 Homework Waiting For Review")
+
+        waiting=query_dataframe("""
+
+        SELECT
+
+        s.first_name || ' ' || s.last_name AS Student,
+
+        h.created_at AS Submitted_Date
+
+        FROM homework h
+
+        JOIN students s
+
+        ON h.student_id=s.id
+
+        WHERE h.status='Submitted'
+
+        ORDER BY h.created_at DESC
+
+        """)
+
+
+        if len(waiting)==0:
+
+            st.success("Nothing waiting 🎉")
+
+        else:
+
+            st.dataframe(
+                waiting,
+                hide_index=True,
+                use_container_width=True
+            )
+
+
+        st.subheader("🔍 Student Search")
+
+        keyword=st.text_input(
+            "Search by name"
+        )
+
+        if keyword:
+
+            results=query_dataframe("""
+
+            SELECT
+
+            first_name,
+
+            last_name,
+
+            grade,
+
+            subject
+
+            FROM students
+
+            WHERE
+
+            first_name LIKE ?
+
+            OR
+
+            last_name LIKE ?
+
+            """,
+
+            (
+
+            f"%{keyword}%",
+
+            f"%{keyword}%"
+
+            )
+
+            )
+
+            st.dataframe(
+                results,
+                hide_index=True,
+                use_container_width=True
+            )
+        st.subheader(
+            "⚡ Quick Actions"
+        )
+
+
+        col1,col2,col3,col4=st.columns(4)
+
+
+        with col1:
+
+            if st.button(
+                "➕ Add Student"
+            ):
+
+                st.session_state.admin_option="Students"
+
+                st.rerun()
+
+
+
+        with col2:
+
+            if st.button(
+                "📅 Schedule"
+            ):
+
+                st.session_state.admin_option="Schedule"
+
+                st.rerun()
+
+
+
+        with col3:
+
+            if st.button(
+                "💰 Payment"
+            ):
+
+                st.session_state.admin_option="Payments"
+
+                st.rerun()
+
+
+
+        with col4:
+
+            if st.button(
+                "📚 Homework"
+            ):
+
+                st.session_state.admin_option="Homework"
+
+                st.rerun()
+                
 
     elif option=="Students":
 
         student_management()
 
+    elif option=="Student Profile":
 
+        student_profile()
 
     elif option=="Payments":
 
         payment_management()
 
+    elif option=="Progress Notes":
 
+        progress_management()
 
     elif option=="Homework":
 

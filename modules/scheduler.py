@@ -7,8 +7,6 @@ from database import (
     query_dataframe
 )
 
-
-
 TIME_SLOTS = [
 
     "8:00 AM",
@@ -71,8 +69,7 @@ def scheduler_management():
 
         return
 
-
-
+    
     tab1,tab2,tab3 = st.tabs(
 
         [

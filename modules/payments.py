@@ -36,6 +36,25 @@ def payment_management():
 
         return
 
+    # ---------------------------------
+    # Remember selected student
+    # ---------------------------------
+
+    selected_student_id = st.session_state.get("selected_student")
+
+    student_names = students["name"].tolist()
+
+    default_index = 0
+
+    if selected_student_id is not None:
+
+        match = students[
+            students["id"] == selected_student_id
+        ]
+
+        if len(match) > 0:
+
+            default_index = match.index[0]
 
 
     tab1, tab2 = st.tabs(
@@ -52,12 +71,13 @@ def payment_management():
 
     with tab1:
 
-
         student = st.selectbox(
 
             "Select Student",
 
-            students["name"].tolist()
+            student_names,
+
+            index=default_index
 
         )
 
@@ -67,7 +87,8 @@ def payment_management():
                 students["name"]==student
             ]["id"].iloc[0]
         )
-
+        
+        st.session_state.selected_student = student_id
 
         amount = st.number_input(
 

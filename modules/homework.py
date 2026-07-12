@@ -55,6 +55,24 @@ def homework_management():
         )
 
         return
+    
+    # Remember selected student
+
+    selected_student_id = st.session_state.get("selected_student")
+
+    student_names = students["name"].tolist()
+
+    default_index = 0
+
+    if selected_student_id is not None:
+
+        match = students[
+            students["id"] == selected_student_id
+        ]
+
+        if len(match) > 0:
+
+            default_index = match.index[0]
 
 
 
@@ -64,17 +82,17 @@ def homework_management():
 
     with tab1:
 
-
-        student_name=st.selectbox(
+        student_name = st.selectbox(
 
             "Student",
 
-            students["name"],
+            student_names,
+
+            index=default_index,
 
             key="assign_student"
 
         )
-
 
         student_id=int(
 
@@ -83,7 +101,8 @@ def homework_management():
             ]["id"].iloc[0]
 
         )
-
+        st.session_state.selected_student = student_id
+        
 
         uploaded_file=st.file_uploader(
 

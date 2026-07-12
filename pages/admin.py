@@ -77,7 +77,7 @@ def admin_page():
 
     if option == "Dashboard":
 
-        st.title("📊 Apex Tutoring Dashboard")
+        st.title("📊 Math Tutoring Dashboard")
 
         # ----------------------------
         # KPI Queries

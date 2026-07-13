@@ -226,3 +226,17 @@ __marimo__/
 __pycache__/
 *.pyc
 *.swp
+# Database
+*.db
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+
+# Generated reports
+*.xlsx
+
+# Python cache
+__pycache__/
+*.pyc

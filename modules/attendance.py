@@ -58,19 +58,52 @@ def attendance_management():
 
         return
 
+    # ---------------------------------
+    # Remember selected student
+    # ---------------------------------
 
+    selected_student_id = st.session_state.get("selected_student")
 
-    session_id=st.selectbox(
+    default_index = 0
+
+    if selected_student_id is not None:
+
+        match = query_dataframe(
+
+            """
+            SELECT id
+            FROM sessions
+            WHERE student_id=?
+            ORDER BY session_date
+            """,
+
+            (selected_student_id,)
+
+        )
+
+        if len(match) > 0:
+
+            session_match = sessions[
+                sessions["id"] == match.iloc[0]["id"]
+            ]
+
+            if len(session_match) > 0:
+
+                default_index = session_match.index[0]
+
+    session_id = st.selectbox(
 
         "Select Session",
 
         sessions["id"],
 
+        index=default_index,
+
         format_func=lambda x:
 
-        sessions[
-            sessions["id"]==x
-        ]["Student"].iloc[0]
+            sessions[
+                sessions["id"] == x
+            ]["Student"].iloc[0]
 
     )
 
@@ -122,6 +155,7 @@ def attendance_management():
             ).iloc[0]["student_id"]
 
         )
+        st.session_state.selected_student = student_id
 
 
         execute(
@@ -178,37 +212,25 @@ def attendance_management():
     )
 
 
-    history=query_dataframe(
-
+    history = query_dataframe(
         """
-
         SELECT
-
-        students.first_name || ' ' ||
-
-        students.last_name AS Student,
-
-
-        attendance.status,
-
-        attendance.date
-
+            students.first_name || ' ' || students.last_name AS Student,
+            attendance.session_date,
+            attendance.session_time,
+            attendance.status,
+            attendance.marked_at
 
         FROM attendance
 
-
         JOIN students
+        ON attendance.student_id = students.id
 
-        ON attendance.student_id=students.id
-
-
-        ORDER BY attendance.date DESC
-
-
+        ORDER BY
+            attendance.session_date DESC,
+            attendance.session_time DESC
         """
-
     )
-
 
     st.dataframe(
 

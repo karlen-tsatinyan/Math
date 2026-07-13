@@ -1,7 +1,7 @@
 import streamlit as st
 
-from database import query_dataframe
-
+from datetime import datetime
+from database import query_dataframe, execute
 
 
 def student_profile():
@@ -233,33 +233,50 @@ def student_profile():
     """
         )
 
-    latest_note = query_dataframe(
+    latest_grade = query_dataframe(
+
         """
         SELECT
 
-            lesson_date,
-            topic
+            assignment,
 
-        FROM progress_notes
+            percentage,
+
+            grade_date
+
+
+        FROM homework_grades
+
 
         WHERE student_id=?
 
-        ORDER BY lesson_date DESC
+
+        ORDER BY grade_date DESC
+
 
         LIMIT 1
+
         """,
-        (student_id,)
+
+        (
+            student_id,
+        )
+
     )
 
-    if len(latest_note) > 0:
+
+    if len(latest_grade) > 0:
 
         st.success(
+
             f"""
-    Latest Progress Note
+    Latest Homework Grade
 
-    {latest_note.iloc[0]['lesson_date']}
+    📚 {latest_grade.iloc[0]['assignment']}
 
-    {latest_note.iloc[0]['topic']}
+    📊 {latest_grade.iloc[0]['percentage']}%
+
+    📅 {latest_grade.iloc[0]['grade_date']}
     """
         )
 
@@ -305,11 +322,11 @@ def student_profile():
 
     with c5:
         if st.button(
-            "📝 Progress",
+            "📝 Grades",
             use_container_width=True
         ):
             st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Progress Notes"
+            st.session_state.admin_option = "Grades"
             st.rerun()
 
 
@@ -328,7 +345,7 @@ def student_profile():
 
         "✅ Attendance",
 
-        "📝 Progress Notes"
+        "📝 Grades"
     ]
 )
 
@@ -457,36 +474,29 @@ def student_profile():
     with tab3:
 
 
-        sessions=query_dataframe(
+        sessions = query_dataframe(
 
             """
-
             SELECT
 
-            session_date,
+                session_date,
 
-            session_time,
+                session_time,
 
-            topic,
+                topic,
 
-            notes
-
+                notes
 
             FROM sessions
 
-
             WHERE student_id=?
 
-
-            ORDER BY session_date DESC
-
+            ORDER BY session_date, session_time
 
             """,
 
             (
-
-            student_id,
-
+                student_id,
             )
 
         )
@@ -498,22 +508,164 @@ def student_profile():
                 "No sessions."
             )
 
+
         else:
 
-            st.dataframe(
 
-                sessions,
-
-                hide_index=True,
-
-                use_container_width=True
-
+            st.subheader(
+                "Session Attendance"
             )
 
 
+            now = datetime.now()
+
+
+            for _, row in sessions.iterrows():
+
+
+                session_datetime = datetime.strptime(
+
+                    f"{row['session_date']} {row['session_time']}",
+
+                    "%Y-%m-%d %I:%M %p"
+
+                )
+
+
+                # only show completed lessons
+
+                if session_datetime <= now:
+
+
+                    existing = query_dataframe(
+
+                        """
+                        SELECT *
+
+                        FROM attendance
+
+                        WHERE student_id=?
+
+                        AND session_date=?
+
+                        AND session_time=?
+
+                        """,
+
+                        (
+
+                            student_id,
+
+                            row["session_date"],
+
+                            row["session_time"]
+
+                        )
+
+                    )
+
+
+                    checked = len(existing) > 0
+
+
+
+                    mark = st.checkbox(
+
+                        f"📅 {row['session_date']}  |  "
+                        f"{row['session_time']}  |  "
+                        f"{row['topic']}",
+
+                        value=checked,
+
+                        key=f"attendance_{student_id}_{row['session_date']}_{row['session_time']}"
+
+                    )
+
+
+                    if mark and not checked:
+
+
+                        execute(
+
+                            """
+                            INSERT OR IGNORE INTO attendance
+
+                            (
+                                student_id,
+
+                                session_date,
+
+                                session_time,
+
+                                status
+
+                            )
+
+                            VALUES (?,?,?,?)
+
+                            """,
+
+                            (
+
+                                student_id,
+
+                                row["session_date"],
+
+                                row["session_time"],
+
+                                "Present"
+
+                            )
+
+                        )
+
+
+                        st.success(
+                            "Attendance marked."
+                        )
+
+
+                        st.rerun()
+
+
+
+                    elif not mark and checked:
+
+
+                        execute(
+
+                            """
+                            DELETE FROM attendance
+
+                            WHERE student_id=?
+
+                            AND session_date=?
+
+                            AND session_time=?
+
+                            """,
+
+                            (
+
+                                student_id,
+
+                                row["session_date"],
+
+                                row["session_time"]
+
+                            )
+
+                        )
+
+
+                        st.warning(
+                            "Attendance removed."
+                        )
+
+
+                        st.rerun()
 
     # ATTENDANCE
-
     with tab4:
 
 
@@ -523,9 +675,13 @@ def student_profile():
 
             SELECT
 
-            date,
+                session_date,
 
-            status
+                session_time,
+
+                status,
+
+                marked_at
 
 
             FROM attendance
@@ -534,15 +690,13 @@ def student_profile():
             WHERE student_id=?
 
 
-            ORDER BY date DESC
+            ORDER BY session_date DESC, session_time DESC
 
 
             """,
 
             (
-
-            student_id,
-
+                student_id,
             )
 
         )
@@ -565,52 +719,65 @@ def student_profile():
                 use_container_width=True
 
             )
+            
     # -------------------------
-    # PROGRESS NOTES
+    # GRADES
     # -------------------------
 
     with tab5:
 
-        notes = query_dataframe(
+
+        grades = query_dataframe(
+
             """
+
             SELECT
 
-                lesson_date,
-                topic,
-                strengths,
-                improvements,
-                homework,
-                next_steps
+                assignment,
 
-            FROM progress_notes
+                grade,
+
+                max_grade,
+
+                percentage,
+
+                teacher_comment,
+
+                grade_date
+
+
+            FROM homework_grades
+
 
             WHERE student_id=?
 
-            ORDER BY lesson_date DESC
+
+            ORDER BY grade_date DESC
+
+
             """,
-            (student_id,)
+
+            (
+                student_id,
+            )
+
         )
 
-        if len(notes) == 0:
 
-            st.info("No progress notes yet.")
+        if len(grades)==0:
+
+            st.info(
+                "No grades recorded."
+            )
 
         else:
 
-            for _, row in notes.iterrows():
+            st.dataframe(
 
-                with st.expander(
-                    f"{row['lesson_date']} - {row['topic']}"
-                ):
+                grades,
 
-                    st.markdown("**Strengths**")
-                    st.write(row["strengths"])
+                hide_index=True,
 
-                    st.markdown("**Needs Improvement**")
-                    st.write(row["improvements"])
+                use_container_width=True
 
-                    st.markdown("**Homework**")
-                    st.write(row["homework"])
-
-                    st.markdown("**Next Lesson**")
-                    st.write(row["next_steps"])
+            )

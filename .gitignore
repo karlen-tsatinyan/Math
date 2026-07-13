@@ -221,3 +221,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+*.db
+*.xlsx
+__pycache__/
+*.pyc
+*.swp

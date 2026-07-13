@@ -58,7 +58,9 @@ def initialize_database():
 
         meeting_id TEXT,
 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        active INTEGER DEFAULT 1
 
     );
     """)
@@ -118,7 +120,7 @@ def initialize_database():
 
     # Schedule table
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS sessions(
+        CREATE TABLE IF NOT EXISTS sessions(
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -128,11 +130,23 @@ def initialize_database():
 
         session_time TEXT NOT NULL,
 
+        duration INTEGER DEFAULT 60,
+
+        repeat_type TEXT DEFAULT 'None',
+
+        repeat_until DATE,
+
+        recurring_group TEXT,
+
+        color TEXT DEFAULT '#4285F4',
+
         topic TEXT,
 
-        attendance TEXT DEFAULT 'Scheduled',
-
         notes TEXT,
+
+        status TEXT DEFAULT 'Scheduled',
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
         FOREIGN KEY(student_id)
         REFERENCES students(id)
@@ -147,19 +161,24 @@ def initialize_database():
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        student_id INTEGER,
+        student_id INTEGER NOT NULL,
 
-        session_id INTEGER,
+        session_date DATE NOT NULL,
 
-        status TEXT,
+        session_time TEXT NOT NULL,
 
-        date DATE,
+        status TEXT DEFAULT 'Present',
+
+        marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        UNIQUE(
+            student_id,
+            session_date,
+            session_time
+        ),
 
         FOREIGN KEY(student_id)
-        REFERENCES students(id),
-
-        FOREIGN KEY(session_id)
-        REFERENCES sessions(id)
+        REFERENCES students(id)
 
     );
     """)
@@ -213,6 +232,6 @@ def initialize_database():
 
 if __name__ == "__main__":
 
-    print(
-        "Database initialization should only be run for a new installation."
-    )
+
+    initialize_database()
+    

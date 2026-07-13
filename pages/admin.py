@@ -3,7 +3,7 @@ import plotly.express as px
 import pandas as pd
 
 from modules.student_profile import student_profile
-from modules.progress import progress_management
+
 from database import query_dataframe
 from modules.students import student_management
 from modules.payments import payment_management
@@ -31,43 +31,30 @@ def admin_page():
 )
 
 
+    menu_options = [
+
+        "Dashboard",
+        "Students",
+        "Student Profile",
+        "Grades",
+        "Payments",
+        "Homework",
+        "Schedule",
+        "Attendance",
+        "Reports"
+
+    ]
+
+    if default_option not in menu_options:
+        default_option = "Dashboard"
+
     option = st.sidebar.radio(
 
         "Admin Menu",
 
-        [
+        menu_options,
 
-            "Dashboard",
-            "Students",
-            "Student Profile",
-            "Progress Notes",
-            "Payments",
-            "Homework",
-            "Schedule",
-            "Attendance",
-            "Reports"
-
-        ],
-
-        index=[
-
-            "Dashboard",
-
-            "Students",
-
-            "Student Profile",
-
-            "Payments",
-
-            "Homework",
-
-            "Schedule",
-
-            "Attendance",
-
-            "Reports"
-
-        ].index(default_option)
+        index=menu_options.index(default_option)
 
     )
 
@@ -383,9 +370,9 @@ def admin_page():
 
         payment_management()
 
-    elif option=="Progress Notes":
+    elif option=="Grdaes":
 
-        progress_management()
+        grades_management()
 
     elif option=="Homework":
 

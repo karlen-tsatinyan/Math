@@ -13,6 +13,12 @@ MIGRATIONS = [
         "migrations.v001_schema_version"
     ),
 
+    (
+        2,
+        "Calendar upgrade",
+        "migrations.v002_calendar_upgrade"
+    ),
+
 ]
 
 

@@ -280,7 +280,8 @@ def student_profile():
     """
         )
 
-    st.subheader("⚡ Quick Actions")
+
+    """st.subheader("⚡ Quick Actions")
 
     c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -328,7 +329,7 @@ def student_profile():
             st.session_state.selected_student = student_id
             st.session_state.admin_option = "Performance"
             st.rerun()
-
+"""
 
     # -------------------------
     # TABS

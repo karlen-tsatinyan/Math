@@ -120,11 +120,13 @@ def admin_page():
 
         st.divider()
 
+        # ============================
+        # TODAY'S SCHEDULE
+        # ============================
 
         st.subheader("📅 Today's Schedule")
 
-        today=query_dataframe("""
-
+        today = query_dataframe("""
         SELECT
 
         s.first_name || ' ' || s.last_name AS Student,
@@ -141,7 +143,6 @@ def admin_page():
 
         JOIN students s
 
-
         ON ss.student_id=s.id
 
 
@@ -150,15 +151,34 @@ def admin_page():
 
         ORDER BY ss.session_time
 
-
         """)
+
+
+        if len(today) == 0:
+
+            st.info(
+                "No sessions today."
+            )
+
+        else:
+
+            st.dataframe(
+                today,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        # ============================
+        # UPCOMING SESSIONS
+        # ============================
 
         st.subheader(
             "📅 Upcoming Sessions"
         )
 
 
-        upcoming=query_dataframe("""
+        upcoming = query_dataframe("""
 
         SELECT
 
@@ -180,14 +200,13 @@ def admin_page():
         ON ss.student_id=s.id
 
 
-        WHERE ss.session_date >= date('now')
+        WHERE ss.session_date > date('now')
 
 
         ORDER BY ss.session_date, ss.session_time
 
 
         LIMIT 10
-
 
         """)
 
@@ -209,19 +228,6 @@ def admin_page():
                 use_container_width=True
 
             )
-
-        if len(today)==0:
-
-            st.info("No sessions today.")
-
-        else:
-
-            st.dataframe(
-                today,
-                use_container_width=True,
-                hide_index=True
-            )
-
 
         st.subheader("📚 Homework Waiting For Review")
 

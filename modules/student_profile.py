@@ -322,11 +322,11 @@ def student_profile():
 
     with c5:
         if st.button(
-            "📝 Grades",
+            "📈 Performance",
             use_container_width=True
         ):
             st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Grades"
+            st.session_state.admin_option = "Performance"
             st.rerun()
 
 
@@ -345,7 +345,7 @@ def student_profile():
 
         "✅ Attendance",
 
-        "📝 Grades"
+        "📈 Performance"
     ]
 )
 

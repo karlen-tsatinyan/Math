@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+from datetime import date
 
 from database import (
     execute,
@@ -312,13 +313,54 @@ def homework_management():
 
             )
 
+            score = st.number_input(
+                "Score",
+                min_value=0.0,
+                step=1.0
+            )
+
+            max_score = st.number_input(
+                "Maximum Score",
+                min_value=1.0,
+                value=20.0,
+                step=1.0
+            )
+
+            topic = st.text_input(
+                "Topic",
+                placeholder="Quadratic Equations"
+            )
 
             if st.button(
 
                 "Save Feedback"
 
             ):
+                
+                percent = round(score / max_score * 100, 1)
 
+                if percent >= 97:
+                    letter = "A+"
+                elif percent >= 93:
+                    letter = "A"
+                elif percent >= 90:
+                    letter = "A-"
+                elif percent >= 87:
+                    letter = "B+"
+                elif percent >= 83:
+                    letter = "B"
+                elif percent >= 80:
+                    letter = "B-"
+                elif percent >= 77:
+                    letter = "C+"
+                elif percent >= 73:
+                    letter = "C"
+                elif percent >= 70:
+                    letter = "C-"
+                elif percent >= 60:
+                    letter = "D"
+                else:
+                    letter = "F"
 
                 execute(
 
@@ -352,6 +394,47 @@ def homework_management():
 
                     "Feedback saved."
 
+                )
+
+                student = query_dataframe(
+                    """
+                    SELECT student_id
+                    FROM homework
+                    WHERE id=?
+                    """,
+                    (int(selected_id),)
+                )
+
+                student_id = int(student.iloc[0]["student_id"])
+
+                execute(
+                    """
+                    INSERT INTO homework_grades
+                    (
+                        homework_id,
+                        student_id,
+                        lesson_date,
+                        topic,
+                        score,
+                        max_score,
+                        percent,
+                        grade_letter,
+                        teacher_comment
+                    )
+                    VALUES
+                    (?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        int(selected_id),
+                        student_id,
+                        str(date.today()),
+                        topic,
+                        score,
+                        max_score,
+                        percent,
+                        letter,
+                        feedback
+                    )
                 )
 
 

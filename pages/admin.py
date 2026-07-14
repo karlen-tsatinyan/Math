@@ -3,6 +3,8 @@ import plotly.express as px
 import pandas as pd
 
 from modules.student_profile import student_profile
+from modules.performance import performance_dashboard
+from modules.curriculum import curriculum_management
 
 from database import query_dataframe
 from modules.students import student_management
@@ -36,11 +38,12 @@ def admin_page():
         "Dashboard",
         "Students",
         "Student Profile",
-        "Grades",
+        "Performance",
         "Payments",
         "Homework",
         "Schedule",
         "Attendance",
+        "Live Curriculum Board",
         "Reports"
 
     ]
@@ -370,9 +373,9 @@ def admin_page():
 
         payment_management()
 
-    elif option=="Grdaes":
+    elif option == "Performance":
 
-        grades_management()
+        performance_dashboard()
 
     elif option=="Homework":
 
@@ -389,6 +392,9 @@ def admin_page():
 
         attendance_management()
 
+    elif option == "Live Curriculum Board":
+
+        curriculum_management()
 
 
     elif option=="Reports":

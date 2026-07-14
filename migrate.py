@@ -19,6 +19,12 @@ MIGRATIONS = [
         "migrations.v002_calendar_upgrade"
     ),
 
+    (
+        3,
+        "Homework Grades",
+        "migrations.v003_homework_grades"
+    ),
+
 ]
 
 

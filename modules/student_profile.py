@@ -2,7 +2,7 @@ import streamlit as st
 
 from datetime import datetime
 from database import query_dataframe, execute
-
+from utils.datetime_utils import today_str
 
 def student_profile():
 
@@ -210,13 +210,13 @@ def student_profile():
         FROM sessions
 
         WHERE student_id=?
-        AND session_date >= date('now')
+        AND session_date >= ?
 
         ORDER BY session_date, session_time
 
         LIMIT 1
         """,
-        (student_id,)
+        (student_id, today_str())
     )
 
     if len(next_session) > 0:
@@ -498,6 +498,7 @@ def student_profile():
 
             (
                 student_id,
+                
             )
 
         )

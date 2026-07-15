@@ -57,10 +57,11 @@ def payment_management():
             default_index = match.index[0]
 
 
-    tab1, tab2 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
             "Add Payment",
-            "Payment History"
+            "Payment History",
+            "Edit Payment"
         ]
     )
 
@@ -227,3 +228,129 @@ def payment_management():
                 f"${payments['Amount'].sum():,.2f}"
 
             )
+
+    # -----------------------------
+    # EDIT PAYMENT
+    # -----------------------------
+
+    with tab3:
+
+        payments = query_dataframe(
+            """
+            SELECT
+
+                p.id,
+
+                s.first_name || ' ' || s.last_name AS Student,
+
+                p.amount,
+
+                p.payment_date,
+
+                p.period,
+
+                p.notes
+
+            FROM payments p
+
+            JOIN students s
+                ON p.student_id = s.id
+
+            ORDER BY p.payment_date DESC
+            """
+        )
+
+        if len(payments) == 0:
+
+            st.info("No payments to edit.")
+
+        else:
+
+            payment_id = st.selectbox(
+
+                "Select Payment",
+
+                payments["id"],
+
+                format_func=lambda x:
+                    f"#{x} - " +
+                    payments.loc[
+                        payments["id"] == x,
+                        "Student"
+                    ].iloc[0]
+
+            )
+
+            payment = payments[
+                payments["id"] == payment_id
+            ].iloc[0]
+
+            amount = st.number_input(
+                "Payment Amount",
+                min_value=0.0,
+                value=float(payment["amount"]),
+                step=25.0,
+                key="edit_amount"
+            )
+
+            payment_date = st.date_input(
+                "Payment Date",
+                value=pd.to_datetime(payment["payment_date"]).date(),
+                key="edit_date"
+            )
+
+            period = st.text_input(
+                "Payment Period",
+                value=payment["period"] if payment["period"] else "",
+                key="edit_period"
+            )
+
+            notes = st.text_area(
+                "Notes",
+                value=payment["notes"] if payment["notes"] else "",
+                key="edit_notes"
+            )
+
+
+            if st.button(
+                "💾 Update Payment"
+            ):
+
+                execute(
+
+                    """
+                    UPDATE payments
+
+                    SET
+
+                        amount=?,
+
+                        payment_date=?,
+
+                        period=?,
+
+                        notes=?
+
+                    WHERE id=?
+
+                    """,
+
+                    (
+
+                        amount,
+
+                        str(payment_date),
+
+                        period,
+
+                        notes,
+
+                        int(payment_id)
+
+                    )
+
+                )
+
+                st.success("Payment updated successfully.")
+
+                st.rerun()

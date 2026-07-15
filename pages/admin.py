@@ -1,6 +1,8 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
+from datetime import date
+from utils.datetime_utils import today_str
 
 from modules.student_profile import student_profile
 from modules.performance import performance_dashboard
@@ -20,6 +22,13 @@ from database import query_dataframe
 
 
 def admin_page():
+    if st.sidebar.button(
+        "🔄 Refresh",
+        use_container_width=True
+    ):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
 
 
     st.sidebar.title(
@@ -89,12 +98,15 @@ def admin_page():
             FROM homework
             WHERE status='Submitted'
         """)
-
-        today_sessions = query_dataframe("""
+        today_date = today_str()
+        today_sessions = query_dataframe(
+            """
             SELECT COUNT(*) AS total
             FROM sessions
-            WHERE session_date=date('now')
-        """)
+            WHERE session_date=?
+            """,
+            (today_str(),)
+)
 
         col1,col2,col3,col4 = st.columns(4)
 
@@ -126,33 +138,33 @@ def admin_page():
 
         st.subheader("📅 Today's Schedule")
 
-        today = query_dataframe("""
-        SELECT
+        today = query_dataframe(
+            """
+            SELECT
 
-        s.first_name || ' ' || s.last_name AS Student,
+                s.first_name || ' ' || s.last_name AS Student,
 
-        ss.session_time AS Time,
+                ss.session_time AS Time,
 
-        ss.topic AS Lesson,
+                ss.topic AS Lesson,
 
-        ss.notes AS Notes
+                ss.notes AS Notes
 
+            FROM sessions ss
 
-        FROM sessions ss
+            JOIN students s
 
+            ON ss.student_id=s.id
 
-        JOIN students s
+            WHERE ss.session_date=?
 
-        ON ss.student_id=s.id
+            ORDER BY ss.session_time
 
-
-        WHERE ss.session_date=date('now')
-
-
-        ORDER BY ss.session_time
-
-        """)
-
+            """,
+            (
+                today_str(),
+            )
+        )
 
         if len(today) == 0:
 
@@ -177,39 +189,42 @@ def admin_page():
             "📅 Upcoming Sessions"
         )
 
+        upcoming = query_dataframe(
+            """
 
-        upcoming = query_dataframe("""
+            SELECT
 
-        SELECT
+                s.first_name || ' ' || s.last_name AS Student,
 
-        s.first_name || ' ' || s.last_name AS Student,
+                ss.session_date AS Date,
 
-        ss.session_date AS Date,
+                ss.session_time AS Time,
 
-        ss.session_time AS Time,
-
-        ss.topic AS Lesson
-
-
-        FROM sessions ss
+                ss.topic AS Lesson
 
 
-        JOIN students s
+            FROM sessions ss
 
 
-        ON ss.student_id=s.id
+            JOIN students s
 
 
-        WHERE ss.session_date > date('now')
+            ON ss.student_id=s.id
 
 
-        ORDER BY ss.session_date, ss.session_time
+            WHERE ss.session_date > ?
 
 
-        LIMIT 10
+            ORDER BY ss.session_date, ss.session_time
 
-        """)
 
+            LIMIT 10
+
+            """,
+            (
+                today_str(),
+            )
+        )
 
         if len(upcoming)==0:
 

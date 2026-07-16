@@ -25,6 +25,12 @@ MIGRATIONS = [
         "migrations.v003_homework_grades"
     ),
 
+    (
+        5,
+        "Homework Upgrade",
+        "migrations.v005_homework_upgrade"
+    ),
+
 ]
 
 

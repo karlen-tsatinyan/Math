@@ -98,6 +98,21 @@ def admin_page():
             FROM homework
             WHERE status='Submitted'
         """)
+
+        homework_due = query_dataframe(
+            """
+            SELECT COUNT(*) total
+
+            FROM homework
+
+            WHERE
+
+                status='Assigned'
+
+                AND archived=0
+            """
+        )
+
         today_date = today_str()
         today_sessions = query_dataframe(
             """
@@ -108,7 +123,7 @@ def admin_page():
             (today_str(),)
 )
 
-        col1,col2,col3,col4 = st.columns(4)
+        col1,col2,col3,col4, col5 = st.columns(5)
 
         col1.metric(
             "👨‍🎓 Students",
@@ -130,6 +145,14 @@ def admin_page():
             int(homework_waiting.iloc[0]["total"])
         )
 
+        col5.metric(
+
+            "📝 Homework Due",
+
+            int(homework_due.iloc[0]["total"])
+
+        )
+                
         st.divider()
 
         # ============================

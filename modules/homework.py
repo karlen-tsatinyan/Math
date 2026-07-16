@@ -104,6 +104,29 @@ def homework_management():
         )
         st.session_state.selected_student = student_id
         
+        title = st.text_input(
+            "Homework Title"
+        )
+
+        curriculum = st.text_input(
+            "Curriculum Topic"
+        )
+
+        assigned_date = st.date_input(
+            "Assigned Date"
+        )
+
+        due_date = st.date_input(
+            "Due Date"
+        )
+
+        priority = st.selectbox(
+            "Priority",
+            [
+                "Normal",
+                "Important"
+            ]
+        )
 
         uploaded_file=st.file_uploader(
 
@@ -145,6 +168,11 @@ def homework_management():
 
             file_path=None
 
+            os.makedirs(
+                UPLOAD_FOLDER,
+                exist_ok=True
+            )
+
 
             if uploaded_file:
 
@@ -182,40 +210,59 @@ def homework_management():
 
                 (
 
-                student_id,
+                    student_id,
 
-                uploaded_by,
+                    uploaded_by,
 
-                file_path,
+                    title,
 
-                file_link,
+                    curriculum_topic,
 
-                comment,
+                    assigned_date,
 
-                status
+                    due_date,
+
+                    priority,
+
+                    file_path,
+
+                    file_link,
+
+                    comment,
+
+                    status
 
                 )
 
-
                 VALUES
 
-                (?,?,?,?,?,?)
+                (?,?,?,?,?,?,?,?,?,?,?)
 
                 """,
 
                 (
 
-                student_id,
+                    student_id,
 
-                "admin",
+                    "admin",
 
-                file_path,
+                    title,
 
-                drive_link,
+                    curriculum,
 
-                comment,
+                    str(assigned_date),
 
-                "Assigned"
+                    str(due_date),
+
+                    priority,
+
+                    file_path,
+
+                    drive_link,
+
+                    comment,
+
+                    "Assigned"
 
                 )
 
@@ -264,6 +311,9 @@ def homework_management():
             h.teacher_feedback,
 
 
+            COALESCE(h.grade,'') AS grade,
+
+
             h.created_at
 
 
@@ -306,30 +356,60 @@ def homework_management():
 
             )
 
+            
+            selected = submissions[
+                submissions["id"] == selected_id
+            ].iloc[0]
 
-            feedback=st.text_area(
+            grade_options = [
 
-                "Teacher Feedback"
+                "",
+                "A+",
+                "A",
+                "A-",
+                "B+",
+                "B",
+                "B-",
+                "C+",
+                "C",
+                "C-",
+                "D",
+                "F"
+
+            ]
+
+
+            current_grade = selected["grade"]
+
+            if current_grade != current_grade:   # checks NaN
+                current_grade = ""
+
+            if current_grade not in grade_options:
+                current_grade = ""
+
+
+            grade = st.selectbox(
+
+                "Letter Grade",
+
+                grade_options,
+
+                index=grade_options.index(current_grade)
 
             )
 
-            score = st.number_input(
-                "Score",
-                min_value=0.0,
-                step=1.0
+            feedback = st.text_area(
+
+                "Teacher Feedback",
+
+                value=selected["teacher_feedback"]
+
+                if selected["teacher_feedback"]
+
+                else ""
+
             )
 
-            max_score = st.number_input(
-                "Maximum Score",
-                min_value=1.0,
-                value=20.0,
-                step=1.0
-            )
-
-            topic = st.text_input(
-                "Topic",
-                placeholder="Quadratic Equations"
-            )
 
             if st.button(
 
@@ -337,31 +417,7 @@ def homework_management():
 
             ):
                 
-                percent = round(score / max_score * 100, 1)
-
-                if percent >= 97:
-                    letter = "A+"
-                elif percent >= 93:
-                    letter = "A"
-                elif percent >= 90:
-                    letter = "A-"
-                elif percent >= 87:
-                    letter = "B+"
-                elif percent >= 83:
-                    letter = "B"
-                elif percent >= 80:
-                    letter = "B-"
-                elif percent >= 77:
-                    letter = "C+"
-                elif percent >= 73:
-                    letter = "C"
-                elif percent >= 70:
-                    letter = "C-"
-                elif percent >= 60:
-                    letter = "D"
-                else:
-                    letter = "F"
-
+                
                 execute(
 
                     """
@@ -372,8 +428,11 @@ def homework_management():
 
                     teacher_feedback=?,
 
-                    status='Reviewed'
+                    grade=?,
 
+                    status='Reviewed',
+
+                    reviewed_at=CURRENT_TIMESTAMP
 
                     WHERE id=?
 
@@ -382,6 +441,8 @@ def homework_management():
                     (
 
                     feedback,
+
+                    grade,
 
                     int(selected_id)
 
@@ -395,49 +456,6 @@ def homework_management():
                     "Feedback saved."
 
                 )
-
-                student = query_dataframe(
-                    """
-                    SELECT student_id
-                    FROM homework
-                    WHERE id=?
-                    """,
-                    (int(selected_id),)
-                )
-
-                student_id = int(student.iloc[0]["student_id"])
-
-                execute(
-                    """
-                    INSERT INTO homework_grades
-                    (
-                        homework_id,
-                        student_id,
-                        lesson_date,
-                        topic,
-                        score,
-                        max_score,
-                        percent,
-                        grade_letter,
-                        teacher_comment
-                    )
-                    VALUES
-                    (?,?,?,?,?,?,?,?,?)
-                    """,
-                    (
-                        int(selected_id),
-                        student_id,
-                        str(date.today()),
-                        topic,
-                        score,
-                        max_score,
-                        percent,
-                        letter,
-                        feedback
-                    )
-                )
-
-
 
 
 
@@ -470,8 +488,17 @@ def student_homework():
 
         SELECT
 
-
         id,
+
+        title,
+
+        curriculum_topic,
+
+        assigned_date,
+
+        due_date,
+
+        priority,
 
         file_path,
 
@@ -480,6 +507,8 @@ def student_homework():
         comment,
 
         teacher_feedback,
+
+        grade,
 
         status,
 
@@ -504,7 +533,7 @@ def student_homework():
         )
 
     )
-
+    
 
 
     if len(homework)==0:
@@ -522,30 +551,34 @@ def student_homework():
     for index,row in homework.iterrows():
 
 
-        st.subheader(
+        st.subheader(row["title"] or f"Homework #{row['id']}")
 
-            f"Assignment #{row['id']}"
+        col1, col2 = st.columns(2)
 
-        )
+        with col1:
 
+            st.write("📚 Topic:", row["curriculum_topic"])
 
-        st.write(
+            st.write("📅 Assigned:", row["assigned_date"])
 
-            "Instructions:",
+            st.write("⏰ Due:", row["due_date"])
 
-            row["comment"]
+        with col2:
 
-        )
+            st.write("Priority:", row["priority"])
 
+            st.write("Status:", row["status"])
 
-        st.write(
+            if row["grade"]:
 
-            "Status:",
+                st.success(f"Grade: {row['grade']}")
 
-            row["status"]
+        st.write("Instructions")
 
-        )
+        st.info(row["comment"])
 
+        if row["file_path"]:
+            st.write("📄 PDF Attached")
 
         if row["file_link"]:
 
@@ -559,13 +592,7 @@ def student_homework():
         if row["teacher_feedback"]:
 
             st.success(
-
-                "Teacher Feedback: "
-
-                +
-
                 row["teacher_feedback"]
-
             )
 
 
@@ -664,8 +691,9 @@ def student_homework():
 
                 file_path=?,
 
-                status='Submitted'
+                status='Submitted',
 
+                submitted_at=CURRENT_TIMESTAMP
 
                 WHERE id=?
 

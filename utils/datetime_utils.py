@@ -14,3 +14,4 @@ def today_str():
 
 def now():
     return datetime.now(PACIFIC)
+

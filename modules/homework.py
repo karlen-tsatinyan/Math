@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from datetime import date
 
+
 from database import (
     execute,
     query_dataframe
@@ -166,7 +167,7 @@ def homework_management():
         ):
 
 
-            file_path=None
+            assignment_file = None
 
             os.makedirs(
                 UPLOAD_FOLDER,
@@ -177,18 +178,19 @@ def homework_management():
             if uploaded_file:
 
 
-                file_path=os.path.join(
+                filename = (
+                    f"{student_id}_{date.today()}_{uploaded_file.name}"
+                )
 
+                assignment_file = os.path.join(
                     UPLOAD_FOLDER,
-
-                    uploaded_file.name
-
+                    filename
                 )
 
 
                 with open(
 
-                    file_path,
+                    assignment_file,
 
                     "wb"
 
@@ -224,7 +226,7 @@ def homework_management():
 
                     priority,
 
-                    file_path,
+                    assignment_file,
 
                     file_link,
 
@@ -256,7 +258,7 @@ def homework_management():
 
                     priority,
 
-                    file_path,
+                    assignment_file,
 
                     drive_link,
 
@@ -290,31 +292,27 @@ def homework_management():
 
             SELECT
 
-
             h.id,
 
+            h.title,
 
             s.first_name || ' ' ||
 
             s.last_name AS Student,
 
+            h.assignment_file,
 
-            h.file_path,
-
+            h.student_file,
 
             h.file_link,
 
-
             h.status,
-
 
             h.teacher_feedback,
 
-
             COALESCE(h.grade,'') AS grade,
 
-
-            h.created_at
+            datetime(h.created_at, 'localtime') AS created_at
 
 
             FROM homework h
@@ -348,11 +346,31 @@ def homework_management():
         if len(submissions)>0:
 
 
-            selected_id=st.selectbox(
+            selected_id = st.selectbox(
 
-                "Homework ID",
+                "Homework",
 
-                submissions["id"]
+                submissions["id"],
+
+                format_func=lambda x:
+
+                    f"{submissions[submissions['id']==x].iloc[0]['Student']}"
+
+                    +
+
+                    " — "
+
+                    +
+
+                    (
+
+                        submissions[submissions["id"]==x].iloc[0]["title"]
+
+                        if submissions[submissions["id"]==x].iloc[0]["title"]
+
+                        else f"Homework #{x}"
+
+                    )
 
             )
 
@@ -360,6 +378,23 @@ def homework_management():
             selected = submissions[
                 submissions["id"] == selected_id
             ].iloc[0]
+
+            st.info(
+
+                f"""
+
+            Student:
+            {selected['Student']}
+
+            Homework:
+            {selected['title']}
+
+            Current Status:
+            {selected['status']}
+
+            """
+
+            )
 
             grade_options = [
 
@@ -410,6 +445,123 @@ def homework_management():
 
             )
 
+            st.divider()
+
+            st.subheader("Storage Management")
+
+            if selected["assignment_file"]:
+
+                st.success("Assignment PDF exists")
+
+                if st.button(
+
+                    "🗑 Delete Assignment PDF",
+
+                    key="delete_assignment"
+
+                ):
+
+                    try:
+
+                        os.remove(
+
+                            selected["assignment_file"]
+
+                        )
+
+                    except FileNotFoundError:
+
+                        pass
+
+                    execute(
+
+                        """
+
+                        UPDATE homework
+
+                        SET
+
+                        assignment_file=NULL,
+
+                        deleted_assignment_file=1
+
+                        WHERE id=?
+
+                        """,
+
+                        (
+
+                            int(selected_id),
+
+                        )
+
+                    )
+
+                    st.success(
+
+                        "Assignment PDF deleted."
+
+                    )
+
+                    st.rerun()
+
+
+            if selected["student_file"]:
+
+                st.success("Student submission exists")
+
+                if st.button(
+
+                    "🗑 Delete Student Submission",
+
+                    key="delete_student"
+
+                ):
+
+                    try:
+
+                        os.remove(
+
+                            selected["student_file"]
+
+                        )
+
+                    except FileNotFoundError:
+
+                        pass
+
+                    execute(
+
+                        """
+
+                        UPDATE homework
+
+                        SET
+
+                        student_file=NULL,
+
+                        deleted_student_file=1
+
+                        WHERE id=?
+
+                        """,
+
+                        (
+
+                            int(selected_id),
+
+                        )
+
+                    )
+
+                    st.success(
+
+                        "Student submission deleted."
+
+                    )
+
+                    st.rerun()        
+
 
             if st.button(
 
@@ -456,7 +608,7 @@ def homework_management():
                     "Feedback saved."
 
                 )
-
+        
 
 
 # ==========================================
@@ -470,9 +622,10 @@ def student_homework():
     student_id=(
 
         st.session_state.user["student_id"]
+        
 
     )
-
+    
 
     st.header(
 
@@ -500,7 +653,9 @@ def student_homework():
 
         priority,
 
-        file_path,
+        assignment_file,
+
+        student_file,
 
         file_link,
 
@@ -533,7 +688,6 @@ def student_homework():
         )
 
     )
-    
 
 
     if len(homework)==0:
@@ -550,53 +704,104 @@ def student_homework():
 
     for index,row in homework.iterrows():
 
-
-        st.subheader(row["title"] or f"Homework #{row['id']}")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.write("📚 Topic:", row["curriculum_topic"])
-
-            st.write("📅 Assigned:", row["assigned_date"])
-
-            st.write("⏰ Due:", row["due_date"])
-
-        with col2:
-
-            st.write("Priority:", row["priority"])
-
-            st.write("Status:", row["status"])
-
-            if row["grade"]:
-
-                st.success(f"Grade: {row['grade']}")
-
-        st.write("Instructions")
-
-        st.info(row["comment"])
-
-        if row["file_path"]:
-            st.write("📄 PDF Attached")
-
-        if row["file_link"]:
-
-            st.markdown(
-
-                row["file_link"]
-
-            )
+        with st.container(border=True):
 
 
-        if row["teacher_feedback"]:
+            st.subheader(row["title"] or f"Homework #{row['id']}")
 
-            st.success(
-                row["teacher_feedback"]
-            )
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.write("📚 Topic:", row["curriculum_topic"])
+
+                st.write("📅 Assigned:", row["assigned_date"])
+
+                st.write("⏰ Due:", row["due_date"])
+
+            with col2:
+
+                st.write("Priority:", row["priority"])
+
+                if row["status"] == "Assigned":
+
+                    st.warning("🟡 Waiting for submission")
+
+                elif row["status"] == "Submitted":
+
+                    st.info("🔵 Submitted - Waiting for grading")
+
+                elif row["status"] == "Reviewed":
+
+                    st.success("🟢 Graded")
+
+                else:
+
+                    st.write(row["status"])
+
+                if row["grade"]:
+
+                    st.success(f"Grade: {row['grade']}")
+
+            st.write("Instructions")
+
+            st.info(row["comment"])
+
+            if row["assignment_file"]:
+
+                with open(
+
+                    row["assignment_file"],
+
+                    "rb"
+
+                ) as f:
+
+                    st.download_button(
+
+                        "📥 Download Assignment",
+
+                        f,
+
+                        file_name=os.path.basename(
+
+                            row["assignment_file"]
+
+                        )
+
+                    )
+
+            if row["file_link"]:
+
+                st.link_button(
+                    "🔗 Open Assignment Link",
+                    row["file_link"]
+                )
 
 
-        st.divider()
+            if row["teacher_feedback"]:
+
+                st.success(
+                    row["teacher_feedback"]
+                )
+
+            if row["student_file"]:
+
+                st.success(
+
+                    "✅ Homework submitted."
+
+                )
+
+            else:
+
+                st.warning(
+
+                    "⌛ Awaiting submission."
+
+                )
+
+            st.divider()
 
 
 
@@ -631,11 +836,23 @@ def student_homework():
     )
 
 
-    selected_assignment=st.selectbox(
+    selected_assignment = st.selectbox(
 
-        "Assignment ID",
+        "Homework",
 
-        homework["id"]
+        homework["id"],
+
+        format_func=lambda x:
+
+            homework[
+                homework["id"]==x
+            ].iloc[0]["title"]
+
+            if homework[
+                homework["id"]==x
+            ].iloc[0]["title"]
+
+            else f"Homework #{x}"
 
     )
 
@@ -651,22 +868,24 @@ def student_homework():
         if upload:
 
 
-            path=os.path.join(
+            filename=(
+
+                f"student_{student_id}_{selected_assignment}_{upload.name}"
+
+            )
+
+            student_file=os.path.join(
 
                 UPLOAD_FOLDER,
 
-                "student_"
-
-                +
-
-                upload.name
+                filename
 
             )
 
 
             with open(
 
-                path,
+                student_file,
 
                 "wb"
 
@@ -689,7 +908,7 @@ def student_homework():
 
                 SET
 
-                file_path=?,
+                student_file=?,
 
                 status='Submitted',
 
@@ -703,7 +922,7 @@ def student_homework():
 
                 (
 
-                path,
+                student_file,
 
                 int(selected_assignment),
 
@@ -719,3 +938,4 @@ def student_homework():
                 "Homework submitted."
 
             )
+            st.rerun()

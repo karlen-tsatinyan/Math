@@ -25,6 +25,33 @@ ALL_TRACKS = [
 ]
 
 
+def ensure_curriculum_schema():
+    """Ensure all required columns and tables exist in PostgreSQL/SQLite."""
+    try:
+        # 1. Add missing column to students table if not existing
+        execute("ALTER TABLE students ADD COLUMN IF NOT EXISTS curriculum_track TEXT DEFAULT '1st Grade General Math';")
+    except Exception:
+        pass
+
+    try:
+        # 2. Ensure curriculum_resources table exists in remote DB
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS curriculum_resources (
+                id SERIAL PRIMARY KEY,
+                grade_track TEXT NOT NULL,
+                resource_title TEXT NOT NULL,
+                resource_type TEXT NOT NULL,
+                direct_url TEXT,
+                file_path TEXT,
+                teacher_comment TEXT
+            );
+            """
+        )
+    except Exception:
+        pass
+
+
 def sanitize_url(url: str) -> str:
     """Ensure URLs have a valid protocol for st.link_button."""
     if not url:
@@ -38,6 +65,9 @@ def sanitize_url(url: str) -> str:
 def curriculum_management():
     st.header("📚 Live Curriculum Board & Resource Vault")
     st.caption("Manage curriculum tracks, resources, and student academic pathways.")
+
+    # Auto-run database migration check
+    ensure_curriculum_schema()
 
     board_tab, resource_tab = st.tabs(
         [
@@ -92,8 +122,8 @@ def curriculum_management():
                             execute(
                                 """
                                 UPDATE students
-                                SET curriculum_track = ?
-                                WHERE id = ?
+                                SET curriculum_track = %s
+                                WHERE id = %s
                                 """,
                                 (selected_track, student_id)
                             )
@@ -112,7 +142,7 @@ def curriculum_management():
                                 file_path,
                                 teacher_comment
                             FROM curriculum_resources
-                            WHERE grade_track = ?
+                            WHERE grade_track = %s
                             ORDER BY id DESC
                             """,
                             (selected_track,)
@@ -201,7 +231,7 @@ def curriculum_management():
                             file_path,
                             teacher_comment
                         )
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         """,
                         (
                             track,
@@ -273,6 +303,6 @@ def curriculum_management():
                                 except OSError:
                                     pass
 
-                            execute("DELETE FROM curriculum_resources WHERE id = ?", (res_id,))
+                            execute("DELETE FROM curriculum_resources WHERE id = %s", (res_id,))
                             st.success("Resource removed.")
                             st.rerun()

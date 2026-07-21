@@ -3,7 +3,7 @@ import psycopg2
 from config import DATABASE_NAME
 
 # 🔑 REPLACE WITH YOUR SUPABASE CONNECTION STRING FROM STREAMLIT SECRETS
-SUPABASE_URI = "postgresql://postgres:YOUR_PASSWORD@db.xxxxxx.supabase.co:5432/postgres"
+SUPABASE_URI = "postgresql://postgres.lwazstmoxaohrnocohnq:Supabase.911911@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
 
 def push_sqlite_to_supabase():
     print("Connecting to local SQLite database...")

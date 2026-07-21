@@ -8,7 +8,7 @@ from database import execute, query_dataframe
 def payment_management():
     st.header("💳 Payment Management")
 
-    # Fetch active students
+    # Fetch active students (Fixed single quotes for string literal, no quotes on alias)
     students = query_dataframe(
         """
         SELECT
@@ -86,7 +86,7 @@ def payment_management():
                 if amount <= 0:
                     st.error("Please enter a payment amount greater than 0.")
                 else:
-                    # Fixed: 5 placeholders for 5 columns
+                    # Fixed: Changed ? placeholders to %%s for Supabase PostgreSQL
                     execute(
                         """
                         INSERT INTO payments (
@@ -96,7 +96,7 @@ def payment_management():
                             period,
                             notes
                         )
-                        VALUES (?, ?, ?, ?, ?)
+                        VALUES (%%s, %%s, %%s, %%s, %%s)
                         """,
                         (
                             student_id,
@@ -115,6 +115,7 @@ def payment_management():
     with tab2:
         st.subheader("All Payments")
 
+        # Fixed: Changed single-quoted aliases to standard double quotes
         payments = query_dataframe(
             """
             SELECT
@@ -222,15 +223,16 @@ def payment_management():
 
                 with btn_cols[0]:
                     if st.button("💾 Update Payment", type="primary"):
+                        # Fixed: Changed SQLite ? to PostgreSQL %%s placeholders
                         execute(
                             """
                             UPDATE payments
                             SET
-                                amount = ?,
-                                payment_date = ?,
-                                period = ?,
-                                notes = ?
-                            WHERE id = ?
+                                amount = %%s,
+                                payment_date = %%s,
+                                period = %%s,
+                                notes = %%s
+                            WHERE id = %%s
                             """,
                             (
                                 amount,
@@ -245,6 +247,7 @@ def payment_management():
 
                 with btn_cols[1]:
                     if st.button("🗑️ Delete Payment"):
-                        execute("DELETE FROM payments WHERE id = ?", (int(payment_id),))
-                        st.warning("Payment deleted successfully.")
+                        # Fixed: Changed SQLite ? to PostgreSQL %%s placeholders
+                        execute("DELETE FROM payments WHERE id = %%s", (int(payment_id),))
+                        st.success("Payment deleted successfully.")
                         st.rerun()

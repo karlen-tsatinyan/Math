@@ -8,6 +8,18 @@ from database import execute, query_dataframe
 def payment_management():
     st.header("💳 Payment Management")
 
+    # 🔍 TEMPORARY DEBUGGER: Let's see what your Supabase columns are actually named
+    st.subheader("🕵️‍♂️ Database Columns Debugger")
+    try:
+        debug_payments = query_dataframe("SELECT * FROM payments LIMIT 1")
+        st.write("Your actual columns in 'payments' table are:", list(debug_payments.columns))
+        
+        debug_students = query_dataframe("SELECT * FROM students LIMIT 1")
+        st.write("Your actual columns in 'students' table are:", list(debug_students.columns))
+    except Exception as e:
+        st.error(f"Failed to fetch table structure: {str(e)}")
+    
+
     # Fetch active students (Fixed single quotes for string literal, no quotes on alias)
     students = query_dataframe(
         """

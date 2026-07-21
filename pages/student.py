@@ -4,51 +4,39 @@ from database import execute, query_dataframe
 
 
 def ensure_student_portal_schema():
-    """Ensure all tables referenced in the student portal exist and have expected columns."""
-    try:
-        # Check / add missing columns in 'students'
-        student_cols = [
+    """Safely ensure required columns exist in Postgres without breaking open transactions."""
+    columns_to_ensure = {
+        "students": [
             ("first_name", "TEXT"),
             ("last_name", "TEXT"),
             ("grade", "TEXT"),
             ("subject", "TEXT"),
             ("zoom_link", "TEXT"),
             ("meeting_id", "TEXT"),
-        ]
-        for col, col_type in student_cols:
-            try:
-                execute(f"ALTER TABLE students ADD COLUMN IF NOT EXISTS {col} {col_type};")
-            except Exception:
-                pass
-
-        # Check / add missing columns in 'homework'
-        homework_cols = [
+        ],
+        "homework": [
             ("archived", "INTEGER DEFAULT 0"),
             ("status", "TEXT DEFAULT 'Assigned'"),
-        ]
-        for col, col_type in homework_cols:
-            try:
-                execute(f"ALTER TABLE homework ADD COLUMN IF NOT EXISTS {col} {col_type};")
-            except Exception:
-                pass
-
-        # Check / add missing columns in 'payments'
-        payment_cols = [
+        ],
+        "payments": [
             ("period", "TEXT"),
             ("payment_date", "DATE DEFAULT CURRENT_DATE"),
             ("amount", "NUMERIC DEFAULT 0.00"),
-        ]
-        for col, col_type in payment_cols:
+        ],
+    }
+
+    for table_name, cols in columns_to_ensure.items():
+        for col_name, col_type in cols:
             try:
-                execute(f"ALTER TABLE payments ADD COLUMN IF NOT EXISTS {col} {col_type};")
+                execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
+                )
             except Exception:
                 pass
 
-    except Exception:
-        pass
-
 
 def student_page():
+    # Make sure database schema is synchronized
     ensure_student_portal_schema()
 
     user = st.session_state.get("user", {})
@@ -66,11 +54,12 @@ def student_page():
     # ==========================
     if option == "Dashboard":
         st.title("Student Dashboard")
-        
-        # Converted '?' to '%s'
+
+        # Query student details with fallback for potential missing columns
         student = query_dataframe(
             """
             SELECT 
+                id,
                 COALESCE(first_name, '') AS first_name,
                 COALESCE(last_name, '') AS last_name,
                 COALESCE(grade, 'N/A') AS grade,
@@ -88,7 +77,7 @@ def student_page():
                 f"Grade: {row['grade']} | Subject: {row['subject']}"
             )
 
-            # Fetch KPIs using %s placeholders
+            # Fetch KPIs
             homework_due = query_dataframe(
                 """
                 SELECT COUNT(*) AS total 
@@ -147,6 +136,8 @@ def student_page():
                 st.info(f"**Date:** {s['session_date']} at {s['session_time']} | **Topic:** {s['topic']}")
             else:
                 st.write("No upcoming sessions scheduled.")
+        else:
+            st.warning(f"No student record found for Student ID: {student_id}")
 
     # ==========================
     # HOMEWORK

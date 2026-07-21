@@ -9,36 +9,55 @@ def get_connection():
 
 def execute(query, params=()):
     conn = get_connection()
-    cursor = conn.cursor()
-    # Replace SQLite '?' placeholder with Postgres '%s' placeholder if needed
-    query_pg = query.replace("?", "%s")
-    cursor.execute(query_pg, params)
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        query_pg = query.replace("?", "%s")
+        cursor.execute(query_pg, params)
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        conn.rollback()  # Roll back transaction on error so it doesn't block future queries
+        raise e
+    finally:
+        conn.close()
 
 def execute_many(query, data):
     conn = get_connection()
-    cursor = conn.cursor()
-    query_pg = query.replace("?", "%s")
-    cursor.executemany(query_pg, data)
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        query_pg = query.replace("?", "%s")
+        cursor.executemany(query_pg, data)
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def query_dataframe(query, params=()):
     conn = get_connection()
-    query_pg = query.replace("?", "%s")
-    df = pd.read_sql_query(query_pg, conn, params=params)
-    conn.close()
-    return df
+    try:
+        query_pg = query.replace("?", "%s")
+        df = pd.read_sql_query(query_pg, conn, params=params)
+        return df
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def get_single(query, params=()):
     conn = get_connection()
-    cursor = conn.cursor()
-    query_pg = query.replace("?", "%s")
-    cursor.execute(query_pg, params)
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return result
+    try:
+        cursor = conn.cursor()
+        query_pg = query.replace("?", "%s")
+        cursor.execute(query_pg, params)
+        result = cursor.fetchone()
+        cursor.close()
+        return result
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

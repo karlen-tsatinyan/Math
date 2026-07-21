@@ -1,58 +1,28 @@
-import sqlite3
-
-from config import DATABASE_NAME
+from database import execute
 
 
-
-conn = sqlite3.connect(
-    DATABASE_NAME
-)
-
-cursor = conn.cursor()
-
-
-
-cursor.execute("""
-
-CREATE TABLE IF NOT EXISTS progress_notes
-
-(
-
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-student_id INTEGER NOT NULL,
-
-lesson_date TEXT,
-
-topic TEXT,
-
-strengths TEXT,
-
-improvements TEXT,
-
-homework TEXT,
-
-next_steps TEXT,
-
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+def create_progress_notes_table():
+    """Creates the progress_notes table for PostgreSQL/SQLite."""
+    try:
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS progress_notes (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                lesson_date DATE,
+                topic TEXT,
+                strengths TEXT,
+                improvements TEXT,
+                homework TEXT,
+                next_steps TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        print("✅ Progress notes table created successfully.")
+    except Exception as e:
+        print(f"❌ Error creating progress notes table: {e}")
 
 
-FOREIGN KEY(student_id)
-
-REFERENCES students(id)
-
-)
-
-""")
-
-
-
-conn.commit()
-
-conn.close()
-
-
-
-print(
-    "Progress notes table created."
-)
+if __name__ == "__main__":
+    create_progress_notes_table()

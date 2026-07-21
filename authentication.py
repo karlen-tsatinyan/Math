@@ -2,15 +2,13 @@ import pandas as pd
 
 from database import query_dataframe
 
-
-
 def login(username, password):
 
     query = """
     SELECT 
         username,
         role,
-        student_id
+        id AS student_id
     FROM users
     WHERE username=?
     AND password=?
@@ -24,21 +22,11 @@ def login(username, password):
         )
     )
 
-
-    if len(result)==1:
-
+    if len(result) == 1:
         return {
-
-            "username":
-                result.iloc[0]["username"],
-
-            "role":
-                result.iloc[0]["role"],
-
-            "student_id":
-                result.iloc[0]["student_id"]
-
+            "username": result.iloc[0]["username"],
+            "role": result.iloc[0]["role"],
+            "student_id": result.iloc[0]["student_id"]
         }
-
 
     return None

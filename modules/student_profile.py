@@ -588,37 +588,23 @@ def student_profile():
 
 
                         execute(
-
                             """
-                            INSERT OR IGNORE INTO attendance
-
+                            INSERT INTO attendance
                             (
                                 student_id,
-
                                 session_date,
-
                                 session_time,
-
                                 status
-
                             )
-
-                            VALUES (?,?,?,?)
-
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (student_id, session_date, session_time) DO NOTHING
                             """,
-
                             (
-
                                 student_id,
-
                                 row["session_date"],
-
                                 row["session_time"],
-
                                 "Present"
-
                             )
-
                         )
 
 

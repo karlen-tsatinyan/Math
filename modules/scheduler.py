@@ -6,6 +6,28 @@ from streamlit_calendar import calendar
 from database import execute, query_dataframe
 
 # =====================================================
+# SCHEMA SAFETY CHECK
+# =====================================================
+
+def ensure_sessions_schema():
+    """Ensure all required columns exist in PostgreSQL/SQLite sessions table."""
+    columns_to_check = [
+        ("duration", "INTEGER DEFAULT 60"),
+        ("repeat_type", "TEXT DEFAULT 'None'"),
+        ("recurring_group", "TEXT"),
+        ("topic", "TEXT"),
+        ("notes", "TEXT"),
+        ("status", "TEXT DEFAULT 'Scheduled'")
+    ]
+    for col_name, col_type in columns_to_check:
+        try:
+            execute(f"ALTER TABLE sessions ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+        except Exception:
+            # Fallback for SQLite versions that don't support ADD COLUMN IF NOT EXISTS
+            pass
+
+
+# =====================================================
 # TIME SLOT HELPERS
 # =====================================================
 
@@ -16,31 +38,42 @@ def generate_time_slots():
     current = start
 
     while current <= end:
-        # Using %I:%M %p ensures 08:00 AM, 01:15 PM, etc. for reliable parsing
         slots.append(current.strftime("%I:%M %p").lstrip("0"))
         current += timedelta(minutes=15)
 
     return slots
 
+
 TIME_SLOTS = generate_time_slots()
+
 
 def convert_time(time_string):
     """
     Convert '4:15 PM' or '04:15 PM' into '16:15:00'
     """
-    # Stripping space and unifying format
-    time_str = time_string.strip()
-    if len(time_str.split(":")[0]) == 1:
-        time_str = "0" + time_str
-    return datetime.strptime(time_str, "%I:%M %p").strftime("%H:%M:%S")
+    time_str = str(time_string).strip()
+    if ":" in time_str:
+        parts = time_str.split(":")
+        if len(parts[0]) == 1:
+            time_str = "0" + time_str
+        try:
+            return datetime.strptime(time_str, "%I:%M %p").strftime("%H:%M:%S")
+        except ValueError:
+            return time_str
+    return "00:00:00"
+
 
 def calculate_end_time(date_str, time_str, duration_minutes):
     """
     Returns ISO datetime string for FullCalendar end time
     """
-    start_dt = datetime.strptime(f"{date_str} {convert_time(time_str)}", "%Y-%m-%d %H:%M:%S")
-    end_dt = start_dt + timedelta(minutes=int(duration_minutes))
-    return end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        duration_val = int(duration_minutes) if duration_minutes else 60
+        start_dt = datetime.strptime(f"{date_str} {convert_time(time_str)}", "%Y-%m-%d %H:%M:%S")
+        end_dt = start_dt + timedelta(minutes=duration_val)
+        return end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return f"{date_str}T23:59:59"
 
 
 # =====================================================
@@ -49,6 +82,9 @@ def calculate_end_time(date_str, time_str, duration_minutes):
 
 def scheduler_management():
     st.header("📅 Interactive Session Scheduler Matrix")
+
+    # Run auto-migration check to ensure missing columns do not cause errors
+    ensure_sessions_schema()
 
     # Compact calendar size styling
     st.markdown(
@@ -93,17 +129,17 @@ def scheduler_management():
         SELECT 
             sessions.id,
             sessions.student_id,
-            sessions.session_date,
+            sessions.session_date::text AS session_date,
             sessions.session_time,
-            sessions.duration,
-            sessions.topic,
-            sessions.notes,
+            COALESCE(sessions.duration, 60) AS duration,
+            COALESCE(sessions.topic, '') AS topic,
+            COALESCE(sessions.notes, '') AS notes,
             sessions.recurring_group,
-            sessions.status,
+            COALESCE(sessions.status, 'Scheduled') AS status,
             students.first_name || ' ' || students.last_name AS student
         FROM sessions
         JOIN students ON sessions.student_id = students.id
-        ORDER BY session_date, session_time
+        ORDER BY sessions.session_date, sessions.session_time
         """
     )
 
@@ -112,32 +148,36 @@ def scheduler_management():
     # =================================================
     calendar_events = []
 
-    for _, row in sessions.iterrows():
-        # Determine color based on recurrence
-        is_recurring = (
-            row["recurring_group"] is not None 
-            and str(row["recurring_group"]).strip() not in ["nan", "", "None"]
-        )
-        color = "#2E7D32" if is_recurring else "#1E88E5"
-        
-        start_iso = f"{row['session_date']}T{convert_time(row['session_time'])}"
-        end_iso = calculate_end_time(row["session_date"], row["session_time"], row.get("duration", 60))
+    if not sessions.empty:
+        for _, row in sessions.iterrows():
+            rec_group = row.get("recurring_group")
+            is_recurring = (
+                rec_group is not None 
+                and str(rec_group).strip() not in ["nan", "", "None", "none"]
+            )
+            color = "#2E7D32" if is_recurring else "#1E88E5"
+            
+            s_date = str(row['session_date'])
+            s_time = str(row['session_time'])
+            
+            start_iso = f"{s_date}T{convert_time(s_time)}"
+            end_iso = calculate_end_time(s_date, s_time, row.get("duration", 60))
 
-        calendar_events.append({
-            "id": str(row["id"]),
-            "title": f"{row['session_time']} - {row['student']}",
-            "start": start_iso,
-            "end": end_iso,
-            "allDay": False,
-            "backgroundColor": color,
-            "borderColor": color,
-            "extendedProps": {
-                "student": str(row["student"]),
-                "topic": str(row["topic"]) if row["topic"] else "",
-                "notes": str(row["notes"]) if row["notes"] else "",
-                "group": str(row["recurring_group"]) if is_recurring else ""
-            }
-        })
+            calendar_events.append({
+                "id": str(row["id"]),
+                "title": f"{s_time} - {row['student']}",
+                "start": start_iso,
+                "end": end_iso,
+                "allDay": False,
+                "backgroundColor": color,
+                "borderColor": color,
+                "extendedProps": {
+                    "student": str(row["student"]),
+                    "topic": str(row["topic"]),
+                    "notes": str(row["notes"]),
+                    "group": str(rec_group) if is_recurring else ""
+                }
+            })
 
     # =================================================
     # TWO COLUMN LAYOUT
@@ -174,7 +214,10 @@ def scheduler_management():
             st.session_state.active_action = "eventClick"
             event_id = state.get("eventClick", {}).get("event", {}).get("id")
             if event_id:
-                st.session_state.selected_session_id = int(event_id)
+                try:
+                    st.session_state.selected_session_id = int(event_id)
+                except ValueError:
+                    st.session_state.selected_session_id = event_id
         elif cb == "dateClick":
             st.session_state.active_action = "dateClick"
             raw_date = state.get("dateClick", {}).get("dateStr") or state.get("dateClick", {}).get("date", "")
@@ -195,7 +238,7 @@ def scheduler_management():
         # ---------------------------------------------
         if active_action == "eventClick" and "selected_session_id" in st.session_state:
             selected_id = st.session_state.selected_session_id
-            selected_event = sessions[sessions["id"] == selected_id]
+            selected_event = sessions[sessions["id"].astype(str) == str(selected_id)]
 
             if not selected_event.empty:
                 event = selected_event.iloc[0]
@@ -210,7 +253,9 @@ def scheduler_management():
                     st.write(f"📖 **Topic:** {event['topic']}")
                 if event["notes"]:
                     st.caption(f"📝 Notes: {event['notes']}")
-                if event["recurring_group"]:
+                
+                rec_grp = event["recurring_group"]
+                if rec_grp and str(rec_grp).strip() not in ["nan", "", "None"]:
                     st.info("🔄 Part of a recurring series.")
 
         # ---------------------------------------------
@@ -248,7 +293,7 @@ def scheduler_management():
                                 student_id, session_date, session_time, duration,
                                 repeat_type, recurring_group, topic, notes, status
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 student_map[selected_student],
@@ -294,7 +339,10 @@ def scheduler_management():
         selected_id = st.session_state.selected_session_id
         group_id = st.session_state.get("selected_group")
 
-        is_recurring = group_id is not None and str(group_id).strip() not in ["nan", "", "None"]
+        is_recurring = (
+            group_id is not None 
+            and str(group_id).strip() not in ["nan", "", "None", "none"]
+        )
 
         if is_recurring:
             delete_option = st.radio(
@@ -306,9 +354,9 @@ def scheduler_management():
 
         if st.button("Confirm Delete", type="primary"):
             if is_recurring and delete_option == "Delete entire recurring series":
-                execute("DELETE FROM sessions WHERE recurring_group=?", (group_id,))
+                execute("DELETE FROM sessions WHERE recurring_group = %s", (group_id,))
             else:
-                execute("DELETE FROM sessions WHERE id=?", (selected_id,))
+                execute("DELETE FROM sessions WHERE id = %s", (selected_id,))
 
             st.success("Session(s) removed.")
             

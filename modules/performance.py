@@ -1,11 +1,37 @@
 import pandas as pd
 import streamlit as st
 
-from database import query_dataframe
+from database import execute, query_dataframe
+
+
+def ensure_performance_schema():
+    """Ensure homework_grades table exists with all required columns in PostgreSQL/SQLite."""
+    try:
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS homework_grades (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                lesson_date DATE DEFAULT CURRENT_DATE,
+                topic TEXT,
+                score NUMERIC(5,2),
+                max_score NUMERIC(5,2) DEFAULT 100,
+                percent NUMERIC(5,2),
+                grade_letter TEXT,
+                teacher_comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+    except Exception:
+        pass
 
 
 def performance_dashboard():
     st.title("📈 Performance Progression Tracking")
+
+    # Run auto-migration check for performance table
+    ensure_performance_schema()
 
     # Fetch active students
     students = query_dataframe(
@@ -14,7 +40,7 @@ def performance_dashboard():
             id,
             first_name || ' ' || last_name AS name
         FROM students
-        ORDER BY last_name
+        ORDER BY last_name, first_name
         """
     )
 
@@ -47,11 +73,11 @@ def performance_dashboard():
     student_id = student_options[selected_label]
     st.session_state.selected_student_id = student_id
 
-    # Query grades
+    # Query grades using PostgreSQL %s placeholder
     grades = query_dataframe(
         """
         SELECT
-            lesson_date,
+            lesson_date::text AS lesson_date,
             topic,
             score,
             max_score,
@@ -59,7 +85,7 @@ def performance_dashboard():
             grade_letter,
             teacher_comment
         FROM homework_grades
-        WHERE student_id = ?
+        WHERE student_id = %s
         ORDER BY lesson_date ASC
         """,
         (student_id,)
@@ -71,6 +97,7 @@ def performance_dashboard():
 
     # Convert lesson_date to datetime objects for proper chronological chart ordering
     grades["lesson_date"] = pd.to_datetime(grades["lesson_date"])
+    grades["percent"] = pd.to_numeric(grades["percent"], errors="coerce").fillna(0)
 
     tab1, tab2 = st.tabs(["Dashboard", "Grade History"])
 
@@ -109,7 +136,7 @@ def performance_dashboard():
     # =========================================================
     with tab2:
         st.subheader("📋 Historical Records")
-        
+
         # Display nicely formatted dataframe
         display_df = grades.copy()
         display_df["lesson_date"] = display_df["lesson_date"].dt.strftime("%Y-%m-%d")

@@ -8,19 +8,7 @@ from database import execute, query_dataframe
 def payment_management():
     st.header("💳 Payment Management")
 
-    # 🔍 TEMPORARY DEBUGGER: Let's see what your Supabase columns are actually named
-    st.subheader("🕵️‍♂️ Database Columns Debugger")
-    try:
-        debug_payments = query_dataframe("SELECT * FROM payments LIMIT 1")
-        st.write("Your actual columns in 'payments' table are:", list(debug_payments.columns))
-        
-        debug_students = query_dataframe("SELECT * FROM students LIMIT 1")
-        st.write("Your actual columns in 'students' table are:", list(debug_students.columns))
-    except Exception as e:
-        st.error(f"Failed to fetch table structure: {str(e)}")
-    
-
-    # Fetch active students (Fixed single quotes for string literal, no quotes on alias)
+    # Fetch active students
     students = query_dataframe(
         """
         SELECT
@@ -98,7 +86,6 @@ def payment_management():
                 if amount <= 0:
                     st.error("Please enter a payment amount greater than 0.")
                 else:
-                    # Fixed: Changed ? placeholders to %%s for Supabase PostgreSQL
                     execute(
                         """
                         INSERT INTO payments (
@@ -127,26 +114,25 @@ def payment_management():
     with tab2:
         st.subheader("All Payments")
 
-        # Fixed: Changed single-quoted aliases to standard double quotes
         payments = query_dataframe(
             """
             SELECT
-                p."id" AS "Payment ID",
-                s."first_name" || ' ' || s."last_name" AS "Student",
-                p."amount" AS "Amount",
-                p."payment_date" AS "Date",
-                p."period" AS "Period",
-                p."notes" AS "Notes"
+                p.id AS "Payment ID",
+                s.first_name || ' ' || s.last_name AS "Student",
+                p.amount AS "Amount",
+                p.payment_date AS "Date",
+                p.period AS "Period",
+                p.notes AS "Notes"
             FROM payments p
-            JOIN students s ON p."student_id" = s."id"
-            ORDER BY p."payment_date" DESC, p."id" DESC
+            JOIN students s ON p.student_id = s.id
+            ORDER BY p.payment_date DESC, p.id DESC
             """
         )
 
         if payments.empty:
             st.info("No payment records recorded yet.")
         else:
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns()
 
             with col2:
                 total_revenue = payments["Amount"].sum()
@@ -202,7 +188,7 @@ def payment_management():
             payment_id = payment_map[selected_payment_label]
             payment = edit_payments[edit_payments["id"] == payment_id].iloc[0]
 
-            col_edit, col_del = st.columns([3, 1])
+            col_edit, col_del = st.columns()
 
             with col_edit:
                 amount = st.number_input(
@@ -231,11 +217,10 @@ def payment_management():
                     key="edit_notes"
                 )
 
-                btn_cols = st.columns([1, 1])
+                btn_cols = st.columns()
 
-                with btn_cols[0]:
+                with btn_cols:
                     if st.button("💾 Update Payment", type="primary"):
-                        # Fixed: Changed SQLite ? to PostgreSQL %%s placeholders
                         execute(
                             """
                             UPDATE payments
@@ -257,9 +242,8 @@ def payment_management():
                         st.success("Payment updated successfully.")
                         st.rerun()
 
-                with btn_cols[1]:
+                with btn_cols:
                     if st.button("🗑️ Delete Payment"):
-                        # Fixed: Changed SQLite ? to PostgreSQL %%s placeholders
                         execute("DELETE FROM payments WHERE id = %%s", (int(payment_id),))
                         st.success("Payment deleted successfully.")
                         st.rerun()

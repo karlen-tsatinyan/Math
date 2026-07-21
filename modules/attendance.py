@@ -5,9 +5,31 @@ import streamlit as st
 from database import execute, query_dataframe
 
 
+def ensure_attendance_schema():
+    """Ensure attendance table exists in PostgreSQL / SQLite."""
+    try:
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS attendance (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                session_date DATE NOT NULL,
+                session_time TIME NOT NULL,
+                status TEXT NOT NULL,
+                marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+    except Exception:
+        pass
+
+
 def attendance_management():
     st.header("📋 Attendance Management & History")
     st.caption("Track, record, and export student attendance logs across tutoring sessions.")
+
+    # Run auto-migration check
+    ensure_attendance_schema()
 
     tab_history, tab_record = st.tabs(["📊 Attendance History & Analytics", "✏️ Record / Edit Attendance"])
 
@@ -50,27 +72,27 @@ def attendance_management():
                 ["All Statuses", "Present", "Late", "Absent - Excused", "Absent - Unexcused"]
             )
 
-        # Build Dynamic Query
+        # Build Dynamic Query (using PostgreSQL %s syntax)
         query = """
             SELECT
-                a.id AS Record_ID,
-                s.first_name || ' ' || s.last_name AS Student,
-                a.session_date AS Date,
-                a.session_time AS Time,
-                a.status AS Status,
-                a.marked_at AS Recorded_At
+                a.id AS record_id,
+                s.first_name || ' ' || s.last_name AS student,
+                a.session_date::text AS session_date,
+                a.session_time::text AS session_time,
+                a.status AS status,
+                a.marked_at::text AS recorded_at
             FROM attendance a
             JOIN students s ON a.student_id = s.id
-            WHERE a.session_date BETWEEN ? AND ?
+            WHERE a.session_date BETWEEN %s AND %s
         """
         params = [start_date.isoformat(), end_date.isoformat()]
 
         if selected_student_id:
-            query += " AND a.student_id = ?"
+            query += " AND a.student_id = %s"
             params.append(selected_student_id)
 
         if status_filter != "All Statuses":
-            query += " AND a.status = ?"
+            query += " AND a.status = %s"
             params.append(status_filter)
 
         query += " ORDER BY a.session_date DESC, a.session_time DESC"
@@ -79,10 +101,13 @@ def attendance_management():
 
         # Metrics Overview
         if not history.empty:
+            # Case-safe column lookup
+            status_col = "status" if "status" in history.columns else history.columns[3]
+            
             total_sessions = len(history)
-            presents = len(history[history["Status"].isin(["Present", "Late"])])
-            unexcused = len(history[history["Status"] == "Absent - Unexcused"])
-            lates = len(history[history["Status"] == "Late"])
+            presents = len(history[history[status_col].isin(["Present", "Late"])])
+            unexcused = len(history[history[status_col] == "Absent - Unexcused"])
+            lates = len(history[history[status_col] == "Late"])
 
             pct_present = round((presents / total_sessions) * 100, 1) if total_sessions > 0 else 0
 
@@ -94,15 +119,29 @@ def attendance_management():
 
             st.divider()
 
+            # Format Display Table Columns
+            display_df = history.rename(
+                columns={
+                    "student": "Student",
+                    "session_date": "Date",
+                    "session_time": "Time",
+                    "status": "Status",
+                    "recorded_at": "Recorded At"
+                }
+            )
+
+            if "record_id" in display_df.columns:
+                display_df = display_df.drop(columns=["record_id"])
+
             # Data Table
             st.dataframe(
-                history.drop(columns=["Record_ID"]),
+                display_df,
                 use_container_width=True,
                 hide_index=True
             )
 
             # Export Button
-            csv_data = history.to_csv(index=False).encode('utf-8')
+            csv_data = display_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 "📥 Export Attendance CSV",
                 data=csv_data,
@@ -148,7 +187,7 @@ def attendance_management():
                 existing = query_dataframe(
                     """
                     SELECT id FROM attendance
-                    WHERE student_id = ? AND session_date = ? AND session_time = ?
+                    WHERE student_id = %s AND session_date = %s AND session_time = %s
                     """,
                     (student_id, session_date.isoformat(), session_time.strftime("%H:%M:%S"))
                 )
@@ -158,8 +197,8 @@ def attendance_management():
                     execute(
                         """
                         UPDATE attendance
-                        SET status = ?, marked_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
+                        SET status = %s, marked_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
                         """,
                         (status, int(existing.iloc[0]["id"]))
                     )
@@ -169,7 +208,7 @@ def attendance_management():
                     execute(
                         """
                         INSERT INTO attendance (student_id, session_date, session_time, status)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s)
                         """,
                         (student_id, session_date.isoformat(), session_time.strftime("%H:%M:%S"), status)
                     )

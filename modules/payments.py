@@ -119,15 +119,15 @@ def payment_management():
         payments = query_dataframe(
             """
             SELECT
-                p.id AS "Payment ID",
-                s.first_name || ' ' || s.last_name AS "Student",
-                p.amount AS "Amount",
-                p.payment_date AS "Date",
-                p.period AS "Period",
-                p.notes AS "Notes"
+                p."id" AS "Payment ID",
+                s."first_name" || ' ' || s."last_name" AS "Student",
+                p."amount" AS "Amount",
+                p."payment_date" AS "Date",
+                p."period" AS "Period",
+                p."notes" AS "Notes"
             FROM payments p
-            JOIN students s ON p.student_id = s.id
-            ORDER BY p.payment_date DESC, p.id DESC
+            JOIN students s ON p."student_id" = s."id"
+            ORDER BY p."payment_date" DESC, p."id" DESC
             """
         )
 

@@ -5,8 +5,9 @@ from database import execute, query_dataframe
 
 
 def ensure_performance_schema():
-    """Ensure homework_grades table exists with all required columns in PostgreSQL/SQLite."""
+    """Ensure homework_grades table exists AND contains all required columns."""
     try:
+        # Create table if it doesn't exist
         execute(
             """
             CREATE TABLE IF NOT EXISTS homework_grades (
@@ -23,6 +24,24 @@ def ensure_performance_schema():
             );
             """
         )
+
+        # Alter existing table to safely add any missing columns
+        columns_to_add = [
+            ("lesson_date", "DATE DEFAULT CURRENT_DATE"),
+            ("topic", "TEXT"),
+            ("score", "NUMERIC(5,2)"),
+            ("max_score", "NUMERIC(5,2) DEFAULT 100"),
+            ("percent", "NUMERIC(5,2)"),
+            ("grade_letter", "TEXT"),
+            ("teacher_comment", "TEXT")
+        ]
+
+        for col_name, col_type in columns_to_add:
+            try:
+                execute(f"ALTER TABLE homework_grades ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+            except Exception:
+                pass
+
     except Exception:
         pass
 
@@ -30,7 +49,7 @@ def ensure_performance_schema():
 def performance_dashboard():
     st.title("📈 Performance Progression Tracking")
 
-    # Run auto-migration check for performance table
+    # Run auto-migration check for missing columns
     ensure_performance_schema()
 
     # Fetch active students
@@ -73,17 +92,17 @@ def performance_dashboard():
     student_id = student_options[selected_label]
     st.session_state.selected_student_id = student_id
 
-    # Query grades using PostgreSQL %s placeholder
+    # Query grades using PostgreSQL %s syntax
     grades = query_dataframe(
         """
         SELECT
-            lesson_date::text AS lesson_date,
-            topic,
-            score,
-            max_score,
-            percent,
-            grade_letter,
-            teacher_comment
+            COALESCE(lesson_date::text, created_at::text, '') AS lesson_date,
+            COALESCE(topic, 'N/A') AS topic,
+            COALESCE(score, 0) AS score,
+            COALESCE(max_score, 100) AS max_score,
+            COALESCE(percent, 0) AS percent,
+            COALESCE(grade_letter, '') AS grade_letter,
+            COALESCE(teacher_comment, '') AS teacher_comment
         FROM homework_grades
         WHERE student_id = %s
         ORDER BY lesson_date ASC
@@ -96,7 +115,7 @@ def performance_dashboard():
         return
 
     # Convert lesson_date to datetime objects for proper chronological chart ordering
-    grades["lesson_date"] = pd.to_datetime(grades["lesson_date"])
+    grades["lesson_date"] = pd.to_datetime(grades["lesson_date"], errors="coerce")
     grades["percent"] = pd.to_numeric(grades["percent"], errors="coerce").fillna(0)
 
     tab1, tab2 = st.tabs(["Dashboard", "Grade History"])
@@ -126,10 +145,13 @@ def performance_dashboard():
         st.subheader("📊 Chronological Score Variance")
 
         # Prepare line chart data
-        chart_df = grades[["lesson_date", "percent"]].set_index("lesson_date")
+        chart_df = grades[["lesson_date", "percent"]].dropna(subset=["lesson_date"]).set_index("lesson_date")
         chart_df.rename(columns={"percent": "Score (%)"}, inplace=True)
 
-        st.line_chart(chart_df)
+        if not chart_df.empty:
+            st.line_chart(chart_df)
+        else:
+            st.info("No valid dates found to render progression chart.")
 
     # =========================================================
     # TAB 2: GRADE HISTORY
@@ -137,9 +159,10 @@ def performance_dashboard():
     with tab2:
         st.subheader("📋 Historical Records")
 
-        # Display nicely formatted dataframe
+        # Display formatted dataframe
         display_df = grades.copy()
-        display_df["lesson_date"] = display_df["lesson_date"].dt.strftime("%Y-%m-%d")
+        if pd.api.types.is_datetime64_any_dtype(display_df["lesson_date"]):
+            display_df["lesson_date"] = display_df["lesson_date"].dt.strftime("%Y-%m-%d")
 
         st.dataframe(
             display_df,

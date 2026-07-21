@@ -3,40 +3,49 @@ from utils.datetime_utils import today_str
 from database import execute, query_dataframe
 
 
-def ensure_student_portal_schema():
-    """Safely ensure required columns exist in Postgres without breaking open transactions."""
-    columns_to_ensure = {
-        "students": [
-            ("first_name", "TEXT"),
-            ("last_name", "TEXT"),
-            ("grade", "TEXT"),
-            ("subject", "TEXT"),
-            ("zoom_link", "TEXT"),
-            ("meeting_id", "TEXT"),
-        ],
-        "homework": [
-            ("archived", "INTEGER DEFAULT 0"),
-            ("status", "TEXT DEFAULT 'Assigned'"),
-        ],
-        "payments": [
-            ("period", "TEXT"),
-            ("payment_date", "DATE DEFAULT CURRENT_DATE"),
-            ("amount", "NUMERIC DEFAULT 0.00"),
-        ],
-    }
+def get_existing_columns(table_name):
+    """Retrieve existing column names for a given table in PostgreSQL."""
+    try:
+        df = query_dataframe(
+            """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = %s
+            """,
+            (table_name,)
+        )
+        if not df.empty:
+            return set(df["column_name"].str.lower().tolist())
+    except Exception:
+        pass
+    return set()
 
-    for table_name, cols in columns_to_ensure.items():
-        for col_name, col_type in cols:
-            try:
-                execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-                )
-            except Exception:
-                pass
+
+def ensure_student_portal_schema():
+    """Safely ensure essential columns exist in PostgreSQL."""
+    columns_to_add = [
+        ("students", "first_name", "TEXT DEFAULT ''"),
+        ("students", "last_name", "TEXT DEFAULT ''"),
+        ("students", "grade", "TEXT DEFAULT 'N/A'"),
+        ("students", "subject", "TEXT DEFAULT 'N/A'"),
+        ("students", "zoom_link", "TEXT"),
+        ("students", "meeting_id", "TEXT"),
+        ("homework", "archived", "INTEGER DEFAULT 0"),
+        ("homework", "status", "TEXT DEFAULT 'Assigned'"),
+        ("payments", "period", "TEXT"),
+        ("payments", "payment_date", "DATE DEFAULT CURRENT_DATE"),
+        ("payments", "amount", "NUMERIC DEFAULT 0.00"),
+    ]
+
+    for table_name, col_name, col_type in columns_to_add:
+        try:
+            execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+        except Exception:
+            pass
 
 
 def student_page():
-    # Make sure database schema is synchronized
+    # Make sure missing columns are added automatically
     ensure_student_portal_schema()
 
     user = st.session_state.get("user", {})
@@ -49,22 +58,30 @@ def student_page():
     st.sidebar.title("Student Portal")
     option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Schedule", "Payments"])
 
+    # Fetch actual existing columns in students table
+    student_cols = get_existing_columns("students")
+
+    # Dynamic Column Builder (Prevents psycopg2.ProgrammingError if columns are missing)
+    fn_col = "first_name" if "first_name" in student_cols else "'' AS first_name"
+    ln_col = "last_name" if "last_name" in student_cols else "'' AS last_name"
+    gr_col = "grade" if "grade" in student_cols else "'N/A' AS grade"
+    sb_col = "subject" if "subject" in student_cols else "'N/A' AS subject"
+
     # ==========================
     # DASHBOARD
     # ==========================
     if option == "Dashboard":
         st.title("Student Dashboard")
 
-        # Query student details with fallback for potential missing columns
         student = query_dataframe(
-            """
+            f"""
             SELECT 
                 id,
-                COALESCE(first_name, '') AS first_name,
-                COALESCE(last_name, '') AS last_name,
-                COALESCE(grade, 'N/A') AS grade,
-                COALESCE(subject, 'N/A') AS subject 
-            FROM students 
+                COALESCE({fn_col}, '') AS first_name,
+                COALESCE({ln_col}, '') AS last_name,
+                COALESCE({gr_col}, 'N/A') AS grade,
+                COALESCE({sb_col}, 'N/A') AS subject
+            FROM students
             WHERE id = %s
             """,
             (student_id,)
@@ -77,14 +94,17 @@ def student_page():
                 f"Grade: {row['grade']} | Subject: {row['subject']}"
             )
 
+            # Check homework columns
+            hw_cols = get_existing_columns("homework")
+            hw_status_clause = "AND status = 'Assigned'" if "status" in hw_cols else ""
+            hw_arch_clause = "AND archived = 0" if "archived" in hw_cols else ""
+
             # Fetch KPIs
             homework_due = query_dataframe(
-                """
+                f"""
                 SELECT COUNT(*) AS total 
                 FROM homework 
-                WHERE student_id = %s 
-                  AND COALESCE(status, 'Assigned') = 'Assigned' 
-                  AND COALESCE(archived, 0) = 0
+                WHERE student_id = %s {hw_status_clause} {hw_arch_clause}
                 """,
                 (student_id,)
             )
@@ -162,9 +182,12 @@ def student_page():
         )
         st.dataframe(sessions, use_container_width=True)
 
+        zl_col = "zoom_link" if "zoom_link" in student_cols else "'' AS zoom_link"
+        mi_col = "meeting_id" if "meeting_id" in student_cols else "'' AS meeting_id"
+
         zoom = query_dataframe(
-            """
-            SELECT zoom_link, meeting_id 
+            f"""
+            SELECT {zl_col}, {mi_col} 
             FROM students 
             WHERE id = %s
             """,
@@ -181,9 +204,12 @@ def student_page():
     # ==========================
     elif option == "Payments":
         st.title("Payment History")
+        pay_cols = get_existing_columns("payments")
+        period_col = "period" if "period" in pay_cols else "'' AS period"
+
         payments = query_dataframe(
-            """
-            SELECT amount, payment_date, period 
+            f"""
+            SELECT amount, payment_date, {period_col} 
             FROM payments 
             WHERE student_id = %s 
             ORDER BY payment_date DESC

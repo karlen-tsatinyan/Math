@@ -7,6 +7,69 @@ from database import execute, query_dataframe
 from config import UPLOAD_FOLDER
 
 
+def ensure_homework_schema():
+    """Ensure the homework table exists and contains all required PostgreSQL columns."""
+    try:
+        # Create table if it doesn't exist
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS homework (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                uploaded_by TEXT DEFAULT 'admin',
+                title TEXT,
+                curriculum_topic TEXT,
+                assigned_date DATE DEFAULT CURRENT_DATE,
+                due_date DATE DEFAULT CURRENT_DATE,
+                priority TEXT DEFAULT 'Normal',
+                assignment_file TEXT,
+                student_file TEXT,
+                file_link TEXT,
+                comment TEXT,
+                teacher_feedback TEXT,
+                grade TEXT,
+                status TEXT DEFAULT 'Assigned',
+                deleted_assignment_file INTEGER DEFAULT 0,
+                deleted_student_file INTEGER DEFAULT 0,
+                submitted_at TIMESTAMP,
+                reviewed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+
+        # Ensure missing columns are dynamically added if the table pre-existed
+        columns_to_add = [
+            ("uploaded_by", "TEXT DEFAULT 'admin'"),
+            ("title", "TEXT"),
+            ("curriculum_topic", "TEXT"),
+            ("assigned_date", "DATE DEFAULT CURRENT_DATE"),
+            ("due_date", "DATE DEFAULT CURRENT_DATE"),
+            ("priority", "TEXT DEFAULT 'Normal'"),
+            ("assignment_file", "TEXT"),
+            ("student_file", "TEXT"),
+            ("file_link", "TEXT"),
+            ("comment", "TEXT"),
+            ("teacher_feedback", "TEXT"),
+            ("grade", "TEXT"),
+            ("status", "TEXT DEFAULT 'Assigned'"),
+            ("deleted_assignment_file", "INTEGER DEFAULT 0"),
+            ("deleted_student_file", "INTEGER DEFAULT 0"),
+            ("submitted_at", "TIMESTAMP"),
+            ("reviewed_at", "TIMESTAMP"),
+            ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        ]
+
+        for col_name, col_type in columns_to_add:
+            try:
+                execute(f"ALTER TABLE homework ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+
 # ==========================================
 # ADMIN / TEACHER HOMEWORK MANAGEMENT
 # ==========================================
@@ -14,13 +77,16 @@ from config import UPLOAD_FOLDER
 def homework_management():
     st.header("📚 Teacher Homework Management")
 
+    # Run auto-migration check for missing columns
+    ensure_homework_schema()
+
     students = query_dataframe(
         """
         SELECT
             id,
             first_name || ' ' || last_name AS name
         FROM students
-        ORDER BY last_name
+        ORDER BY last_name, first_name
         """
     )
 
@@ -119,7 +185,7 @@ def homework_management():
                             comment,
                             status
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             student_id,
@@ -149,15 +215,15 @@ def homework_management():
             """
             SELECT
                 h.id,
-                h.title,
+                COALESCE(h.title, 'Untitled') AS title,
                 s.first_name || ' ' || s.last_name AS student_name,
                 h.assignment_file,
                 h.student_file,
                 h.file_link,
-                h.status,
-                h.teacher_feedback,
+                COALESCE(h.status, 'Assigned') AS status,
+                COALESCE(h.teacher_feedback, '') AS teacher_feedback,
                 COALESCE(h.grade, '') AS grade,
-                datetime(h.created_at, 'localtime') AS created_at
+                COALESCE(h.created_at::text, '') AS created_at
             FROM homework h
             JOIN students s ON h.student_id = s.id
             ORDER BY h.created_at DESC
@@ -168,7 +234,7 @@ def homework_management():
             st.info("No homework submissions found.")
         else:
             submission_map = {
-                f"#{row['id']} - {row['student_name']} — {row['title'] or 'Untitled'} ({row['status']})": row["id"]
+                f"#{row['id']} - {row['student_name']} — {row['title']} ({row['status']})": row["id"]
                 for _, row in submissions.iterrows()
             }
 
@@ -182,7 +248,7 @@ def homework_management():
 
             st.info(
                 f"**Student:** {selected['student_name']}  \n"
-                f"**Title:** {selected['title'] or 'N/A'}  \n"
+                f"**Title:** {selected['title']}  \n"
                 f"**Status:** {selected['status']}"
             )
 
@@ -206,11 +272,11 @@ def homework_management():
                     """
                     UPDATE homework
                     SET
-                        teacher_feedback = ?,
-                        grade = ?,
+                        teacher_feedback = %s,
+                        grade = %s,
                         status = 'Reviewed',
                         reviewed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
+                    WHERE id = %s
                     """,
                     (feedback.strip(), grade, int(selected_id))
                 )
@@ -232,7 +298,7 @@ def homework_management():
                             pass
 
                         execute(
-                            "UPDATE homework SET assignment_file = NULL, deleted_assignment_file = 1 WHERE id = ?",
+                            "UPDATE homework SET assignment_file = NULL, deleted_assignment_file = 1 WHERE id = %s",
                             (int(selected_id),)
                         )
                         st.success("Assignment PDF removed.")
@@ -250,7 +316,7 @@ def homework_management():
                             pass
 
                         execute(
-                            "UPDATE homework SET student_file = NULL, deleted_student_file = 1 WHERE id = ?",
+                            "UPDATE homework SET student_file = NULL, deleted_student_file = 1 WHERE id = %s",
                             (int(selected_id),)
                         )
                         st.success("Student submission file removed.")
@@ -273,25 +339,27 @@ def student_homework():
 
     st.header("📖 My Homework")
 
+    ensure_homework_schema()
+
     homework = query_dataframe(
         """
         SELECT
             id,
-            title,
-            curriculum_topic,
-            assigned_date,
-            due_date,
-            priority,
+            COALESCE(title, '') AS title,
+            COALESCE(curriculum_topic, '') AS curriculum_topic,
+            COALESCE(assigned_date::text, '') AS assigned_date,
+            COALESCE(due_date::text, '') AS due_date,
+            COALESCE(priority, 'Normal') AS priority,
             assignment_file,
             student_file,
             file_link,
             comment,
             teacher_feedback,
             grade,
-            status,
-            created_at
+            COALESCE(status, 'Assigned') AS status,
+            COALESCE(created_at::text, '') AS created_at
         FROM homework
-        WHERE student_id = ?
+        WHERE student_id = %s
         ORDER BY created_at DESC
         """,
         (student_id,)
@@ -313,7 +381,7 @@ def student_homework():
                 st.write("⏰ **Due:**", row["due_date"])
 
             with col2:
-                st.write(" Priority:", row["priority"])
+                st.write("Priority:", row["priority"])
 
                 if row["status"] == "Assigned":
                     st.warning("🟡 Waiting for submission")
@@ -389,10 +457,10 @@ def student_homework():
                 """
                 UPDATE homework
                 SET
-                    student_file = ?,
+                    student_file = %s,
                     status = 'Submitted',
                     submitted_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND student_id = ?
+                WHERE id = %s AND student_id = %s
                 """,
                 (student_file, int(selected_assignment_id), student_id)
             )

@@ -48,9 +48,29 @@ def reports_management():
     
     selected_student_id = student_options[selected_student_name]
 
+    
     # ==========================
-    # DATA QUERIES (WITH CONDITIONAL STUDENT FILTERING)
+    # DATA QUERIES
     # ==========================
+    
+    # 1. Summary always fetches for ALL students (unfiltered)
+    summary = query_dataframe(
+        """
+        SELECT
+            s.first_name || ' ' || s.last_name AS Student,
+            SUM(p.amount) AS Total_Paid,
+            MAX(p.payment_date) AS Last_Payment,
+            MAX(p.period) AS Last_Period
+        FROM payments p
+        JOIN students s ON p.student_id = s.id
+        WHERE p.payment_date BETWEEN ? AND ?
+        GROUP BY s.id
+        ORDER BY Total_Paid DESC
+        """,
+        (str_start, str_end)
+    )
+
+    # 2. Payments, sessions, and active students respect the student filter dropdown
     if selected_student_id:
         payments = query_dataframe(
             """
@@ -84,22 +104,6 @@ def reports_management():
             """,
             (str_start, str_end, selected_student_id)
         )
-
-        summary = query_dataframe(
-            """
-            SELECT
-                s.first_name || ' ' || s.last_name AS Student,
-                SUM(p.amount) AS Total_Paid,
-                MAX(p.payment_date) AS Last_Payment,
-                MAX(p.period) AS Last_Period
-            FROM payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE p.payment_date BETWEEN ? AND ? AND p.student_id = ?
-            GROUP BY s.id
-            ORDER BY Total_Paid DESC
-            """,
-            (str_start, str_end, selected_student_id)
-        )
     else:
         payments = query_dataframe(
             """
@@ -130,22 +134,6 @@ def reports_management():
             SELECT COUNT(DISTINCT student_id) AS active_students
             FROM payments
             WHERE payment_date BETWEEN ? AND ?
-            """,
-            (str_start, str_end)
-        )
-
-        summary = query_dataframe(
-            """
-            SELECT
-                s.first_name || ' ' || s.last_name AS Student,
-                SUM(p.amount) AS Total_Paid,
-                MAX(p.payment_date) AS Last_Payment,
-                MAX(p.period) AS Last_Period
-            FROM payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE p.payment_date BETWEEN ? AND ?
-            GROUP BY s.id
-            ORDER BY Total_Paid DESC
             """,
             (str_start, str_end)
         )

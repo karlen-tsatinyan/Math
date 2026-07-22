@@ -19,7 +19,18 @@ from modules.attendance import attendance_management
 from modules.reports import reports_management
 from database import query_dataframe
 
-
+st.markdown(
+    """
+    <style>
+        /* Hides the Streamlit running man / status indicator widget */
+        [data-testid="stStatusWidget"] {
+            visibility: hidden;
+            display: none;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 def admin_page():
     # Hide the default Streamlit multi-page auto-generated sidebar navigation header

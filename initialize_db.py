@@ -1,39 +1,16 @@
-import sqlite3
-from config import DATABASE_NAME
-
-
-def run_migrations(cursor):
-    """Ensure existing databases receive missing columns without wiping data."""
-    # Check if 'curriculum_track' exists in 'students'
-    cursor.execute("PRAGMA table_info(students);")
-    columns = [col[1] for col in cursor.fetchall()]
-
-    if columns and "curriculum_track" not in columns:
-        cursor.execute("ALTER TABLE students ADD COLUMN curriculum_track TEXT DEFAULT '1st Grade General Math';")
-        print("Migrated: Added 'curriculum_track' column to 'students' table.")
-
-    # Check if 'zoom_link' exists in 'sessions'
-    cursor.execute("PRAGMA table_info(sessions);")
-    session_columns = [col[1] for col in cursor.fetchall()]
-
-    if session_columns and "zoom_link" not in session_columns:
-        cursor.execute("ALTER TABLE sessions ADD COLUMN zoom_link TEXT;")
-        print("Migrated: Added 'zoom_link' column to 'sessions' table.")
+import psycopg2
+from database import get_connection
 
 
 def initialize_database():
-    conn = sqlite3.connect(DATABASE_NAME)
-
-    with conn:
-        cursor = conn.cursor()
-
-        # Enable Foreign Keys
-        cursor.execute("PRAGMA foreign_keys = ON;")
-
+    conn = get_connection()
+    conn.autocommit = True
+    
+    with conn.cursor() as cursor:
         # 1. Students table (Parent table)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             student_code TEXT UNIQUE NOT NULL,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
@@ -52,7 +29,7 @@ def initialize_database():
         # 2. Users table (Child of Students)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             role TEXT NOT NULL,
@@ -64,7 +41,7 @@ def initialize_database():
         # 3. Payments table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             student_id INTEGER NOT NULL,
             amount REAL NOT NULL,
             payment_date DATE NOT NULL,
@@ -77,7 +54,7 @@ def initialize_database():
         # 4. Homework table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS homework (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             student_id INTEGER NOT NULL,
             uploaded_by TEXT NOT NULL,
             file_path TEXT,
@@ -93,7 +70,7 @@ def initialize_database():
         # 5. Sessions table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             student_id INTEGER NOT NULL,
             session_date DATE NOT NULL,
             session_time TEXT NOT NULL,
@@ -114,7 +91,7 @@ def initialize_database():
         # 6. Attendance table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS attendance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             student_id INTEGER NOT NULL,
             session_date DATE NOT NULL,
             session_time TEXT NOT NULL,
@@ -128,7 +105,7 @@ def initialize_database():
         # 7. Curriculum Resources Vault table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS curriculum_resources (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             grade_track TEXT NOT NULL,
             resource_title TEXT NOT NULL,
             resource_type TEXT NOT NULL,
@@ -142,7 +119,7 @@ def initialize_database():
         # 8. Reports table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             start_date DATE,
             end_date DATE,
             generated_by TEXT,
@@ -150,17 +127,15 @@ def initialize_database():
         );
         """)
 
-        # Safely run schema updates for existing database files
-        run_migrations(cursor)
-
-        # Default admin seed account
+        # Default admin seed account (PostgreSQL compatible ON CONFLICT)
         cursor.execute("""
-        INSERT OR IGNORE INTO users (username, password, role)
-        VALUES ('admin', 'admin123', 'admin');
+        INSERT INTO users (username, password, role)
+        VALUES ('admin', 'admin123', 'admin')
+        ON CONFLICT (username) DO NOTHING;
         """)
 
     conn.close()
-    print("Database schema initialized and verified successfully.")
+    print("PostgreSQL Database schema initialized and verified successfully.")
 
 
 if __name__ == "__main__":

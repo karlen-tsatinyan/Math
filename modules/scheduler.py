@@ -17,7 +17,8 @@ def ensure_sessions_schema():
         ("recurring_group", "TEXT"),
         ("topic", "TEXT"),
         ("notes", "TEXT"),
-        ("status", "TEXT DEFAULT 'Scheduled'")
+        ("status", "TEXT DEFAULT 'Scheduled'"),
+        ("zoom_link", "TEXT")
     ]
     for col_name, col_type in columns_to_check:
         try:
@@ -134,6 +135,7 @@ def scheduler_management():
             COALESCE(sessions.duration, 60) AS duration,
             COALESCE(sessions.topic, '') AS topic,
             COALESCE(sessions.notes, '') AS notes,
+            COALESCE(sessions.zoom_link, '') AS zoom_link,
             sessions.recurring_group,
             COALESCE(sessions.status, 'Scheduled') AS status,
             students.first_name || ' ' || students.last_name AS student
@@ -175,6 +177,7 @@ def scheduler_management():
                     "student": str(row["student"]),
                     "topic": str(row["topic"]),
                     "notes": str(row["notes"]),
+                    "zoom_link": str(row["zoom_link"]),
                     "group": str(rec_group) if is_recurring else ""
                 }
             })
@@ -254,6 +257,12 @@ def scheduler_management():
                 if event["notes"]:
                     st.caption(f"📝 Notes: {event['notes']}")
                 
+                zoom_url = event.get("zoom_link")
+                if zoom_url and zoom_url.strip() not in ["", "nan", "None"]:
+                    st.markdown(f"🔗 **Zoom Link:** [Join Meeting]({zoom_url})")
+                else:
+                    st.caption("No Zoom link assigned.")
+                
                 rec_grp = event["recurring_group"]
                 if rec_grp and str(rec_grp).strip() not in ["nan", "", "None"]:
                     st.info("🔄 Part of a recurring series.")
@@ -272,6 +281,7 @@ def scheduler_management():
                 selected_time = st.selectbox("Start Time", TIME_SLOTS)
                 duration = st.selectbox("Duration (minutes)", [30, 45, 60, 75, 90, 120], index=2)
                 topic = st.text_input("Lesson Topic")
+                zoom_link = st.text_input("Zoom Meeting Link")
                 notes = st.text_area("Notes")
                 recurring = st.checkbox("Repeat weekly?")
                 
@@ -291,9 +301,9 @@ def scheduler_management():
                             """
                             INSERT INTO sessions (
                                 student_id, session_date, session_time, duration,
-                                repeat_type, recurring_group, topic, notes, status
+                                repeat_type, recurring_group, topic, notes, zoom_link, status
                             )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 student_map[selected_student],
@@ -304,6 +314,7 @@ def scheduler_management():
                                 group_id,
                                 topic,
                                 notes,
+                                zoom_link,
                                 "Scheduled"
                             )
                         )

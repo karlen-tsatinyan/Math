@@ -69,6 +69,7 @@ def student_management():
                             )
                         
                         st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
+                        st.rerun()
                     else:
                         st.error("Failed to retrieve new student ID.")
                 except Exception as e:
@@ -139,25 +140,28 @@ def student_management():
         )
 
         if st.button("Create Student Account"):
-
-            execute(
-                """
-                INSERT INTO users
-                (
-                    username,
-                    password,
-                    role,
-                    student_id
+            try:
+                execute(
+                    """
+                    INSERT INTO users
+                    (
+                        username,
+                        password,
+                        role,
+                        student_id
+                    )
+                    VALUES
+                    (%s, %s, %s, %s)
+                    """,
+                    (
+                        username,
+                        password,
+                        "student",
+                        student_id
+                    )
                 )
-                VALUES
-                (%s, %s, %s, %s)
-                """,
-                (
-                    username,
-                    password,
-                    "student",
-                    student_id
-                )
-            )
 
-            st.success("Student login created.")
+                st.success("Student login created.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error creating student account: {e}")

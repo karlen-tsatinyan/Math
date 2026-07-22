@@ -95,7 +95,6 @@ def student_management():
         if "student_version" not in st.session_state:
             st.session_state.student_version = 0
 
-        # Clean standard PostgreSQL query without invalid parameter matching
         students = query_dataframe(
             """
             SELECT
@@ -113,8 +112,28 @@ def student_management():
         )
 
         if not students.empty:
+            # Safely combine first and last name for visibility
+            students["Student Name"] = students["first_name"].fillna("") + " " + students["last_name"].fillna("")
+            
+            display_df = students[[
+                "id",
+                "student_code",
+                "Student Name",
+                "grade",
+                "subject",
+                "email",
+                "phone"
+            ]].rename(columns={
+                "id": "ID",
+                "student_code": "Student Code",
+                "grade": "Grade",
+                "subject": "Subject",
+                "email": "Email",
+                "phone": "Phone"
+            })
+
             st.dataframe(
-                students,
+                display_df,
                 use_container_width=True,
                 hide_index=True
             )
@@ -143,7 +162,7 @@ def student_management():
         )
 
         if not edit_students.empty:
-            edit_students["display_name"] = edit_students["first_name"] + " " + edit_students["last_name"] + " (Code: " + edit_students["student_code"].fillna("N/A") + ")"
+            edit_students["display_name"] = edit_students["first_name"].fillna("") + " " + edit_students["last_name"].fillna("") + " (Code: " + edit_students["student_code"].fillna("N/A") + ")"
             
             selected_edit_name = st.selectbox(
                 "Select Student to Edit",

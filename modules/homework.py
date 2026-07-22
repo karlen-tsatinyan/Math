@@ -80,6 +80,7 @@ def homework_management():
     # Run auto-migration check for missing columns
     ensure_homework_schema()
 
+    # Fetches students list using cached query layer
     students = query_dataframe(
         """
         SELECT
@@ -202,6 +203,8 @@ def homework_management():
                         )
                     )
 
+                    # Clear cache to display newly assigned homework instantly
+                    st.cache_data.clear()
                     st.success("Homework assigned successfully!")
                     st.rerun()
 
@@ -211,6 +214,7 @@ def homework_management():
     with tab2:
         st.subheader("Review & Grade Submissions")
 
+        # Fetches homework submissions through cache layer
         submissions = query_dataframe(
             """
             SELECT
@@ -280,6 +284,9 @@ def homework_management():
                     """,
                     (feedback.strip(), grade, int(selected_id))
                 )
+                
+                # Clear cache so grade changes reflect immediately
+                st.cache_data.clear()
                 st.success("Feedback saved successfully.")
                 st.rerun()
 
@@ -301,6 +308,8 @@ def homework_management():
                             "UPDATE homework SET assignment_file = NULL, deleted_assignment_file = 1 WHERE id = %s",
                             (int(selected_id),)
                         )
+                        
+                        st.cache_data.clear()
                         st.success("Assignment PDF removed.")
                         st.rerun()
                 else:
@@ -319,6 +328,8 @@ def homework_management():
                             "UPDATE homework SET student_file = NULL, deleted_student_file = 1 WHERE id = %s",
                             (int(selected_id),)
                         )
+                        
+                        st.cache_data.clear()
                         st.success("Student submission file removed.")
                         st.rerun()
                 else:
@@ -341,6 +352,7 @@ def student_homework():
 
     ensure_homework_schema()
 
+    # Fetches student-specific homework records via cached query layer
     homework = query_dataframe(
         """
         SELECT
@@ -465,5 +477,7 @@ def student_homework():
                 (student_file, int(selected_assignment_id), student_id)
             )
 
+            # Clear cache so submission status updates immediately
+            st.cache_data.clear()
             st.success("Homework submitted successfully!")
             st.rerun()

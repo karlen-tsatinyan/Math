@@ -35,6 +35,7 @@ def attendance_management():
     col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
 
     with col_f1:
+        # Uses cached query_dataframe safely
         students = query_dataframe(
             """
             SELECT id, first_name || ' ' || last_name AS student_name
@@ -91,6 +92,7 @@ def attendance_management():
 
     query += " ORDER BY a.session_date DESC, a.session_time DESC"
 
+    # Fetches filtered attendance history via cache layer
     history = query_dataframe(query, tuple(params))
 
     # Metrics Overview

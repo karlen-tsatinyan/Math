@@ -35,19 +35,19 @@ def student_management():
         username = st.text_input("Username for Login", value=email.split("@")[0] if email else "", key="add_username")
         password = st.text_input("Initial Password", type="password", value="changeme123", key="add_password")
         
-        if st.button("Add Student"):
+        if st.button("Add "):
             if not first or not last:
                 st.error("First name and last name are required.")
             elif not username or not password:
                 st.error("Username and password are required for portal login.")
             else:
                 try:
-                    # 1. Insert into students table and retrieve new ID safely
+                    # 1. Insert into s table and retrieve new ID safely
                     res = query_dataframe(
                         """
-                        INSERT INTO students
+                        INSERT INTO s
                         (
-                            student_code,
+                            _code,
                             first_name,
                             last_name,
                             grade,
@@ -65,7 +65,7 @@ def student_management():
                     )
                     
                     if not res.empty:
-                        new_student_id = int(res.iloc[0]["id"])
+                        new__id = int(res.iloc[0]["id"])
                         
                         # 2. Insert into users authentication table linking the student ID
                         execute(
@@ -105,7 +105,9 @@ def student_management():
                 phone
             FROM students
             ORDER BY id DESC
-            """
+            """,
+            (),
+            _force_refresh=st.session_state.get("admin_option")
         )
 
         if not students.empty:

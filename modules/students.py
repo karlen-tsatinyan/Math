@@ -35,8 +35,8 @@ def student_management():
                 st.error("First name and last name are required.")
             else:
                 try:
-                    # 1. Use get_single to execute the insert and securely fetch the exact returning ID in one atomic step
-                    res = get_single(
+                    # 1. Insert student and cleanly retrieve the newly generated primary key ID in PostgreSQL
+                    res = query_dataframe(
                         """
                         INSERT INTO students
                         (
@@ -55,10 +55,10 @@ def student_management():
                         (code, first, last, grade, subject, email, phone)
                     )
                     
-                    if res:
-                        new_student_id = int(res[0])
+                    if not res.empty:
+                        new_student_id = int(res.iloc[0]["id"])
                         
-                        # 2. Create the matching user login record
+                        # 2. Automatically create the matching user login record linked by student_id
                         if username and password:
                             execute(
                                 """
@@ -69,16 +69,14 @@ def student_management():
                             )
                         
                         st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
-                        
-                        # Clear cache and rerun so it appears instantly in tables
                         st.cache_data.clear()
                         st.cache_resource.clear()
                         st.rerun()
                     else:
-                        st.error("Student was added, but failed to retrieve their ID.")
+                        st.error("Failed to retrieve new student ID.")
                 except Exception as e:
                     st.error(f"Error adding student: {e}")
-                    
+
     with tab2:
 
         st.subheader("Current Students")
@@ -166,8 +164,6 @@ def student_management():
                 )
 
                 st.success("Student login created.")
-                
-                # Clear cache and rerun
                 st.cache_data.clear()
                 st.cache_resource.clear()
                 st.rerun()

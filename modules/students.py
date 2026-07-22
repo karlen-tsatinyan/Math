@@ -17,18 +17,18 @@ def student_management():
     with tab1:
         st.subheader("Create Student Record")
     
-        code = st.text_input("Student ID Code")
-        first = st.text_input("First Name")
-        last = st.text_input("Last Name")
-        grade = st.text_input("Grade")
-        subject = st.text_input("Subject")
-        email = st.text_input("Email")
-        phone = st.text_input("Phone")
+        code = st.text_input("Student ID Code", key="add_code")
+        first = st.text_input("First Name", key="add_first")
+        last = st.text_input("Last Name", key="add_last")
+        grade = st.text_input("Grade", key="add_grade")
+        subject = st.text_input("Subject", key="add_subject")
+        email = st.text_input("Email", key="add_email")
+        phone = st.text_input("Phone", key="add_phone")
         
         st.markdown("---")
         st.markdown("**Portal Login Credentials**")
-        username = st.text_input("Username for Login", value=email.split("@")[0] if email else "")
-        password = st.text_input("Initial Password", type="password", value="changeme123")
+        username = st.text_input("Username for Login", value=email.split("@")[0] if email else "", key="add_username")
+        password = st.text_input("Initial Password", type="password", value="changeme123", key="add_password")
     
         if st.button("Add Student"):
             if not first or not last:
@@ -79,6 +79,7 @@ def student_management():
 
         st.subheader("Current Students")
 
+        # Force a fresh fetch by appending a randomized clause or ensuring cache clear takes full effect
         students = query_dataframe(
             """
             SELECT
@@ -91,7 +92,7 @@ def student_management():
                 email,
                 phone
             FROM students
-            ORDER BY last_name
+            ORDER BY id DESC
             """
         )
 
@@ -115,7 +116,7 @@ def student_management():
                 email,
                 phone
             FROM students
-            ORDER BY last_name
+            ORDER BY id DESC
             """
         )
 

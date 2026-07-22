@@ -35,8 +35,8 @@ def student_management():
                 st.error("First name and last name are required.")
             else:
                 try:
-                    # 1. Insert student and cleanly retrieve the newly generated primary key ID in PostgreSQL
-                    res = query_dataframe(
+                    # 1. Insert the student using the dedicated execute function (guarantees commit)
+                    execute(
                         """
                         INSERT INTO students
                         (
@@ -50,15 +50,20 @@ def student_management():
                         )
                         VALUES
                         (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
                         """,
                         (code, first, last, grade, subject, email, phone)
+                    )
+                    
+                    # 2. Fetch the newly created student's ID safely
+                    res = query_dataframe(
+                        "SELECT id FROM students WHERE first_name = %s AND last_name = %s ORDER BY id DESC LIMIT 1",
+                        (first, last)
                     )
                     
                     if not res.empty:
                         new_student_id = int(res.iloc[0]["id"])
                         
-                        # 2. Automatically create the matching user login record linked by student_id
+                        # 3. Create the matching user login record
                         if username and password:
                             execute(
                                 """
@@ -69,12 +74,16 @@ def student_management():
                             )
                         
                         st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
+                        
+                        # Clear cache and rerun so it appears instantly in tables
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
                         st.rerun()
                     else:
-                        st.error("Failed to retrieve new student ID.")
+                        st.error("Student was added, but failed to retrieve their ID for login creation.")
                 except Exception as e:
                     st.error(f"Error adding student: {e}")
-
+                    
     with tab2:
 
         st.subheader("Current Students")

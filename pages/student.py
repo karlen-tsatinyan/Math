@@ -49,10 +49,17 @@ def student_page():
     ensure_student_portal_schema()
 
     user = st.session_state.get("user", {})
-    student_id = user.get("student_id")
+    raw_student_id = user.get("student_id") or user.get("id")
 
-    if not student_id:
+    if not raw_student_id:
         st.error("No student profile found in session. Please log in again.")
+        return
+
+    # Force student_id to an integer to prevent psycopg2 type mismatches
+    try:
+        student_id = int(raw_student_id)
+    except (ValueError, TypeError):
+        st.error("Invalid student profile ID format.")
         return
 
     st.sidebar.title("Student Portal")
@@ -61,12 +68,6 @@ def student_page():
     # Fetch actual existing columns in students table
     student_cols = get_existing_columns("students")
 
-    # Dynamic Column Builder (Prevents psycopg2.ProgrammingError if columns are missing)
-    fn_col = "first_name" if "first_name" in student_cols else "'' AS first_name"
-    ln_col = "last_name" if "last_name" in student_cols else "'' AS last_name"
-    gr_col = "grade" if "grade" in student_cols else "'N/A' AS grade"
-    sb_col = "subject" if "subject" in student_cols else "'N/A' AS subject"
-
     # ==========================
     # DASHBOARD
     # ==========================
@@ -74,13 +75,13 @@ def student_page():
         st.title("Student Dashboard")
 
         student = query_dataframe(
-            f"""
+            """
             SELECT 
                 id,
-                COALESCE({fn_col}, '') AS first_name,
-                COALESCE({ln_col}, '') AS last_name,
-                COALESCE({gr_col}, 'N/A') AS grade,
-                COALESCE({sb_col}, 'N/A') AS subject
+                COALESCE(first_name, '') AS first_name,
+                COALESCE(last_name, '') AS last_name,
+                COALESCE(grade, 'N/A') AS grade,
+                COALESCE(subject, 'N/A') AS subject
             FROM students
             WHERE id = %s
             """,
@@ -182,12 +183,9 @@ def student_page():
         )
         st.dataframe(sessions, use_container_width=True)
 
-        zl_col = "zoom_link" if "zoom_link" in student_cols else "'' AS zoom_link"
-        mi_col = "meeting_id" if "meeting_id" in student_cols else "'' AS meeting_id"
-
         zoom = query_dataframe(
-            f"""
-            SELECT {zl_col}, {mi_col} 
+            """
+            SELECT zoom_link, meeting_id 
             FROM students 
             WHERE id = %s
             """,

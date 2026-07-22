@@ -52,7 +52,7 @@ def performance_dashboard():
     # Run auto-migration check for missing columns
     ensure_performance_schema()
 
-    # Fetch active students
+    # Fetch active students via cached query layer
     students = query_dataframe(
         """
         SELECT
@@ -92,7 +92,7 @@ def performance_dashboard():
     student_id = student_options[selected_label]
     st.session_state.selected_student_id = student_id
 
-    # Query grades using PostgreSQL %s syntax
+    # Query grades using PostgreSQL %s syntax through cache layer
     grades = query_dataframe(
         """
         SELECT

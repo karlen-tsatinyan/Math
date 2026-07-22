@@ -6,10 +6,11 @@ def student_management():
 
     st.header("Student Management")
 
-    tab1, tab2 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
             "Add Student",
-            "Student List"
+            "Student List",
+            "Edit Student"
         ]
     )
 
@@ -24,7 +25,6 @@ def student_management():
         email = st.text_input("Email")
         phone = st.text_input("Phone")
         
-        # Optional: Add fields to automatically provision their portal login credentials here
         st.markdown("---")
         st.markdown("**Portal Login Credentials**")
         username = st.text_input("Username for Login", value=email.split("@")[0] if email else "")
@@ -35,7 +35,6 @@ def student_management():
                 st.error("First name and last name are required.")
             else:
                 try:
-                    # 1. Insert student and cleanly retrieve the newly generated primary key ID in PostgreSQL
                     res = query_dataframe(
                         """
                         INSERT INTO students
@@ -58,7 +57,6 @@ def student_management():
                     if not res.empty:
                         new_student_id = int(res.iloc[0]["id"])
                         
-                        # 2. Automatically create the matching user login record linked by student_id
                         if username and password:
                             execute(
                                 """
@@ -101,6 +99,76 @@ def student_management():
             students,
             use_container_width=True
         )
+
+    with tab3:
+        st.subheader("Edit Student Information")
+
+        edit_students = query_dataframe(
+            """
+            SELECT
+                id,
+                student_code,
+                first_name,
+                last_name,
+                grade,
+                subject,
+                email,
+                phone
+            FROM students
+            ORDER BY last_name
+            """
+        )
+
+        if not edit_students.empty:
+            edit_students["display_name"] = edit_students["first_name"] + " " + edit_students["last_name"] + " (Code: " + edit_students["student_code"].fillna("N/A") + ")"
+            
+            selected_edit_name = st.selectbox(
+                "Select Student to Edit",
+                edit_students["display_name"],
+                key="edit_student_selectbox"
+            )
+
+            student_row = edit_students[edit_students["display_name"] == selected_edit_name].iloc[0]
+            student_id = int(student_row["id"])
+
+            with st.form("edit_student_form"):
+                e_code = st.text_input("Student ID Code", value=str(student_row["student_code"]) if student_row["student_code"] else "")
+                e_first = st.text_input("First Name", value=str(student_row["first_name"]) if student_row["first_name"] else "")
+                e_last = st.text_input("Last Name", value=str(student_row["last_name"]) if student_row["last_name"] else "")
+                e_grade = st.text_input("Grade", value=str(student_row["grade"]) if student_row["grade"] else "")
+                e_subject = st.text_input("Subject", value=str(student_row["subject"]) if student_row["subject"] else "")
+                e_email = st.text_input("Email", value=str(student_row["email"]) if student_row["email"] else "")
+                e_phone = st.text_input("Phone", value=str(student_row["phone"]) if student_row["phone"] else "")
+
+                submit_edit = st.form_submit_button("Update Student Record")
+
+                if submit_edit:
+                    if not e_first or not e_last:
+                        st.error("First name and last name are required.")
+                    else:
+                        try:
+                            execute(
+                                """
+                                UPDATE students
+                                SET student_code = %s,
+                                    first_name = %s,
+                                    last_name = %s,
+                                    grade = %s,
+                                    subject = %s,
+                                    email = %s,
+                                    phone = %s
+                                WHERE id = %s
+                                """,
+                                (e_code, e_first, e_last, e_grade, e_subject, e_email, e_phone, student_id)
+                            )
+                            st.success("Student information updated successfully!")
+                            st.cache_data.clear()
+                            st.cache_resource.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error updating student: {e}")
+        else:
+            st.info("No students available to edit.")
 
     st.divider()
 

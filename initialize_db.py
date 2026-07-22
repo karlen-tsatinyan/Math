@@ -12,6 +12,14 @@ def run_migrations(cursor):
         cursor.execute("ALTER TABLE students ADD COLUMN curriculum_track TEXT DEFAULT '1st Grade General Math';")
         print("Migrated: Added 'curriculum_track' column to 'students' table.")
 
+    # Check if 'zoom_link' exists in 'sessions'
+    cursor.execute("PRAGMA table_info(sessions);")
+    session_columns = [col[1] for col in cursor.fetchall()]
+
+    if session_columns and "zoom_link" not in session_columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN zoom_link TEXT;")
+        print("Migrated: Added 'zoom_link' column to 'sessions' table.")
+
 
 def initialize_database():
     conn = sqlite3.connect(DATABASE_NAME)
@@ -95,6 +103,7 @@ def initialize_database():
             recurring_group TEXT,
             color TEXT DEFAULT '#4285F4',
             topic TEXT,
+            zoom_link TEXT,
             notes TEXT,
             status TEXT DEFAULT 'Scheduled',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

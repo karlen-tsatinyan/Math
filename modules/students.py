@@ -35,19 +35,18 @@ def student_management():
         username = st.text_input("Username for Login", value=email.split("@")[0] if email else "", key="add_username")
         password = st.text_input("Initial Password", type="password", value="changeme123", key="add_password")
         
-        if st.button("Add "):
+        if st.button("Add Student"):
             if not first or not last:
                 st.error("First name and last name are required.")
             elif not username or not password:
                 st.error("Username and password are required for portal login.")
             else:
                 try:
-                    # 1. Insert into s table and retrieve new ID safely
                     res = query_dataframe(
                         """
-                        INSERT INTO s
+                        INSERT INTO students
                         (
-                            _code,
+                            student_code,
                             first_name,
                             last_name,
                             grade,
@@ -65,9 +64,8 @@ def student_management():
                     )
                     
                     if not res.empty:
-                        new__id = int(res.iloc[0]["id"])
+                        new_student_id = int(res.iloc[0]["id"])
                         
-                        # 2. Insert into users authentication table linking the student ID
                         execute(
                             """
                             INSERT INTO users (username, password, role, student_id)
@@ -76,7 +74,10 @@ def student_management():
                             (username, password, new_student_id)
                         )
                         
-                        # 3. Aggressively clear all cached dataframe states so admin lists update immediately
+                        if "student_version" not in st.session_state:
+                            st.session_state.student_version = 0
+                        st.session_state.student_version += 1
+                        
                         st.cache_data.clear()
                         st.cache_resource.clear()
                         
@@ -91,10 +92,10 @@ def student_management():
 
         st.subheader("Current Students")
 
-        # Explicitly forces a fresh un-cached pull or clears layer when rendering list
         if "student_version" not in st.session_state:
             st.session_state.student_version = 0
 
+        # Clean standard PostgreSQL query without invalid parameter matching
         students = query_dataframe(
             """
             SELECT
@@ -107,11 +108,8 @@ def student_management():
                 email,
                 phone
             FROM students
-            -- %s safely acts as a cache-buster when version increments
-            WHERE 1 = 1 AND %s = %s
             ORDER BY id DESC
-            """,
-            (st.session_state.student_version, st.session_state.student_version)
+            """
         )
 
         if not students.empty:

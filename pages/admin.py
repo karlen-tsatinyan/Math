@@ -164,25 +164,16 @@ def admin_page():
         today = query_dataframe(
             """
             SELECT
-
                 s.first_name || ' ' || s.last_name AS Student,
-
                 ss.session_time AS Time,
-
                 ss.topic AS Lesson,
-
+                ss.zoom_link AS Zoom,
                 ss.notes AS Notes
-
             FROM sessions ss
-
             JOIN students s
-
             ON ss.student_id=s.id
-
             WHERE ss.session_date=?
-
             ORDER BY ss.session_time
-
             """,
             (
                 today_str(),
@@ -190,18 +181,21 @@ def admin_page():
         )
 
         if len(today) == 0:
-
             st.info(
                 "No sessions today."
             )
-
         else:
-
-            st.dataframe(
-                today,
-                use_container_width=True,
-                hide_index=True
-            )
+            # Render a custom loop or dataframe with markdown links for Zoom
+            for _, row in today.iterrows():
+                with st.container():
+                    st.write(f"**Student:** {row['Student']} | **Time:** {row['Time']} | **Lesson:** {row['Lesson']}")
+                    if row['Zoom'] and str(row['Zoom']).strip() not in ["", "nan", "None"]:
+                        st.markdown(f"🔗 [Join Zoom Meeting]({row['Zoom']})")
+                    else:
+                        st.caption("No Zoom link assigned.")
+                    if row['Notes']:
+                        st.caption(f"📝 Notes: {row['Notes']}")
+                    st.divider()
 
 
         # ============================

@@ -4,6 +4,21 @@ from authentication import login
 from pages.admin import admin_page
 from pages.student import student_page
 
+st.markdown(
+    """
+    <style>
+        /* Hide the status toast / running indicator completely */
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        /* Hide the small floating running man / spinner on top right */
+        header [data-testid="stDecoration"] {
+            display: none;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 st.set_page_config(
     page_title="Advanced Math Tutoring Portal",

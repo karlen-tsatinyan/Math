@@ -38,8 +38,11 @@ def student_management():
         if st.button("Add Student"):
             if not first or not last:
                 st.error("First name and last name are required.")
+            elif not username or not password:
+                st.error("Username and password are required for portal login.")
             else:
                 try:
+                    # 1. Insert into students table and retrieve new ID safely
                     res = query_dataframe(
                         """
                         INSERT INTO students
@@ -64,21 +67,23 @@ def student_management():
                     if not res.empty:
                         new_student_id = int(res.iloc[0]["id"])
                         
-                        if username and password:
-                            execute(
-                                """
-                                INSERT INTO users (username, password, role, student_id)
-                                VALUES (%s, %s, 'student', %s)
-                                """,
-                                (username, password, new_student_id)
-                            )
+                        # 2. Insert into users authentication table linking the student ID
+                        execute(
+                            """
+                            INSERT INTO users (username, password, role, student_id)
+                            VALUES (%s, %s, 'student', %s)
+                            """,
+                            (username, password, new_student_id)
+                        )
                         
-                        st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
+                        # 3. Aggressively clear all cached dataframe states so admin lists update immediately
                         st.cache_data.clear()
                         st.cache_resource.clear()
+                        
+                        st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
                         st.rerun()
                     else:
-                        st.error("Failed to retrieve new student ID.")
+                        st.error("Failed to retrieve new student ID from database response.")
                 except Exception as e:
                     st.error(f"Error adding student: {e}")
 
@@ -86,6 +91,7 @@ def student_management():
 
         st.subheader("Current Students")
 
+        # Explicitly forces a fresh un-cached pull or clears layer when rendering list
         students = query_dataframe(
             """
             SELECT
@@ -102,10 +108,14 @@ def student_management():
             """
         )
 
-        st.dataframe(
-            students,
-            use_container_width=True
-        )
+        if not students.empty:
+            st.dataframe(
+                students,
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No students found in the database.")
 
     with tab3:
         st.subheader("Edit Student Information")
@@ -177,9 +187,11 @@ def student_management():
                                 """,
                                 (e_code, e_first, e_last, e_grade, e_subject, e_email, e_phone, e_zoom, e_meeting, student_id)
                             )
-                            st.success("Student information updated successfully!")
+                            
                             st.cache_data.clear()
                             st.cache_resource.clear()
+                            
+                            st.success("Student information updated successfully!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error updating student: {e}")

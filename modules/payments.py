@@ -22,7 +22,7 @@ def payment_management():
 
     st.title("💰 Payment Management")
 
-    # Re-introducing your multi-tab layout
+    # Multi-tab layout for payment operations
     tab1, tab2, tab3 = st.tabs(["💳 Payment History", "➕ Record Payment", "✏️ Edit / Manage Payments"])
 
     # ==========================
@@ -31,6 +31,7 @@ def payment_management():
     with tab1:
         st.subheader("Payment Records")
         try:
+            # Fetches payment data using cached query layer
             payments = query_dataframe(
                 """
                 SELECT 
@@ -70,6 +71,9 @@ def payment_management():
                         """,
                         (student_id_input, amount_input, period_input)
                     )
+                    
+                    # Clear cache so newly recorded payments appear immediately
+                    st.cache_data.clear()
                     st.success("Payment successfully recorded!")
                     st.rerun()
                 except Exception as e:
@@ -103,11 +107,17 @@ def payment_management():
                                 "UPDATE payments SET amount = %s, period = %s WHERE id = %s",
                                 (new_amount, new_period, selected_id)
                             )
+                            
+                            # Clear cache on update
+                            st.cache_data.clear()
                             st.success("Payment updated successfully!")
                             st.rerun()
                             
                         if delete_sub:
                             execute("DELETE FROM payments WHERE id = %s", (selected_id,))
+                            
+                            # Clear cache on deletion
+                            st.cache_data.clear()
                             st.success("Payment deleted successfully!")
                             st.rerun()
             else:

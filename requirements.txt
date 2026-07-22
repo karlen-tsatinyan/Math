@@ -3,3 +3,4 @@ plotly
 streamlit-calendar
 pandas
 psycopg2-binary
+openpyxl

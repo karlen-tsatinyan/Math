@@ -17,8 +17,8 @@ def ensure_sessions_schema():
         ("recurring_group", "TEXT"),
         ("topic", "TEXT"),
         ("notes", "TEXT"),
-        ("status", "TEXT DEFAULT 'Scheduled'"),
-        ("zoom_link", "TEXT")
+        ("status", "TEXT DEFAULT 'Scheduled'")
+        # zoom_link is now tracked at the student level in students.py, so it's removed here
     ]
     for col_name, col_type in columns_to_check:
         try:
@@ -104,13 +104,14 @@ def scheduler_management():
     )
 
     # =================================================
-    # STUDENT LIST
+    # STUDENT LIST (Fetching zoom_link from students table)
     # =================================================
     students = query_dataframe(
         """
         SELECT 
             id, 
-            first_name || ' ' || last_name AS name 
+            first_name || ' ' || last_name AS name,
+            COALESCE(zoom_link, '') AS zoom_link
         FROM students 
         ORDER BY last_name
         """
@@ -121,9 +122,10 @@ def scheduler_management():
         return
 
     student_map = {row["name"]: row["id"] for _, row in students.iterrows()}
+    student_zoom_map = {row["id"]: row["zoom_link"] for _, row in students.iterrows()}
 
     # =================================================
-    # LOAD SESSIONS
+    # LOAD SESSIONS (Pulling student zoom_link via JOIN)
     # =================================================
     sessions = query_dataframe(
         """
@@ -135,10 +137,10 @@ def scheduler_management():
             COALESCE(sessions.duration, 60) AS duration,
             COALESCE(sessions.topic, '') AS topic,
             COALESCE(sessions.notes, '') AS notes,
-            COALESCE(sessions.zoom_link, '') AS zoom_link,
             sessions.recurring_group,
             COALESCE(sessions.status, 'Scheduled') AS status,
-            students.first_name || ' ' || students.last_name AS student
+            students.first_name || ' ' || students.last_name AS student,
+            COALESCE(students.zoom_link, '') AS zoom_link
         FROM sessions
         JOIN students ON sessions.student_id = students.id
         ORDER BY sessions.session_date, sessions.session_time
@@ -257,11 +259,12 @@ def scheduler_management():
                 if event["notes"]:
                     st.caption(f"📝 Notes: {event['notes']}")
                 
+                # Zoom link dynamically pulled from student profile record
                 zoom_url = event.get("zoom_link")
                 if zoom_url and zoom_url.strip() not in ["", "nan", "None"]:
                     st.markdown(f"🔗 **Zoom Link:** [Join Meeting]({zoom_url})")
                 else:
-                    st.caption("No Zoom link assigned.")
+                    st.caption("No Zoom link assigned to this student profile.")
                 
                 rec_grp = event["recurring_group"]
                 if rec_grp and str(rec_grp).strip() not in ["nan", "", "None"]:
@@ -281,7 +284,7 @@ def scheduler_management():
                 selected_time = st.selectbox("Start Time", TIME_SLOTS)
                 duration = st.selectbox("Duration (minutes)", [30, 45, 60, 75, 90, 120], index=2)
                 topic = st.text_input("Lesson Topic")
-                zoom_link = st.text_input("Zoom Meeting Link")
+                # Zoom link input field is completely removed from session booking creation
                 notes = st.text_area("Notes")
                 recurring = st.checkbox("Repeat weekly?")
                 
@@ -301,9 +304,9 @@ def scheduler_management():
                             """
                             INSERT INTO sessions (
                                 student_id, session_date, session_time, duration,
-                                repeat_type, recurring_group, topic, notes, zoom_link, status
+                                repeat_type, recurring_group, topic, notes, status
                             )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 student_map[selected_student],
@@ -314,7 +317,6 @@ def scheduler_management():
                                 group_id,
                                 topic,
                                 notes,
-                                zoom_link,
                                 "Scheduled"
                             )
                         )

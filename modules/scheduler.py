@@ -104,7 +104,7 @@ def scheduler_management():
     )
 
     # =================================================
-    # STUDENT LIST (Fetching zoom_link from students table)
+    # STUDENT LIST (Fetching zoom_link from students table via cache)
     # =================================================
     students = query_dataframe(
         """
@@ -125,7 +125,7 @@ def scheduler_management():
     student_zoom_map = {row["id"]: row["zoom_link"] for _, row in students.iterrows()}
 
     # =================================================
-    # LOAD SESSIONS (Pulling student zoom_link via JOIN)
+    # LOAD SESSIONS (Pulling student zoom_link via JOIN with cache)
     # =================================================
     sessions = query_dataframe(
         """
@@ -284,7 +284,6 @@ def scheduler_management():
                 selected_time = st.selectbox("Start Time", TIME_SLOTS)
                 duration = st.selectbox("Duration (minutes)", [30, 45, 60, 75, 90, 120], index=2)
                 topic = st.text_input("Lesson Topic")
-                # Zoom link input field is completely removed from session booking creation
                 notes = st.text_area("Notes")
                 recurring = st.checkbox("Repeat weekly?")
                 
@@ -321,6 +320,8 @@ def scheduler_management():
                             )
                         )
 
+                    # Clear cache so new schedule updates display instantly
+                    st.cache_data.clear()
                     st.success("Session(s) created successfully.")
                     st.session_state.active_action = None
                     st.rerun()
@@ -371,6 +372,8 @@ def scheduler_management():
             else:
                 execute("DELETE FROM sessions WHERE id = %s", (selected_id,))
 
+            # Clear cache on deletion
+            st.cache_data.clear()
             st.success("Session(s) removed.")
             
             # Clean up session state

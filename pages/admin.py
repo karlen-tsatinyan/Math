@@ -172,7 +172,7 @@ def admin_page():
             FROM sessions ss
             JOIN students s
             ON ss.student_id=s.id
-            WHERE ss.session_date=?
+            WHERE ss.session_date = ?
             ORDER BY ss.session_time
             """,
             (
@@ -180,12 +180,9 @@ def admin_page():
             )
         )
 
-        if len(today) == 0:
-            st.info(
-                "No sessions today."
-            )
+        if today.empty or len(today) == 0:
+            st.info("There is no session for today.")
         else:
-            # Render a custom loop or dataframe with markdown links for Zoom
             for _, row in today.iterrows():
                 with st.container():
                     student_name = row.get('Student', row.get('student', 'N/A'))
@@ -198,8 +195,6 @@ def admin_page():
                     
                     if zoom_url and str(zoom_url).strip() not in ["", "nan", "None"]:
                         st.markdown(f"🔗 [Join Zoom Meeting]({zoom_url})")
-                    else:
-                        st.caption("No Zoom link assigned.")
                         
                     if notes and str(notes).strip() not in ["", "nan", "None"]:
                         st.caption(f"📝 Notes: {notes}")

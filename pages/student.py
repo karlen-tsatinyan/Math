@@ -30,6 +30,7 @@ def ensure_student_portal_schema():
         ("students", "subject", "TEXT DEFAULT 'N/A'"),
         ("students", "zoom_link", "TEXT"),
         ("students", "meeting_id", "TEXT"),
+        ("sessions", "zoom_link", "TEXT"),
         ("homework", "archived", "INTEGER DEFAULT 0"),
         ("homework", "status", "TEXT DEFAULT 'Assigned'"),
         ("payments", "period", "TEXT"),
@@ -142,10 +143,10 @@ def student_page():
                 (student_id,)
             )
 
-            # Fetch Single Next Session
+            # Fetch Single Next Session with Zoom Link
             next_session = query_dataframe(
                 """
-                SELECT session_date, session_time, topic 
+                SELECT session_date, session_time, topic, zoom_link 
                 FROM sessions 
                 WHERE student_id = %s AND session_date >= %s 
                 ORDER BY session_date ASC, session_time ASC 
@@ -168,6 +169,12 @@ def student_page():
             if not next_session.empty:
                 s = next_session.iloc[0]
                 st.info(f"**Date:** {s['session_date']} at {s['session_time']} | **Topic:** {s['topic']}")
+                
+                zoom_url = s.get("zoom_link")
+                if zoom_url and str(zoom_url).strip() not in ["", "nan", "None"]:
+                    st.markdown(f"🔗 [Join Zoom Meeting]({zoom_url})")
+                else:
+                    st.caption("No Zoom link assigned for this session yet.")
             else:
                 st.write("No upcoming sessions scheduled.")
         else:
@@ -187,15 +194,32 @@ def student_page():
         st.title("My Sessions")
         sessions = query_dataframe(
             """
-            SELECT session_date, session_time, topic, notes 
+            SELECT session_date, session_time, topic, zoom_link, notes 
             FROM sessions 
             WHERE student_id = %s 
-            ORDER BY session_date ASC
+            ORDER BY session_date ASC, session_time ASC
             """,
             (student_id,)
         )
-        st.dataframe(sessions, use_container_width=True)
+        
+        if sessions.empty:
+            st.info("No sessions found.")
+        else:
+            for _, row in sessions.iterrows():
+                with st.container():
+                    st.write(f"📅 **Date:** {row['session_date']} at {row['session_time']} | **Topic:** {row.get('topic', 'N/A')}")
+                    
+                    z_link = row.get("zoom_link")
+                    if z_link and str(z_link).strip() not in ["", "nan", "None"]:
+                        st.markdown(f"🔗 [Join Zoom Meeting]({z_link})")
+                    else:
+                        st.caption("No Zoom link assigned.")
+                        
+                    if row.get("notes"):
+                        st.caption(f"📝 Notes: {row['notes']}")
+                    st.divider()
 
+        # Fallback profile-level zoom check if needed
         zoom = query_dataframe(
             """
             SELECT zoom_link, meeting_id 
@@ -208,7 +232,12 @@ def student_page():
             z_link = zoom.iloc[0].get("zoom_link")
             m_id = zoom.iloc[0].get("meeting_id")
             if z_link or m_id:
-                st.info(f"**Zoom Link:** {z_link or 'N/A'}\n\n**Meeting ID:** {m_id or 'N/A'}")
+                st.sidebar.divider()
+                st.sidebar.subheader("Permanent Classroom Info")
+                if z_link:
+                    st.sidebar.markdown(f"🔗 [General Zoom Room]({z_link})")
+                if m_id:
+                    st.sidebar.text(f"Meeting ID: {m_id}")
 
     # ==========================
     # PAYMENTS

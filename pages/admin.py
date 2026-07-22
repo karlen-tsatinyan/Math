@@ -164,32 +164,32 @@ def admin_page():
         today = query_dataframe(
             """
             SELECT
-                s.first_name || ' ' || s.last_name AS Student,
-                ss.session_time AS Time,
-                ss.topic AS Lesson,
-                ss.zoom_link AS Zoom,
-                ss.notes AS Notes
+                s.first_name || ' ' || s.last_name AS student,
+                ss.session_time AS session_time,
+                COALESCE(ss.topic, 'General Tutoring') AS topic,
+                COALESCE(s.zoom_link, '') AS zoom_link,
+                COALESCE(ss.notes, '') AS notes
             FROM sessions ss
             JOIN students s
-            ON ss.student_id=s.id
+            ON ss.student_id = s.id
             WHERE ss.session_date = ?
-            ORDER BY ss.session_time
+            ORDER BY ss.session_time ASC
             """,
             (
                 today_str(),
             )
         )
 
-        if today.empty or len(today) == 0:
+        if today.empty:
             st.info("There is no session for today.")
         else:
             for _, row in today.iterrows():
                 with st.container():
-                    student_name = row.get('Student', row.get('student', 'N/A'))
-                    session_time = row.get('Time', row.get('session_time', 'N/A'))
-                    lesson_topic = row.get('Lesson', row.get('topic', 'N/A'))
-                    zoom_url = row.get('Zoom', row.get('zoom_link', ''))
-                    notes = row.get('Notes', row.get('notes', ''))
+                    student_name = row.get('student', 'N/A')
+                    session_time = row.get('session_time', 'N/A')
+                    lesson_topic = row.get('topic', 'N/A')
+                    zoom_url = row.get('zoom_link', '')
+                    notes = row.get('notes', '')
 
                     st.write(f"**Student:** {student_name} | **Time:** {session_time} | **Lesson:** {lesson_topic}")
                     

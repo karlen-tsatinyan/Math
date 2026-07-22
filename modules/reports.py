@@ -84,7 +84,7 @@ def reports_management():
     # ==========================
     # KPI CARDS
     # ==========================
-    revenue = payments["Amount"].sum() if not payments.empty else 0.0
+    revenue = payments["Amount"].sum() if not payments.empty and "Amount" in payments.columns else 0.0
     total_sessions = int(sessions.iloc[0]["total_sessions"]) if not sessions.empty else 0
     active_students = int(students.iloc[0]["active_students"]) if not students.empty else 0
 

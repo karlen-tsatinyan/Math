@@ -35,6 +35,7 @@ def execute_many(query, data):
     finally:
         conn.close()
 
+@st.cache_data(ttl=600)
 def query_dataframe(query, params=()):
     conn = get_connection()
     try:

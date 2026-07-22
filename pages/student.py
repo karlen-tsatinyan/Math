@@ -49,24 +49,37 @@ def student_page():
     ensure_student_portal_schema()
 
     user = st.session_state.get("user", {})
-    raw_student_id = user.get("student_id") or user.get("id")
+    user_id = user.get("id")
+    username = user.get("username")
 
-    if not raw_student_id:
-        st.error("No student profile found in session. Please log in again.")
-        return
+    student_id = None
 
-    # Force student_id to an integer to prevent psycopg2 type mismatches
+    # Dynamically resolve student_id from the database users table (matching the admin source of truth)
     try:
-        student_id = int(raw_student_id)
-    except (ValueError, TypeError):
-        st.error("Invalid student profile ID format.")
+        if user_id:
+            res = query_dataframe("SELECT student_id FROM users WHERE id = %s", (user_id,))
+            if not res.empty and res.iloc[0]["student_id"] is not None:
+                student_id = int(res.iloc[0]["student_id"])
+        elif username:
+            res = query_dataframe("SELECT student_id FROM users WHERE username = %s", (username,))
+            if not res.empty and res.iloc[0]["student_id"] is not None:
+                student_id = int(res.iloc[0]["student_id"])
+    except Exception:
+        pass
+
+    # Fallback to direct session dictionary value if query lookup is empty
+    if not student_id and user.get("student_id"):
+        try:
+            student_id = int(user.get("student_id"))
+        except (ValueError, TypeError):
+            pass
+
+    if not student_id:
+        st.error("No linked student profile found for this user account. Please check with your administrator.")
         return
 
     st.sidebar.title("Student Portal")
     option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Schedule", "Payments"])
-
-    # Fetch actual existing columns in students table
-    student_cols = get_existing_columns("students")
 
     # ==========================
     # DASHBOARD

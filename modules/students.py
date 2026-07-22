@@ -162,6 +162,10 @@ def student_management():
                 )
 
                 st.success("Student login created.")
+                
+                # Clear cache and rerun
+                st.cache_data.clear()
+                st.cache_resource.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"Error creating student account: {e}")

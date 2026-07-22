@@ -92,6 +92,9 @@ def student_management():
         st.subheader("Current Students")
 
         # Explicitly forces a fresh un-cached pull or clears layer when rendering list
+        if "student_version" not in st.session_state:
+            st.session_state.student_version = 0
+
         students = query_dataframe(
             """
             SELECT
@@ -104,10 +107,11 @@ def student_management():
                 email,
                 phone
             FROM students
+            -- %s safely acts as a cache-buster when version increments
+            WHERE 1 = 1 AND %s = %s
             ORDER BY id DESC
             """,
-            (),
-            _force_refresh=st.session_state.get("admin_option")
+            (st.session_state.student_version, st.session_state.student_version)
         )
 
         if not students.empty:

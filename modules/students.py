@@ -35,8 +35,8 @@ def student_management():
                 st.error("First name and last name are required.")
             else:
                 try:
-                    # 1. Insert the student using the dedicated execute function (guarantees commit)
-                    execute(
+                    # 1. Use get_single to execute the insert and securely fetch the exact returning ID in one atomic step
+                    res = get_single(
                         """
                         INSERT INTO students
                         (
@@ -50,20 +50,15 @@ def student_management():
                         )
                         VALUES
                         (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (code, first, last, grade, subject, email, phone)
                     )
                     
-                    # 2. Fetch the newly created student's ID safely
-                    res = query_dataframe(
-                        "SELECT id FROM students WHERE first_name = %s AND last_name = %s ORDER BY id DESC LIMIT 1",
-                        (first, last)
-                    )
-                    
-                    if not res.empty:
-                        new_student_id = int(res.iloc[0]["id"])
+                    if res:
+                        new_student_id = int(res[0])
                         
-                        # 3. Create the matching user login record
+                        # 2. Create the matching user login record
                         if username and password:
                             execute(
                                 """
@@ -80,7 +75,7 @@ def student_management():
                         st.cache_resource.clear()
                         st.rerun()
                     else:
-                        st.error("Student was added, but failed to retrieve their ID for login creation.")
+                        st.error("Student was added, but failed to retrieve their ID.")
                 except Exception as e:
                     st.error(f"Error adding student: {e}")
                     

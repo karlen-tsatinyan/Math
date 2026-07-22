@@ -188,13 +188,22 @@ def admin_page():
             # Render a custom loop or dataframe with markdown links for Zoom
             for _, row in today.iterrows():
                 with st.container():
-                    st.write(f"**Student:** {row['Student']} | **Time:** {row['Time']} | **Lesson:** {row['Lesson']}")
-                    if row['Zoom'] and str(row['Zoom']).strip() not in ["", "nan", "None"]:
-                        st.markdown(f"🔗 [Join Zoom Meeting]({row['Zoom']})")
+                    student_name = row.get('Student', row.get('student', 'N/A'))
+                    session_time = row.get('Time', row.get('session_time', 'N/A'))
+                    lesson_topic = row.get('Lesson', row.get('topic', 'N/A'))
+                    zoom_url = row.get('Zoom', row.get('zoom_link', ''))
+                    notes = row.get('Notes', row.get('notes', ''))
+
+                    st.write(f"**Student:** {student_name} | **Time:** {session_time} | **Lesson:** {lesson_topic}")
+                    
+                    if zoom_url and str(zoom_url).strip() not in ["", "nan", "None"]:
+                        st.markdown(f"🔗 [Join Zoom Meeting]({zoom_url})")
                     else:
                         st.caption("No Zoom link assigned.")
-                    if row['Notes']:
-                        st.caption(f"📝 Notes: {row['Notes']}")
+                        
+                    if notes and str(notes).strip() not in ["", "nan", "None"]:
+                        st.caption(f"📝 Notes: {notes}")
+                        
                     st.divider()
 
 

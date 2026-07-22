@@ -80,6 +80,7 @@ def curriculum_management():
     # TAB 1: CURRICULUM BOARD
     # ==========================================
     with board_tab:
+        # Cached via database.py layer to avoid constant Supabase hits
         students = query_dataframe(
             """
             SELECT
@@ -127,6 +128,8 @@ def curriculum_management():
                                 """,
                                 (selected_track, student_id)
                             )
+                            # Clear data cache so updates reflect right away
+                            st.cache_data.clear()
                             st.success(f"Updated track to '{selected_track}'!")
                             st.rerun()
 
@@ -243,6 +246,8 @@ def curriculum_management():
                         )
                     )
 
+                    # Clear cache on modification so new resource appears instantly
+                    st.cache_data.clear()
                     st.success(f"Resource '{title.strip()}' saved to {track}!")
                     st.rerun()
 
@@ -304,5 +309,7 @@ def curriculum_management():
                                     pass
 
                             execute("DELETE FROM curriculum_resources WHERE id = %s", (res_id,))
+                            # Clear cache on delete
+                            st.cache_data.clear()
                             st.success("Resource removed.")
                             st.rerun()

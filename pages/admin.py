@@ -19,6 +19,15 @@ from modules.attendance import attendance_management
 from modules.reports import reports_management
 from database import query_dataframe
 
+from database import query_dataframe
+
+st.write(
+    query_dataframe(
+        "SELECT current_database(), current_schema()"
+    )
+)
+
+
 st.markdown(
     """
     <style>

@@ -62,3 +62,31 @@ def get_single(query, params=()):
         raise e
     finally:
         conn.close()
+
+def execute_returning(query, params=()):
+    conn = get_connection()
+
+    try:
+        cursor = conn.cursor()
+
+        query_pg = query.replace("?", "%s")
+
+        cursor.execute(query_pg, params)
+
+        row = cursor.fetchone()
+
+        conn.commit()
+
+        cursor.close()
+
+        return row
+
+    except Exception as e:
+
+        conn.rollback()
+
+        raise e
+
+    finally:
+
+        conn.close()

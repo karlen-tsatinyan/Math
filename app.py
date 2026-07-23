@@ -1,5 +1,5 @@
 import streamlit as st
-
+st.cache_data.clear()
 from authentication import login
 from pages.admin import admin_page
 from pages.student import student_page

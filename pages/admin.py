@@ -242,19 +242,15 @@ def admin_page():
                 with st.container(border=True):
 
 
-                    student_name = row["Student"]
+                    student_name = row.get("Student", "Unknown Student")
 
-
-                    session_time = row["Time"]
-
-
-                    lesson_topic = row["Lesson"]
-
-
-                    zoom_url = row["Zoom"]
-
-
-                    notes = row["Notes"]
+                    session_time = row.get("Time", "Not Set")
+                    
+                    lesson_topic = row.get("Lesson", "Not Set")
+                    
+                    zoom_url = row.get("Zoom", "")
+                    
+                    notes = row.get("Notes", "")
 
 
 

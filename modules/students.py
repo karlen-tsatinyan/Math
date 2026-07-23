@@ -19,48 +19,169 @@ def student_management():
     )
 
     with tab1:
+
         st.subheader("Create Student Record")
-        
-        code = st.text_input("Student ID Code", key="add_code")
-        first = st.text_input("First Name", key="add_first")
-        last = st.text_input("Last Name", key="add_last")
-        grade = st.text_input("Grade", key="add_grade")
-        subject = st.text_input("Subject", key="add_subject")
-        email = st.text_input("Email", key="add_email")
-        phone = st.text_input("Phone", key="add_phone")
-        
+    
+    
+        code = st.text_input(
+            "Student ID Code",
+            key="add_code"
+        )
+    
+        first = st.text_input(
+            "First Name",
+            key="add_first"
+        )
+    
+        last = st.text_input(
+            "Last Name",
+            key="add_last"
+        )
+    
+        grade = st.text_input(
+            "Grade",
+            key="add_grade"
+        )
+    
+        subject = st.text_input(
+            "Subject",
+            key="add_subject"
+        )
+    
+        email = st.text_input(
+            "Email",
+            key="add_email"
+        )
+    
+        phone = st.text_input(
+            "Phone",
+            key="add_phone"
+        )
+    
+    
         st.markdown("---")
         st.markdown("**Zoom Classroom Information**")
-        zoom_link = st.text_input("Zoom Link", key="add_zoom_link")
-        meeting_id = st.text_input("Meeting ID", key="add_meeting_id")
-        
+    
+    
+        zoom_link = st.text_input(
+            "Zoom Link",
+            key="add_zoom_link"
+        )
+    
+        meeting_id = st.text_input(
+            "Meeting ID",
+            key="add_meeting_id"
+        )
+    
+    
         st.markdown("---")
         st.markdown("**Portal Login Credentials**")
-        username = st.text_input("Username for Login", value=email.split("@")[0] if email else "", key="add_username")
-        password = st.text_input("Initial Password", type="password", value="changeme123", key="add_password")
-        
+    
+    
+        username = st.text_input(
+            "Username for Login",
+            value=email.split("@")[0] if email else "",
+            key="add_username"
+        )
+    
+        password = st.text_input(
+            "Initial Password",
+            type="password",
+            value="changeme123",
+            key="add_password"
+        )
+    
+    
+    
         if st.button("Add Student"):
-
+    
+    
             if not first or not last:
-        
+    
                 st.error(
                     "First name and last name are required."
                 )
-        
+    
+    
             elif not username or not password:
-        
+    
                 st.error(
                     "Username and password are required for portal login."
                 )
-        
+    
+    
             else:
-        
+    
+    
+                # ===============================
+                # DUPLICATE CHECK
+                # ===============================
+    
+                existing_student = query_dataframe(
+    
+                    """
+                    SELECT id
+                    FROM students
+                    WHERE email=%s
+                    OR student_code=%s
+                    """,
+    
+                    (
+                        email,
+                        code
+                    )
+    
+                )
+    
+    
+                if len(existing_student) > 0:
+    
+                    st.warning(
+                        "A student with this email or Student ID Code already exists."
+                    )
+    
+                    return
+    
+    
+    
+                existing_user = query_dataframe(
+    
+                    """
+                    SELECT id
+                    FROM users
+                    WHERE username=%s
+                    """,
+    
+                    (
+                        username,
+                    )
+    
+                )
+    
+    
+                if len(existing_user) > 0:
+    
+                    st.warning(
+                        "This username already exists."
+                    )
+    
+                    return
+    
+    
+    
+                # ===============================
+                # INSERT STUDENT
+                # ===============================
+    
                 try:
-        
+    
+    
                     row = execute_returning(
-        
+    
                         """
+    
                         INSERT INTO students
+    
                         (
                             student_code,
                             first_name,
@@ -72,12 +193,17 @@ def student_management():
                             zoom_link,
                             meeting_id
                         )
+    
                         VALUES
+    
                         (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    
                         RETURNING id
+    
                         """,
-        
+    
                         (
+    
                             code,
                             first,
                             last,
@@ -87,57 +213,86 @@ def student_management():
                             phone,
                             zoom_link,
                             meeting_id
+    
                         )
-        
+    
                     )
-        
+    
+    
                     new_student_id = int(row[0])
-        
+    
+    
+    
+                    # ===============================
+                    # CREATE STUDENT LOGIN
+                    # ===============================
+    
+    
                     execute(
-        
+    
                         """
+    
                         INSERT INTO users
+    
                         (
                             username,
                             password,
                             role,
                             student_id
                         )
+    
                         VALUES
-                        (%s, %s, 'student', %s)
+    
+                        (%s,%s,'student',%s)
+    
                         """,
-        
+    
                         (
+    
                             username,
                             password,
                             new_student_id
+    
                         )
-        
+    
                     )
-        
+    
+    
+    
                     if "student_version" not in st.session_state:
-        
+    
                         st.session_state.student_version = 0
-        
+    
+    
+    
                     st.session_state.student_version += 1
-        
+    
+    
                     st.cache_data.clear()
-        
+    
                     st.cache_resource.clear()
-        
+    
+    
+    
                     st.success(
-        
+    
                         f"Student added successfully! "
                         f"Linked Student ID is {new_student_id}."
-        
+    
                     )
-        
+    
+    
                     st.rerun()
-        
+    
+    
+    
                 except Exception as e:
-        
+    
+    
                     st.error(
+    
                         f"Error adding student: {e}"
+    
                     )
 
     with tab2:

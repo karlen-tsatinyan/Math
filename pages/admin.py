@@ -192,15 +192,17 @@ def admin_page():
             """
             SELECT
 
-                s.first_name || ' ' || s.last_name AS Student,
+                s.first_name,
 
-                ss.session_time AS Time,
+                s.last_name,
 
-                ss.topic AS Lesson,
+                ss.session_time,
 
-                s.zoom_link AS Zoom,
+                ss.topic,
 
-                ss.notes AS Notes
+                s.zoom_link,
+
+                ss.notes
 
 
             FROM sessions ss
@@ -242,15 +244,27 @@ def admin_page():
                 with st.container(border=True):
 
 
-                    student_name = row.get("Student", "Unknown Student")
+                    student_name = (
 
-                    session_time = row.get("Time", "Not Set")
-                    
-                    lesson_topic = row.get("Lesson", "Not Set")
-                    
-                    zoom_url = row.get("Zoom", "")
-                    
-                    notes = row.get("Notes", "")
+                        str(row["first_name"])
+
+                        + " "
+
+                        + str(row["last_name"])
+
+                    )
+
+
+                    session_time = row["session_time"]
+
+
+                    lesson_topic = row["topic"]
+
+
+                    zoom_url = row["zoom_link"]
+
+
+                    notes = row["notes"]
 
 
 
@@ -261,7 +275,7 @@ def admin_page():
 
                         **Time:** {session_time if session_time else "Not Set"}
 
-                        **Lesson:** {lesson_topic if lesson_topic else "Not Set"}
+                        **Lesson:** {lesson_topic if lesson_topic else "Not Entered"}
                         """
 
                     )

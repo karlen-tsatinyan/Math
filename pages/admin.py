@@ -24,11 +24,11 @@ from database import query_dataframe
 st.markdown(
     """
     <style>
-        /* Hides the Streamlit running man / status indicator widget */
-        [data-testid="stStatusWidget"] {
-            visibility: hidden;
-            display: none;
-        }
+
+    [data-testid="stStatusWidget"] {
+        display: none;
+    }
+
     </style>
     """,
     unsafe_allow_html=True

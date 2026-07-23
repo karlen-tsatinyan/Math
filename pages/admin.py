@@ -16,6 +16,7 @@ from modules.student_profile import student_profile
 from modules.students import student_management
 from utils.datetime_utils import today_str
 
+# Hide default Streamlit status indicators
 st.markdown(
     """
     <style>
@@ -29,6 +30,7 @@ st.markdown(
 
 
 def admin_page():
+    # Hide default sidebar navigation headers
     st.markdown(
         """
         <style>
@@ -39,11 +41,6 @@ def admin_page():
         """,
         unsafe_allow_html=True,
     )
-
-    if st.sidebar.button("🔄 Refresh", use_container_width=True):
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.rerun()
 
     st.sidebar.title("Admin Control Panel")
 
@@ -103,7 +100,6 @@ def admin_page():
                 AND archived=0
         """)
 
-        today_date = today_str()
         today_sessions = query_dataframe(
             """
             SELECT COUNT(*) AS total
@@ -116,17 +112,13 @@ def admin_page():
         col1, col2, col3, col4, col5 = st.columns(5)
 
         col1.metric("👨‍🎓 Students", int(student_count.iloc[0]["total"]))
-
         col2.metric(
             "📅 Today's Sessions", int(today_sessions.iloc[0]["total"])
         )
-
         col3.metric("💰 Revenue", f"${payment_total.iloc[0]['total']:,.2f}")
-
         col4.metric(
             "📚 Homework Waiting", int(homework_waiting.iloc[0]["total"])
         )
-
         col5.metric("📝 Homework Due", int(homework_due.iloc[0]["total"]))
 
         st.divider()

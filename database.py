@@ -1,167 +1,53 @@
-import psycopg2
 import pandas as pd
+import psycopg2
 import streamlit as st
 
 
 def get_connection():
-
+    """
+    Establishes and returns a connection to the PostgreSQL database
+    using Streamlit secrets.
+    """
     return psycopg2.connect(
-        st.secrets["postgres"]["url"]
+        host=st.secrets["postgres"]["host"],
+        port=st.secrets["postgres"]["port"],
+        database=st.secrets["postgres"]["database"],
+        user=st.secrets["postgres"]["user"],
+        password=st.secrets["postgres"]["password"],
     )
 
 
-def execute(query, params=()):
-
+def query_dataframe(query, params=None):
+    """
+    Executes a SELECT query safely using psycopg2 directly and loads the output
+    into a Pandas DataFrame without throwing pd.read_sql parameter parsing errors.
+    """
     conn = get_connection()
-
     try:
-
-        cursor = conn.cursor()
-
-        cursor.execute(
-            query,
-            params
-        )
-
-        conn.commit()
-
-        cursor.close()
-
+        with conn.cursor() as cur:
+            cur.execute(query, params or ())
+            if cur.description:
+                columns = [desc[0] for desc in cur.description]
+                data = cur.fetchall()
+                return pd.DataFrame(data, columns=columns)
+            return pd.DataFrame()
     except Exception as e:
-
-        conn.rollback()
         raise e
-
     finally:
-
         conn.close()
 
 
-
-def execute_many(query, data):
-
+def execute(query, params=None):
+    """
+    Executes INSERT, UPDATE, or DELETE queries with automatic transaction commit.
+    """
     conn = get_connection()
-
     try:
-
-        cursor = conn.cursor()
-
-        cursor.executemany(
-            query,
-            data
-        )
-
-        conn.commit()
-
-        cursor.close()
-
+        with conn.cursor() as cur:
+            cur.execute(query, params or ())
+            conn.commit()
     except Exception as e:
-
         conn.rollback()
         raise e
-
     finally:
-
-        conn.close()
-
-
-
-@st.cache_data(ttl=600)
-def query_dataframe(query, params=()):
-
-    conn = get_connection()
-
-    try:
-
-        df = pd.read_sql_query(
-            query,
-            conn,
-            params=params
-        )
-
-        return df
-
-
-    except Exception as e:
-
-        print("SQL ERROR:")
-        print(e)
-
-        print("QUERY:")
-        print(query)
-
-        print("PARAMS:")
-        print(params)
-
-        raise e
-
-
-    finally:
-
-        conn.close()
-
-
-
-def get_single(query, params=()):
-
-    conn = get_connection()
-
-    try:
-
-        cursor = conn.cursor()
-
-        cursor.execute(
-            query,
-            params
-        )
-
-        result = cursor.fetchone()
-
-        cursor.close()
-
-        return result
-
-
-    except Exception as e:
-
-        conn.rollback()
-        raise e
-
-
-    finally:
-
-        conn.close()
-
-
-
-def execute_returning(query, params=()):
-
-    conn = get_connection()
-
-    try:
-
-        cursor = conn.cursor()
-
-        cursor.execute(
-            query,
-            params
-        )
-
-        row = cursor.fetchone()
-
-        conn.commit()
-
-        cursor.close()
-
-        return row
-
-
-    except Exception as e:
-
-        conn.rollback()
-        raise e
-
-
-    finally:
-
         conn.close()

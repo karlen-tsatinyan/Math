@@ -40,13 +40,25 @@ def student_management():
         password = st.text_input("Initial Password", type="password", value="changeme123", key="add_password")
         
         if st.button("Add Student"):
+
             if not first or not last:
-                st.error("First name and last name are required.")
+        
+                st.error(
+                    "First name and last name are required."
+                )
+        
             elif not username or not password:
-                st.error("Username and password are required for portal login.")
+        
+                st.error(
+                    "Username and password are required for portal login."
+                )
+        
             else:
+        
                 try:
+        
                     row = execute_returning(
+        
                         """
                         INSERT INTO students
                         (
@@ -64,6 +76,7 @@ def student_management():
                         (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
                         """,
+        
                         (
                             code,
                             first,
@@ -75,31 +88,57 @@ def student_management():
                             zoom_link,
                             meeting_id
                         )
+        
                     )
-                    
+        
                     new_student_id = int(row[0])
-                        
-                        execute(
-                            """
-                            INSERT INTO users (username, password, role, student_id)
-                            VALUES (%s, %s, 'student', %s)
-                            """,
-                            (username, password, new_student_id)
+        
+                    execute(
+        
+                        """
+                        INSERT INTO users
+                        (
+                            username,
+                            password,
+                            role,
+                            student_id
                         )
-                        
-                        if "student_version" not in st.session_state:
-                            st.session_state.student_version = 0
-                        st.session_state.student_version += 1
-                        
-                        st.cache_data.clear()
-                        st.cache_resource.clear()
-                        
-                        st.success(f"Student added successfully! Linked Student ID is {new_student_id}.")
-                        st.rerun()
-                    else:
-                        st.error("Failed to retrieve new student ID from database response.")
+                        VALUES
+                        (%s, %s, 'student', %s)
+                        """,
+        
+                        (
+                            username,
+                            password,
+                            new_student_id
+                        )
+        
+                    )
+        
+                    if "student_version" not in st.session_state:
+        
+                        st.session_state.student_version = 0
+        
+                    st.session_state.student_version += 1
+        
+                    st.cache_data.clear()
+        
+                    st.cache_resource.clear()
+        
+                    st.success(
+        
+                        f"Student added successfully! "
+                        f"Linked Student ID is {new_student_id}."
+        
+                    )
+        
+                    st.rerun()
+        
                 except Exception as e:
-                    st.error(f"Error adding student: {e}")
+        
+                    st.error(
+                        f"Error adding student: {e}"
+                    )
 
     with tab2:
 

@@ -1,6 +1,10 @@
 import streamlit as st
-from database import execute, query_dataframe
 
+from database import (
+    execute,
+    execute_returning,
+    query_dataframe
+)
 
 def student_management():
 
@@ -42,7 +46,7 @@ def student_management():
                 st.error("Username and password are required for portal login.")
             else:
                 try:
-                    res = query_dataframe(
+                    row = execute_returning(
                         """
                         INSERT INTO students
                         (
@@ -57,14 +61,23 @@ def student_management():
                             meeting_id
                         )
                         VALUES
-                        (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
                         """,
-                        (code, first, last, grade, subject, email, phone, zoom_link, meeting_id)
+                        (
+                            code,
+                            first,
+                            last,
+                            grade,
+                            subject,
+                            email,
+                            phone,
+                            zoom_link,
+                            meeting_id
+                        )
                     )
                     
-                    if not res.empty:
-                        new_student_id = int(res.iloc[0]["id"])
+                    new_student_id = int(row[0])
                         
                         execute(
                             """

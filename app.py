@@ -9,6 +9,8 @@ st.set_page_config(
     layout="wide"
 )
 
+st.set_option("client.showErrorDetails", False)
+
 st.markdown(
     """
     <style>

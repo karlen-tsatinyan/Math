@@ -143,10 +143,10 @@ def admin_page():
             """
             SELECT COUNT(*) AS total
             FROM sessions
-            WHERE session_date=?
+            WHERE session_date=%s
             """,
             (today_str(),)
-)
+        )
 
         col1,col2,col3,col4, col5 = st.columns(5)
 

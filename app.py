@@ -4,6 +4,11 @@ from authentication import login
 from pages.admin import admin_page
 from pages.student import student_page
 
+st.set_page_config(
+    page_title="Advanced Math Tutoring Portal",
+    layout="wide"
+)
+
 st.markdown(
     """
     <style>
@@ -19,12 +24,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-st.set_page_config(
-    page_title="Advanced Math Tutoring Portal",
-    layout="wide"
-)
-
 
 if "user" not in st.session_state:
     st.session_state.user = None

@@ -1,6 +1,5 @@
-import pandas as pd
-
 from database import query_dataframe
+
 
 def login(username, password):
 
@@ -8,10 +7,10 @@ def login(username, password):
     SELECT 
         username,
         role,
-        id AS student_id
+        student_id
     FROM users
-    WHERE username=?
-    AND password=?
+    WHERE username=%s
+    AND password=%s
     """
 
     result = query_dataframe(
@@ -23,6 +22,7 @@ def login(username, password):
     )
 
     if len(result) == 1:
+
         return {
             "username": result.iloc[0]["username"],
             "role": result.iloc[0]["role"],

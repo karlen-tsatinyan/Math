@@ -10,7 +10,6 @@ def student_profile():
         "👨‍🎓 Student Profile"
     )
 
-
     students=query_dataframe(
 
         """
@@ -44,7 +43,6 @@ def student_profile():
 
     )
 
-
     if len(students)==0:
 
         st.warning(
@@ -52,8 +50,6 @@ def student_profile():
         )
 
         return
-
-
 
     selected=st.selectbox(
 
@@ -63,28 +59,21 @@ def student_profile():
 
     )
 
-
-
     student=students[
 
         students["name"]==selected
 
     ].iloc[0]
 
-
-
     # -------------------------
     # BASIC INFORMATION
     # -------------------------
-
 
     st.subheader(
         "Student Information"
     )
 
-
     col1,col2=st.columns(2)
-
 
     with col1:
 
@@ -103,7 +92,6 @@ def student_profile():
             student["subject"]
         )
 
-
     with col2:
 
         st.write(
@@ -116,11 +104,7 @@ def student_profile():
             student["phone"]
         )
 
-
-
     st.divider()
-
-
 
     student_id=int(student["id"])
 
@@ -136,7 +120,7 @@ def student_profile():
         SELECT
             COALESCE(SUM(amount),0) AS total
         FROM payments
-        WHERE student_id=?
+        WHERE student_id=%s
         """,
         (student_id,)
     )
@@ -147,7 +131,7 @@ def student_profile():
         SELECT
             COUNT(*) AS total
         FROM sessions
-        WHERE student_id=?
+        WHERE student_id=%s
         """,
         (student_id,)
     )
@@ -158,7 +142,7 @@ def student_profile():
         SELECT
             COUNT(*) AS total
         FROM attendance
-        WHERE student_id=?
+        WHERE student_id=%s
         AND status='Present'
         """,
         (student_id,)
@@ -170,7 +154,7 @@ def student_profile():
         SELECT
             COUNT(*) AS total
         FROM homework
-        WHERE student_id=?
+        WHERE student_id=%s
         """,
         (student_id,)
     )
@@ -209,8 +193,8 @@ def student_profile():
 
         FROM sessions
 
-        WHERE student_id=?
-        AND session_date >= ?
+        WHERE student_id=%s
+        AND session_date >= %s
 
         ORDER BY session_date, session_time
 
@@ -248,7 +232,7 @@ def student_profile():
         FROM homework_grades
 
 
-        WHERE student_id=?
+        WHERE student_id=%s
 
 
         ORDER BY grade_date DESC
@@ -263,7 +247,6 @@ def student_profile():
         )
 
     )
-
 
     if len(latest_grade) > 0:
 
@@ -280,82 +263,27 @@ def student_profile():
     """
         )
 
-
-    """st.subheader("⚡ Quick Actions")
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    with c1:
-        if st.button(
-            "💰 Payment",
-            use_container_width=True
-        ):
-            st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Payments"
-            st.rerun()
-
-    with c2:
-        if st.button(
-            "📚 Homework",
-            use_container_width=True
-        ):
-            st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Homework"
-            st.rerun()
-
-    with c3:
-        if st.button(
-            "📅 Schedule",
-            use_container_width=True
-        ):
-            st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Schedule"
-            st.rerun()
-
-    with c4:
-        if st.button(
-            "✅ Attendance",
-            use_container_width=True
-        ):
-            st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Attendance"
-            st.rerun()
-
-    with c5:
-        if st.button(
-            "📈 Performance",
-            use_container_width=True
-        ):
-            st.session_state.selected_student = student_id
-            st.session_state.admin_option = "Performance"
-            st.rerun()
-"""
-
     # -------------------------
     # TABS
     # -------------------------
 
-
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    [
-        "💰 Payments",
+        [
+            "💰 Payments",
 
-        "📚 Homework",
+            "📚 Homework",
 
-        "📅 Sessions",
+            "📅 Sessions",
 
-        "✅ Attendance",
+            "✅ Attendance",
 
-        "📈 Performance"
-    ]
-)
-
-
+            "📈 Performance"
+        ]
+    )
 
     # PAYMENTS
 
     with tab1:
-
 
         payments=query_dataframe(
 
@@ -373,7 +301,7 @@ def student_profile():
             FROM payments
 
 
-            WHERE student_id=?
+            WHERE student_id=%s
 
 
             ORDER BY payment_date DESC
@@ -388,7 +316,6 @@ def student_profile():
             )
 
         )
-
 
         if len(payments)==0:
 
@@ -408,12 +335,9 @@ def student_profile():
 
             )
 
-
-
     # HOMEWORK
 
     with tab2:
-
 
         homework=query_dataframe(
 
@@ -433,7 +357,7 @@ def student_profile():
             FROM homework
 
 
-            WHERE student_id=?
+            WHERE student_id=%s
 
 
             ORDER BY created_at DESC
@@ -448,7 +372,6 @@ def student_profile():
             )
 
         )
-
 
         if len(homework)==0:
 
@@ -468,12 +391,9 @@ def student_profile():
 
             )
 
-
-
     # SESSIONS
 
     with tab3:
-
 
         sessions = query_dataframe(
 
@@ -490,7 +410,7 @@ def student_profile():
 
             FROM sessions
 
-            WHERE student_id=?
+            WHERE student_id=%s
 
             ORDER BY session_date, session_time
 
@@ -503,27 +423,21 @@ def student_profile():
 
         )
 
-
         if len(sessions)==0:
 
             st.info(
                 "No sessions."
             )
 
-
         else:
-
 
             st.subheader(
                 "Session Attendance"
             )
 
-
             now = datetime.now()
 
-
             for _, row in sessions.iterrows():
-
 
                 session_datetime = datetime.strptime(
 
@@ -533,11 +447,9 @@ def student_profile():
 
                 )
 
-
                 # only show completed lessons
 
                 if session_datetime <= now:
-
 
                     existing = query_dataframe(
 
@@ -546,11 +458,11 @@ def student_profile():
 
                         FROM attendance
 
-                        WHERE student_id=?
+                        WHERE student_id=%s
 
-                        AND session_date=?
+                        AND session_date=%s
 
-                        AND session_time=?
+                        AND session_time=%s
 
                         """,
 
@@ -566,10 +478,7 @@ def student_profile():
 
                     )
 
-
                     checked = len(existing) > 0
-
-
 
                     mark = st.checkbox(
 
@@ -583,9 +492,7 @@ def student_profile():
 
                     )
 
-
                     if mark and not checked:
-
 
                         execute(
                             """
@@ -607,29 +514,24 @@ def student_profile():
                             )
                         )
 
-
                         st.success(
                             "Attendance marked."
                         )
 
-
                         st.rerun()
 
-
-
                     elif not mark and checked:
-
 
                         execute(
 
                             """
                             DELETE FROM attendance
 
-                            WHERE student_id=?
+                            WHERE student_id=%s
 
-                            AND session_date=?
+                            AND session_date=%s
 
-                            AND session_time=?
+                            AND session_time=%s
 
                             """,
 
@@ -645,17 +547,14 @@ def student_profile():
 
                         )
 
-
                         st.warning(
                             "Attendance removed."
                         )
-
 
                         st.rerun()
 
     # ATTENDANCE
     with tab4:
-
 
         attendance=query_dataframe(
 
@@ -675,7 +574,7 @@ def student_profile():
             FROM attendance
 
 
-            WHERE student_id=?
+            WHERE student_id=%s
 
 
             ORDER BY session_date DESC, session_time DESC
@@ -688,7 +587,6 @@ def student_profile():
             )
 
         )
-
 
         if len(attendance)==0:
 
@@ -714,7 +612,6 @@ def student_profile():
 
     with tab5:
 
-
         grades = query_dataframe(
 
             """
@@ -737,7 +634,7 @@ def student_profile():
             FROM homework_grades
 
 
-            WHERE student_id=?
+            WHERE student_id=%s
 
 
             ORDER BY grade_date DESC
@@ -750,7 +647,6 @@ def student_profile():
             )
 
         )
-
 
         if len(grades)==0:
 

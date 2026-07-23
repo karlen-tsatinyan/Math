@@ -21,13 +21,6 @@ from database import query_dataframe
 
 from database import query_dataframe
 
-st.write(
-    query_dataframe(
-        "SELECT current_database(), current_schema()"
-    )
-)
-
-
 st.markdown(
     """
     <style>

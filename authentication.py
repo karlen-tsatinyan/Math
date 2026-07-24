@@ -4,7 +4,7 @@ from database import query_dataframe
 def login(username, password):
 
     query = """
-    SELECT 
+    SELECT
         username,
         role,
         student_id

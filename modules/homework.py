@@ -356,27 +356,26 @@ def student_homework():
     homework = query_dataframe(
         """
         SELECT
-            id,
-            COALESCE(title, '') AS title,
-            COALESCE(curriculum_topic, '') AS curriculum_topic,
-            COALESCE(assigned_date::text, '') AS assigned_date,
-            COALESCE(due_date::text, '') AS due_date,
-            COALESCE(priority, 'Normal') AS priority,
-            assignment_file,
-            student_file,
-            file_link,
-            comment,
-            teacher_feedback,
-            grade,
-            COALESCE(status, 'Assigned') AS status,
-            COALESCE(created_at::text, '') AS created_at
-        FROM homework
-        WHERE student_id = %s
-        ORDER BY created_at DESC
+            h.id,
+            COALESCE(h.title, '') AS title,
+            COALESCE(h.curriculum_topic, '') AS curriculum_topic,
+            h.assigned_date,
+            h.due_date,
+            COALESCE(h.priority, 'Normal') AS priority,
+            h.assignment_file,
+            h.student_file,
+            h.file_link,
+            h.comment,
+            h.teacher_feedback,
+            h.grade,
+            COALESCE(h.status, 'Assigned') AS status,
+            h.created_at
+        FROM homework h
+        WHERE h.student_id = %s
+        ORDER BY h.created_at DESC
         """,
         (student_id,)
     )
-
     if homework.empty:
         st.info("No homework assigned yet.")
         return

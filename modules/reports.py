@@ -123,9 +123,9 @@ def reports_management():
             SELECT
 
                 s.first_name || ' ' || s.last_name AS Student,
-                p.amount AS Amount,
-                p.payment_date AS Date,
-                p.period AS Period
+                p.amount AS "Amount",
+                p.payment_date AS "Date",
+                p.period AS "Period"
 
             FROM payments p
 
@@ -192,9 +192,9 @@ def reports_management():
             SELECT
 
                 s.first_name || ' ' || s.last_name AS Student,
-                p.amount AS Amount,
-                p.payment_date AS Date,
-                p.period AS Period
+                p.amount AS "Amount",
+                p.payment_date AS "Date",
+                p.period AS "Period"
 
             FROM payments p
 
@@ -254,7 +254,12 @@ def reports_management():
     revenue = 0.0
 
     if not payments.empty:
-        revenue = payments["Amount"].sum()
+    
+        if "Amount" in payments.columns:
+            revenue = payments["Amount"].sum()
+    
+        elif "amount" in payments.columns:
+            revenue = payments["amount"].sum()
 
 
     total_sessions = 0

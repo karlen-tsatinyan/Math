@@ -81,36 +81,6 @@ def execute(query, params=()):
 
 
 
-def execute_returning(query, params=()):
-
-    conn = get_connection()
-
-    try:
-
-        with conn.cursor() as cur:
-
-            cur.execute(
-                query,
-                params
-            )
-
-            row = cur.fetchone()
-
-        conn.commit()
-
-        return row
-
-
-    except Exception as e:
-
-        conn.rollback()
-        raise e
-
-
-    finally:
-
-        conn.close()
-
 
 
 def get_single(query, params=()):
@@ -165,3 +135,36 @@ def execute_many(query, data):
     finally:
 
         conn.close()
+        
+
+def execute_returning(query, params=()):
+
+    conn = get_connection()
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                query,
+                params
+            )
+
+            row = cur.fetchone()
+
+        conn.commit()
+
+        return row
+
+
+    except Exception as e:
+
+        conn.rollback()
+        raise e
+
+
+    finally:
+
+        conn.close()
+
+

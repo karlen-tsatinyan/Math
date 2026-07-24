@@ -2,6 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 import streamlit as st
+import numpy as np
 
 from database import execute, query_dataframe
 from config import UPLOAD_FOLDER
@@ -341,8 +342,13 @@ def homework_management():
 # ==========================================
 
 def student_homework():
+
     user = st.session_state.get("user", {})
+
     student_id = user.get("student_id")
+
+    if student_id:
+        student_id = int(student_id)
 
     if not student_id:
         st.error("Student profile missing from session. Please log in again.")

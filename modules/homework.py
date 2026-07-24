@@ -2,7 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 import streamlit as st
-import numpy as np
+
 
 from database import execute, query_dataframe
 from config import UPLOAD_FOLDER

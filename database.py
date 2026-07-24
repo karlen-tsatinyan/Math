@@ -135,14 +135,13 @@ def execute_many(query, data):
     finally:
 
         conn.close()
-        
+
 
 def execute_returning(query, params=()):
 
     conn = get_connection()
 
     try:
-
         with conn.cursor() as cur:
 
             cur.execute(
@@ -156,15 +155,11 @@ def execute_returning(query, params=()):
 
         return row
 
-
     except Exception as e:
 
         conn.rollback()
         raise e
 
-
     finally:
 
         conn.close()
-
-

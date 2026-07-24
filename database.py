@@ -41,13 +41,12 @@ def query_dataframe(query, params=()):
 
     except Exception as e:
 
+        st.error(f"Database Error: {e}")
         raise e
 
     finally:
 
         conn.close()
-
-
 
 def execute(query, params=()):
 

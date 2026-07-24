@@ -1,6 +1,22 @@
 import pandas as pd
+import numpy as np
 import psycopg2
 import streamlit as st
+
+
+def convert_params(params):
+    """
+    Convert numpy data types from Pandas into
+    native Python types for psycopg2.
+    """
+
+    if params is None:
+        return ()
+
+    return tuple(
+        int(x) if isinstance(x, np.integer) else x
+        for x in params
+    )
 
 
 def get_connection():
@@ -11,6 +27,8 @@ def get_connection():
 
 
 def query_dataframe(query, params=()):
+
+    params = convert_params(params)
 
     conn = get_connection()
 
@@ -48,7 +66,11 @@ def query_dataframe(query, params=()):
 
         conn.close()
 
+
+
 def execute(query, params=()):
+
+    params = convert_params(params)
 
     conn = get_connection()
 
@@ -63,12 +85,10 @@ def execute(query, params=()):
 
         conn.commit()
 
-
     except Exception as e:
 
         conn.rollback()
         raise e
-
 
     finally:
 
@@ -76,9 +96,9 @@ def execute(query, params=()):
 
 
 
-
-
 def get_single(query, params=()):
+
+    params = convert_params(params)
 
     conn = get_connection()
 
@@ -93,11 +113,9 @@ def get_single(query, params=()):
 
             return cur.fetchone()
 
-
     except Exception as e:
 
         raise e
-
 
     finally:
 
@@ -107,6 +125,12 @@ def get_single(query, params=()):
 
 def execute_many(query, data):
 
+    # Convert every row
+    converted_data = [
+        convert_params(row)
+        for row in data
+    ]
+
     conn = get_connection()
 
     try:
@@ -115,28 +139,30 @@ def execute_many(query, data):
 
             cur.executemany(
                 query,
-                data
+                converted_data
             )
 
         conn.commit()
-
 
     except Exception as e:
 
         conn.rollback()
         raise e
 
-
     finally:
 
         conn.close()
 
 
+
 def execute_returning(query, params=()):
+
+    params = convert_params(params)
 
     conn = get_connection()
 
     try:
+
         with conn.cursor() as cur:
 
             cur.execute(

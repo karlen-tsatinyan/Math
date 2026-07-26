@@ -138,9 +138,7 @@ def student_management():
                         WHERE student_code = %s
                         LIMIT 1
                         """,
-                        (
-                            clean_code,
-                        )
+                        (clean_code,)
                     )
                 
                     if not existing_code.empty:
@@ -182,7 +180,6 @@ def student_management():
                 
                 
                 # --------------------------------
-                # Check Username
                 # Username MUST be unique
                 # --------------------------------
                 
@@ -205,24 +202,6 @@ def student_management():
                     )
                 
                     return
-            
-                existing_user = query_dataframe(
-                    """
-                    SELECT id
-                    FROM users
-                    WHERE username=%s
-                    """,
-                    (
-                        username,
-                    )
-                )
-            
-                if len(existing_user) > 0:
-                    st.warning(
-                        "This username already exists."
-                    )
-                    return
-    
     
                 # ===============================
                 # INSERT STUDENT

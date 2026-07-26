@@ -203,7 +203,6 @@ def student_page():
                 s.session_date, 
                 s.session_time, 
                 s.topic, 
-                st.zoom_link, 
                 s.notes,
                 COALESCE(a.status, 'Pending') AS attendance_status
             FROM sessions s
@@ -232,12 +231,6 @@ def student_page():
 
                     st.write(f"📅 **Date:** {row['session_date']} at {row['session_time']} | **Topic:** {row.get('topic', 'N/A')} | **Attendance:** {badge}")
                     
-                    z_link = row.get("zoom_link")
-                    if z_link and str(z_link).strip() not in ["", "nan", "None"]:
-                        st.markdown(f"🔗 [Join Zoom Meeting]({z_link})")
-                    else:
-                        st.caption("No Zoom link assigned.")
-                        
                     if row.get("notes"):
                         st.caption(f"📝 Notes: {row['notes']}")
                     st.divider()

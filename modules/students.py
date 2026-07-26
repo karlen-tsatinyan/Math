@@ -112,29 +112,98 @@ def student_management():
     
             else:
     
-    
                 # ===============================
-                # DUPLICATE CHECK (Allowing shared family emails for siblings)
+                # DUPLICATE CHECK
+                # PostgreSQL / Supabase
                 # ===============================
-            
-                existing_student = query_dataframe(
+                
+                # Clean input values first
+                clean_code = code.strip()
+                clean_first = first.strip()
+                clean_last = last.strip()
+                clean_email = email.strip().lower()
+                clean_username = username.strip().lower()
+                
+                
+                # --------------------------------
+                # Check Student ID Code
+                # --------------------------------
+                
+                if clean_code:
+                
+                    existing_code = query_dataframe(
+                        """
+                        SELECT id
+                        FROM students
+                        WHERE student_code = %s
+                        LIMIT 1
+                        """,
+                        (
+                            clean_code,
+                        )
+                    )
+                
+                    if not existing_code.empty:
+                
+                        st.warning(
+                            f"Student ID Code '{clean_code}' is already being used."
+                        )
+                
+                        return
+                
+                
+                # --------------------------------
+                # Check Email
+                # Allow siblings to share email
+                # --------------------------------
+                
+                if clean_email:
+                
+                    existing_email = query_dataframe(
+                        """
+                        SELECT id
+                        FROM students
+                        WHERE LOWER(TRIM(email)) = %s
+                        LIMIT 1
+                        """,
+                        (
+                            clean_email,
+                        )
+                    )
+                
+                    # Email is allowed to be shared by siblings,
+                    # so this is informational only.
+                    if not existing_email.empty:
+                
+                        st.info(
+                            "This email is already associated with another student. "
+                            "That's okay if this is a family/shared parent email."
+                        )
+                
+                
+                # --------------------------------
+                # Check Username
+                # Username MUST be unique
+                # --------------------------------
+                
+                existing_user = query_dataframe(
                     """
                     SELECT id
-                    FROM students
-                    WHERE (LOWER(TRIM(first_name)) = LOWER(TRIM(%s)) AND LOWER(TRIM(email)) = LOWER(TRIM(%s)))
-                    OR student_code = %s
+                    FROM users
+                    WHERE LOWER(TRIM(username)) = %s
+                    LIMIT 1
                     """,
                     (
-                        first,
-                        email,
-                        code
+                        clean_username,
                     )
                 )
-            
-                if len(existing_student) > 0:
+                
+                if not existing_user.empty:
+                
                     st.warning(
-                        "A student with this exact First Name and Email combination, or this Student ID Code, already exists."
+                        f"The username '{clean_username}' is already being used."
                     )
+                
                     return
             
                 existing_user = query_dataframe(
@@ -161,13 +230,9 @@ def student_management():
     
                 try:
     
-    
                     row = execute_returning(
-    
                         """
-    
                         INSERT INTO students
-    
                         (
                             student_code,
                             first_name,
@@ -179,29 +244,21 @@ def student_management():
                             zoom_link,
                             meeting_id
                         )
-    
                         VALUES
-    
                         (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    
                         RETURNING id
-    
                         """,
-    
                         (
-    
-                            code,
-                            first,
-                            last,
-                            grade,
-                            subject,
-                            email,
-                            phone,
-                            zoom_link,
-                            meeting_id
-    
+                            clean_code,
+                            clean_first,
+                            clean_last,
+                            grade.strip(),
+                            subject.strip(),
+                            clean_email,
+                            phone.strip(),
+                            zoom_link.strip(),
+                            meeting_id.strip()
                         )
-    
                     )
     
     
@@ -215,32 +272,22 @@ def student_management():
     
     
                     execute(
-    
                         """
-    
                         INSERT INTO users
-    
                         (
                             username,
                             password,
                             role,
                             student_id
                         )
-    
                         VALUES
-    
                         (%s,%s,'student',%s)
-    
                         """,
-    
                         (
-    
-                            username,
+                            clean_username,
                             password,
                             new_student_id
-    
                         )
-    
                     )
     
     

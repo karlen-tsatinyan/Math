@@ -1,13 +1,13 @@
-import pandas as pd
 import streamlit as st
-
+import pandas as pd
 from database import execute, query_dataframe
 
-
+# ============================================================
+# SCHEMA MIGRATION / INITIALIZATION (SUPABASE COMPATIBLE)
+# ============================================================
 def ensure_performance_schema():
-    """Ensure homework_grades table exists AND contains all required columns."""
+    """Ensure homework_grades table exists AND contains all required columns for Supabase PostgreSQL."""
     try:
-        # Create table if it doesn't exist
         execute(
             """
             CREATE TABLE IF NOT EXISTS homework_grades (
@@ -25,7 +25,6 @@ def ensure_performance_schema():
             """
         )
 
-        # Alter existing table to safely add any missing columns
         columns_to_add = [
             ("lesson_date", "DATE DEFAULT CURRENT_DATE"),
             ("topic", "TEXT"),
@@ -41,18 +40,19 @@ def ensure_performance_schema():
                 execute(f"ALTER TABLE homework_grades ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
             except Exception:
                 pass
-
     except Exception:
         pass
 
-
+# ============================================================
+# PERFORMANCE PROGRESSION DASHBOARD (SUPABASE ENVIRONMENT)
+# ============================================================
 def performance_dashboard():
     st.title("📈 Performance Progression Tracking")
 
-    # Run auto-migration check for missing columns
+    # Run auto-migration check for Supabase PostgreSQL schema
     ensure_performance_schema()
 
-    # Fetch active students via cached query layer
+    # Fetch active students
     students = query_dataframe(
         """
         SELECT
@@ -67,13 +67,12 @@ def performance_dashboard():
         st.warning("No students available. Please enroll students first.")
         return
 
-    # Safe student selection map { "Jane Smith (ID: 12)": 12 }
+    # Safe student selection map
     student_options = {
         f"{row['name']} (ID: {row['id']})": row["id"]
         for _, row in students.iterrows()
     }
 
-    # Session state index memory
     saved_student_id = st.session_state.get("selected_student_id")
     default_index = 0
 
@@ -92,7 +91,9 @@ def performance_dashboard():
     student_id = student_options[selected_label]
     st.session_state.selected_student_id = student_id
 
-    # Query grades using PostgreSQL %s syntax through cache layer
+    # --------------------------------------------------------
+    # UNIFIED GRADE QUERY (Supabase PostgreSQL Compatible)
+    # --------------------------------------------------------
     grades = query_dataframe(
         """
         SELECT
@@ -105,30 +106,72 @@ def performance_dashboard():
             COALESCE(teacher_comment, '') AS teacher_comment
         FROM homework_grades
         WHERE student_id = %s
+
+        UNION ALL
+
+        SELECT
+            COALESCE(reviewed_at::text, due_date::text, created_at::text, '') AS lesson_date,
+            COALESCE(title, curriculum_topic, 'Homework Assignment') AS topic,
+            CASE
+                WHEN grade = 'A+' THEN 98
+                WHEN grade = 'A' THEN 95
+                WHEN grade = 'A-' THEN 90
+                WHEN grade = 'B+' THEN 88
+                WHEN grade = 'B' THEN 85
+                WHEN grade = 'B-' THEN 80
+                WHEN grade = 'C+' THEN 78
+                WHEN grade = 'C' THEN 75
+                WHEN grade = 'C-' THEN 70
+                WHEN grade = 'D' THEN 65
+                WHEN grade = 'F' THEN 50
+                ELSE 0
+            END AS score,
+            100 AS max_score,
+            CASE
+                WHEN grade = 'A+' THEN 98
+                WHEN grade = 'A' THEN 95
+                WHEN grade = 'A-' THEN 90
+                WHEN grade = 'B+' THEN 88
+                WHEN grade = 'B' THEN 85
+                WHEN grade = 'B-' THEN 80
+                WHEN grade = 'C+' THEN 78
+                WHEN grade = 'C' THEN 75
+                WHEN grade = 'C-' THEN 70
+                WHEN grade = 'D' THEN 65
+                WHEN grade = 'F' THEN 50
+                ELSE 0
+            END AS percent,
+            COALESCE(grade, '') AS grade_letter,
+            COALESCE(teacher_feedback, '') AS teacher_comment
+        FROM homework
+        WHERE student_id = %s
+          AND status = 'Reviewed'
+          AND grade IS NOT NULL
+          AND grade != ''
+
         ORDER BY lesson_date ASC
         """,
-        (student_id,)
+        (student_id, student_id)
     )
 
     if grades.empty:
         st.info("No graded homework or performance records found for this student.")
         return
 
-    # Convert lesson_date to datetime objects for proper chronological chart ordering
+    # Process types for Supabase results
     grades["lesson_date"] = pd.to_datetime(grades["lesson_date"], errors="coerce")
     grades["percent"] = pd.to_numeric(grades["percent"], errors="coerce").fillna(0)
 
     tab1, tab2 = st.tabs(["Dashboard", "Grade History"])
 
     # =========================================================
-    # TAB 1: DASHBOARD
+    # TAB 1: DASHBOARD (Altair Interactive Fancy Charts)
     # =========================================================
     with tab1:
         average = grades["percent"].mean()
         highest = grades["percent"].max()
         lowest = grades["percent"].min()
 
-        # Calculate trend safely
         if len(grades) > 1:
             improvement = grades.iloc[-1]["percent"] - grades.iloc[0]["percent"]
             trend_str = f"{improvement:+.1f}%"
@@ -142,14 +185,58 @@ def performance_dashboard():
         c4.metric("Overall Trend", trend_str)
 
         st.divider()
-        st.subheader("📊 Chronological Score Variance")
+        st.subheader("📊 Advanced Progression Analytics")
 
-        # Prepare line chart data
-        chart_df = grades[["lesson_date", "percent"]].dropna(subset=["lesson_date"]).set_index("lesson_date")
-        chart_df.rename(columns={"percent": "Score (%)"}, inplace=True)
+        chart_data = grades.dropna(subset=["lesson_date"]).copy()
+        chart_data["formatted_date"] = chart_data["lesson_date"].dt.strftime("%Y-%m-%d")
 
-        if not chart_df.empty:
-            st.line_chart(chart_df)
+        if not chart_data.empty:
+            try:
+                import altair as alt
+
+                base = alt.Chart(chart_data).encode(
+                    x=alt.X("formatted_date:N", title="Lesson Date", sort=None),
+                    tooltip=[
+                        alt.Tooltip("formatted_date:N", title="Date"),
+                        alt.Tooltip("topic:N", title="Topic"),
+                        alt.Tooltip("percent:Q", title="Score (%)", format=".1f"),
+                        alt.Tooltip("grade_letter:N", title="Grade")
+                    ]
+                )
+
+                area = base.mark_area(
+                    line={"color": "#4C78A8"},
+                    color=alt.Gradient(
+                        gradient="linear",
+                        stops=[
+                            alt.GradientStop(color="#4C78A8", offset=0),
+                            alt.GradientStop(color="rgba(76, 120, 168, 0.0)", offset=1)
+                        ],
+                        x1=1,
+                        y1=1,
+                        x2=1,
+                        y2=0
+                    ),
+                    opacity=0.6
+                )
+
+                points = base.mark_circle(size=80, color="#1f77b4").encode(
+                    y=alt.Y("percent:Q", title="Score Percentage (%)", scale=alt.Scale(domain=[0, 100]))
+                )
+
+                line = base.mark_line(strokeWidth=3, color="#1f77b4").encode(
+                    y=alt.Y("percent:Q", scale=alt.Scale(domain=[0, 100]))
+                )
+
+                chart = (area + line + points).interactive().properties(
+                    height=380
+                )
+
+                st.altair_chart(chart, use_container_width=True)
+            except Exception:
+                fallback_df = chart_data[["lesson_date", "percent"]].set_index("lesson_date")
+                fallback_df.rename(columns={"percent": "Score (%)"}, inplace=True)
+                st.area_chart(fallback_df)
         else:
             st.info("No valid dates found to render progression chart.")
 
@@ -159,7 +246,6 @@ def performance_dashboard():
     with tab2:
         st.subheader("📋 Historical Records")
 
-        # Display formatted dataframe
         display_df = grades.copy()
         if pd.api.types.is_datetime64_any_dtype(display_df["lesson_date"]):
             display_df["lesson_date"] = display_df["lesson_date"].dt.strftime("%Y-%m-%d")

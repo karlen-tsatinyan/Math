@@ -208,7 +208,7 @@ def student_page():
                 COALESCE(a.status, 'Pending') AS attendance_status
             FROM sessions s
             JOIN students st ON s.student_id = st.id
-            LEFT JOIN attendance a ON a.session_id = s.id AND a.student_id = st.id
+            LEFT JOIN attendance a ON a.student_id = st.id AND a.session_date = s.session_date
             WHERE s.student_id = %s 
             ORDER BY s.session_date ASC, s.session_time ASC
             """,
@@ -220,7 +220,6 @@ def student_page():
         else:
             for _, row in sessions.iterrows():
                 with st.container():
-                    # Format attendance checkmark badge or indicator
                     att_status = row.get("attendance_status", "Pending")
                     if att_status == "Present":
                         badge = "✅ **Present**"

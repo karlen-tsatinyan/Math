@@ -20,18 +20,16 @@ def progress_management():
         st.warning("No students available. Please enroll students first.")
         return
 
-    # Build reliable student map { "John Doe (ID: 4)": 4 } to handle duplicate names safely
+    # Build reliable student map to handle duplicate names safely
     student_options = {
         f"{row['name']} (ID: {row['id']})": row["id"] 
         for _, row in students.iterrows()
     }
     
-    # Session state index memory
     saved_student_id = st.session_state.get("selected_student_id")
     default_index = 0
 
     if saved_student_id:
-        # Find index matching current ID
         for idx, (label, s_id) in enumerate(student_options.items()):
             if s_id == saved_student_id:
                 default_index = idx
@@ -59,7 +57,7 @@ def progress_management():
             with col1:
                 lesson_date = st.date_input("Lesson Date")
             with col2:
-                topic = st.text_input("Lesson Topic", placeholder="e.g., Quadratic Equations / Scales")
+                topic = st.text_input("Lesson Topic", placeholder="e.g., Quadratic Equations")
 
             strengths = st.text_area("Strengths & Achievements", placeholder="What went well?")
             improvements = st.text_area("Needs Improvement / Focus Areas", placeholder="What needs practice?")
@@ -78,7 +76,7 @@ def progress_management():
                             student_id, lesson_date, topic, strengths,
                             improvements, homework, next_steps
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             student_id,
@@ -108,7 +106,7 @@ def progress_management():
                 homework,
                 next_steps
             FROM progress_notes
-            WHERE student_id = ?
+            WHERE student_id = %s
             ORDER BY lesson_date DESC
             """,
             (student_id,)
@@ -138,8 +136,7 @@ def progress_management():
 
                     st.divider()
                     
-                    # Delete action
                     if st.button("🗑️ Delete Note", key=f"del_note_{note['id']}"):
-                        execute("DELETE FROM progress_notes WHERE id = ?", (note["id"],))
+                        execute("DELETE FROM progress_notes WHERE id = %s", (note["id"],))
                         st.success("Note removed.")
                         st.rerun()

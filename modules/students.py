@@ -114,59 +114,45 @@ def student_management():
     
     
                 # ===============================
-                # DUPLICATE CHECK
+                # DUPLICATE CHECK (Allowing shared family emails for siblings)
                 # ===============================
-    
+            
                 existing_student = query_dataframe(
-    
                     """
                     SELECT id
                     FROM students
-                    WHERE email=%s
-                    OR student_code=%s
+                    WHERE (LOWER(TRIM(first_name)) = LOWER(TRIM(%s)) AND LOWER(TRIM(email)) = LOWER(TRIM(%s)))
+                    OR student_code = %s
                     """,
-    
                     (
+                        first,
                         email,
                         code
                     )
-    
                 )
-    
-    
+            
                 if len(existing_student) > 0:
-    
                     st.warning(
-                        "A student with this email or Student ID Code already exists."
+                        "A student with this exact First Name and Email combination, or this Student ID Code, already exists."
                     )
-    
                     return
-    
-    
-    
+            
                 existing_user = query_dataframe(
-    
                     """
                     SELECT id
                     FROM users
                     WHERE username=%s
                     """,
-    
                     (
                         username,
                     )
-    
                 )
-    
-    
+            
                 if len(existing_user) > 0:
-    
                     st.warning(
                         "This username already exists."
                     )
-    
                     return
-    
     
     
                 # ===============================

@@ -143,13 +143,18 @@ def student_page():
                 (student_id,)
             )
 
-            # Fetch Single Next Session with Zoom Link
+            # Fetch Single Next Session using Student's Profile Zoom Link
             next_session = query_dataframe(
                 """
-                SELECT session_date, session_time, topic, zoom_link 
-                FROM sessions 
-                WHERE student_id = %s AND session_date >= %s 
-                ORDER BY session_date ASC, session_time ASC 
+                SELECT 
+                    s.session_date, 
+                    s.session_time, 
+                    s.topic, 
+                    st.zoom_link 
+                FROM sessions s
+                JOIN students st ON s.student_id = st.id
+                WHERE s.student_id = %s AND s.session_date >= %s 
+                ORDER BY s.session_date ASC, s.session_time ASC 
                 LIMIT 1
                 """,
                 (student_id, today_str())
@@ -194,10 +199,16 @@ def student_page():
         st.title("My Sessions")
         sessions = query_dataframe(
             """
-            SELECT session_date, session_time, topic, zoom_link, notes 
-            FROM sessions 
-            WHERE student_id = %s 
-            ORDER BY session_date ASC, session_time ASC
+            SELECT 
+                s.session_date, 
+                s.session_time, 
+                s.topic, 
+                st.zoom_link, 
+                s.notes 
+            FROM sessions s
+            JOIN students st ON s.student_id = st.id
+            WHERE s.student_id = %s 
+            ORDER BY s.session_date ASC, s.session_time ASC
             """,
             (student_id,)
         )

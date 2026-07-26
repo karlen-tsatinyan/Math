@@ -124,13 +124,12 @@ def student_management():
                 clean_email = email.strip().lower()
                 clean_username = username.strip().lower()
                 
-                
+                #---------------------------------
+                # Student ID Code Check
+                # Should remain separate and unique
                 # --------------------------------
-                # Check Student ID Code
-                # --------------------------------
-                
                 if clean_code:
-                
+
                     existing_code = query_dataframe(
                         """
                         SELECT id
@@ -149,56 +148,30 @@ def student_management():
                 
                         return
                 
-                
                 # --------------------------------
-                # Check Email
-                # Allow siblings to share email
-                # --------------------------------
-                
-                if clean_email:
-                
-                    existing_email = query_dataframe(
-                        """
-                        SELECT id
-                        FROM students
-                        WHERE LOWER(TRIM(email)) = %s
-                        LIMIT 1
-                        """,
-                        (
-                            clean_email,
-                        )
-                    )
-                
-                    # Email is allowed to be shared by siblings,
-                    # so this is informational only.
-                    if not existing_email.empty:
-                
-                        st.info(
-                            "This email is already associated with another student. "
-                            "That's okay if this is a family/shared parent email."
-                        )
-                
-                
-                # --------------------------------
-                # Username MUST be unique
+                # Check Username + Email combination
                 # --------------------------------
                 
                 existing_user = query_dataframe(
                     """
                     SELECT id
-                    FROM users
-                    WHERE LOWER(TRIM(username)) = %s
+                    FROM users u
+                    JOIN students s
+                        ON u.student_id = s.id
+                    WHERE LOWER(TRIM(u.username)) = %s
+                      AND LOWER(TRIM(s.email)) = %s
                     LIMIT 1
                     """,
                     (
                         clean_username,
+                        clean_email
                     )
                 )
                 
                 if not existing_user.empty:
                 
                     st.warning(
-                        f"The username '{clean_username}' is already being used."
+                        "A student account with this username and email already exists."
                     )
                 
                     return

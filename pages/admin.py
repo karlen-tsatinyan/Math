@@ -80,12 +80,6 @@ def admin_page():
             FROM students
         """)
 
-        payment_total = query_dataframe("""
-            SELECT
-                COALESCE(SUM(amount), 0) AS total
-            FROM payments
-        """)
-
         homework_waiting = query_dataframe("""
             SELECT COUNT(*) AS total
             FROM homework

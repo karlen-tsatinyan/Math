@@ -103,17 +103,16 @@ def admin_page():
             (today_str(),),
         )
 
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4)
 
         col1.metric("👨‍🎓 Students", int(student_count.iloc[0]["total"]))
         col2.metric(
             "📅 Today's Sessions", int(today_sessions.iloc[0]["total"])
         )
-        col3.metric("💰 Revenue", f"${payment_total.iloc[0]['total']:,.2f}")
-        col4.metric(
+        col3.metric(
             "📚 Homework Waiting", int(homework_waiting.iloc[0]["total"])
         )
-        col5.metric("📝 Homework Due", int(homework_due.iloc[0]["total"]))
+        col4.metric("📝 Homework Due", int(homework_due.iloc[0]["total"]))
 
         st.divider()
 

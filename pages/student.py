@@ -204,9 +204,11 @@ def student_page():
                 s.session_time, 
                 s.topic, 
                 st.zoom_link, 
-                s.notes 
+                s.notes,
+                COALESCE(a.status, 'Pending') AS attendance_status
             FROM sessions s
             JOIN students st ON s.student_id = st.id
+            LEFT JOIN attendance a ON a.session_id = s.id AND a.student_id = st.id
             WHERE s.student_id = %s 
             ORDER BY s.session_date ASC, s.session_time ASC
             """,
@@ -218,7 +220,18 @@ def student_page():
         else:
             for _, row in sessions.iterrows():
                 with st.container():
-                    st.write(f"📅 **Date:** {row['session_date']} at {row['session_time']} | **Topic:** {row.get('topic', 'N/A')}")
+                    # Format attendance checkmark badge or indicator
+                    att_status = row.get("attendance_status", "Pending")
+                    if att_status == "Present":
+                        badge = "✅ **Present**"
+                    elif att_status == "Absent":
+                        badge = "❌ **Absent**"
+                    elif att_status == "Late":
+                        badge = "⚠️ **Late**"
+                    else:
+                        badge = "⏳ **Pending / Not Marked**"
+
+                    st.write(f"📅 **Date:** {row['session_date']} at {row['session_time']} | **Topic:** {row.get('topic', 'N/A')} | **Attendance:** {badge}")
                     
                     z_link = row.get("zoom_link")
                     if z_link and str(z_link).strip() not in ["", "nan", "None"]:

@@ -80,7 +80,7 @@ def student_page():
         return
 
     st.sidebar.title("Student Portal")
-    option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Schedule", "Payments"])
+    option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Performance & Account", "Schedule", "Payments"])
 
     # ==========================
     # DASHBOARD
@@ -192,6 +192,289 @@ def student_page():
         from modules.homework import student_homework
         student_homework()
 
+    # ============================================================
+    # PERFORMANCE & ACCOUNT
+    # ============================================================
+    
+    elif option == "Performance & Account":
+    
+        st.title(
+            "📊 Performance & Account"
+        )
+    
+        # ========================================================
+        # GET CURRENT STUDENT
+        # ========================================================
+    
+        student_id = st.session_state.user["student_id"]
+    
+        # ========================================================
+        # TABS
+        # ========================================================
+    
+        tab_grades, tab_sessions, tab_financial = st.tabs(
+            [
+                "📚 Homework Grades",
+                "📅 Session History",
+                "🔒 Financial Statement"
+            ]
+        )
+    
+        # ========================================================
+        # HOMEWORK GRADES
+        # ========================================================
+    
+        with tab_grades:
+    
+            st.subheader(
+                "Homework Grades"
+            )
+    
+            grades = query_dataframe(
+                """
+                SELECT
+                    title AS "Homework",
+                    due_date AS "Due Date",
+                    grade AS "Grade",
+                    teacher_feedback AS "Teacher Feedback",
+                    reviewed_at AS "Graded On"
+                FROM homework
+                WHERE student_id = %s
+                  AND grade IS NOT NULL
+                  AND TRIM(grade) <> ''
+                ORDER BY due_date DESC
+                """,
+                (
+                    student_id,
+                )
+            )
+    
+            if grades.empty:
+    
+                st.info(
+                    "No graded homework available yet."
+                )
+    
+            else:
+    
+                st.dataframe(
+                    grades,
+                    use_container_width=True,
+                    hide_index=True
+                )
+    
+        # ========================================================
+        # SESSION HISTORY
+        # ========================================================
+    
+        with tab_sessions:
+    
+            st.subheader(
+                "Session History"
+            )
+    
+            sessions = query_dataframe(
+                """
+                SELECT
+                    session_date AS "Date",
+                    session_time AS "Time",
+                    duration AS "Duration",
+                    topic AS "Topic",
+                    status AS "Status"
+                FROM sessions
+                WHERE student_id = %s
+                ORDER BY session_date DESC, session_time DESC
+                """,
+                (
+                    student_id,
+                )
+            )
+    
+            if sessions.empty:
+    
+                st.info(
+                    "No session history available."
+                )
+    
+            else:
+    
+                st.dataframe(
+                    sessions,
+                    use_container_width=True,
+                    hide_index=True
+                )
+    
+        # ========================================================
+        # FINANCIAL STATEMENT
+        # ========================================================
+    
+        with tab_financial:
+    
+            st.subheader(
+                "🔒 Financial Statement"
+            )
+    
+            # ----------------------------------------------------
+            # Initialize authentication state specifically
+            # for this logged-in student.
+            # ----------------------------------------------------
+    
+            auth_key = (
+                f"parent_authenticated_{student_id}"
+            )
+    
+            if auth_key not in st.session_state:
+    
+                st.session_state[auth_key] = False
+    
+            # ====================================================
+            # AUTHENTICATED
+            # ====================================================
+    
+            if st.session_state[auth_key]:
+    
+                col1, col2 = st.columns(
+                    [4, 1]
+                )
+    
+                with col1:
+    
+                    st.success(
+                        "🔓 Parent Access Authenticated"
+                    )
+    
+                with col2:
+    
+                    if st.button(
+                        "🔒 Lock",
+                        key=f"lock_financial_{student_id}"
+                    ):
+    
+                        st.session_state[auth_key] = False
+    
+                        st.rerun()
+    
+                # ------------------------------------------------
+                # PAYMENT HISTORY
+                # ------------------------------------------------
+    
+                payments = query_dataframe(
+                    """
+                    SELECT
+                        payment_date AS "Payment Date",
+                        amount AS "Amount Paid",
+                        period AS "Period"
+                    FROM payments
+                    WHERE student_id = %s
+                    ORDER BY payment_date DESC
+                    """,
+                    (
+                        student_id,
+                    )
+                )
+    
+                if payments.empty:
+    
+                    st.info(
+                        "No payment statements available."
+                    )
+    
+                else:
+    
+                    st.dataframe(
+                        payments,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+    
+                    total_paid = payments[
+                        "Amount Paid"
+                    ].fillna(0).sum()
+    
+                    st.metric(
+                        "Total Paid",
+                        f"${float(total_paid):,.2f}"
+                    )
+    
+            # ====================================================
+            # NOT AUTHENTICATED
+            # ====================================================
+    
+            else:
+    
+                st.warning(
+                    "🔒 Financial information is confidential "
+                    "and requires Parent Authorization."
+                )
+    
+                with st.container(
+                    border=True
+                ):
+    
+                    st.markdown(
+                        "### 🔑 Parent Authentication Gateway"
+                    )
+    
+                    st.write(
+                        "Please enter the Parent Access PIN "
+                        "provided by the parent/guardian."
+                    )
+    
+                    pin_input = st.text_input(
+                        "Parent Access PIN",
+                        type="password",
+                        key=f"parent_pin_input_{student_id}"
+                    )
+    
+                    if st.button(
+                        "Verify Identity & Unlock Financial Statement",
+                        type="primary",
+                        key=f"verify_parent_{student_id}"
+                    ):
+    
+                        stored_pin_result = query_dataframe(
+                            """
+                            SELECT
+                                parent_pin
+                            FROM users
+                            WHERE student_id = %s
+                              AND role = 'student'
+                            LIMIT 1
+                            """,
+                            (
+                                student_id,
+                            )
+                        )
+    
+                        if stored_pin_result.empty:
+    
+                            st.error(
+                                "No Parent Access PIN has been configured "
+                                "for this student."
+                            )
+    
+                        else:
+    
+                            stored_pin = stored_pin_result.iloc[0][
+                                "parent_pin"
+                            ]
+    
+                            if (
+                                stored_pin is not None
+                                and pin_input.strip()
+                                == str(stored_pin).strip()
+                            ):
+    
+                                st.session_state[auth_key] = True
+    
+                                st.rerun()
+    
+                            else:
+    
+                                st.error(
+                                    "Invalid Parent Access PIN."
+                                )
+    
     # ==========================
     # SCHEDULE
     # ==========================

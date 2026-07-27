@@ -76,19 +76,26 @@ def student_management():
     
         st.markdown("---")
         st.markdown("**Portal Login Credentials**")
-    
-    
+        
         username = st.text_input(
             "Username for Login",
             value=email.split("@")[0] if email else "",
             key="add_username"
         )
-    
+        
         password = st.text_input(
             "Initial Password",
             type="password",
             value="changeme123",
             key="add_password"
+        )
+        
+        parent_pin = st.text_input(
+            "Parent PIN",
+            type="password",
+            value="",
+            key="add_parent_pin",
+            help="PIN used by the parent to access confidential financial information."
         )
     
     
@@ -194,10 +201,11 @@ def student_management():
                             email,
                             phone,
                             zoom_link,
-                            meeting_id
+                            meeting_id,
+                            parent_pin
                         )
                         VALUES
-                        (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
                         """,
                         (
@@ -209,7 +217,8 @@ def student_management():
                             clean_email,
                             phone.strip(),
                             zoom_link.strip(),
-                            meeting_id.strip()
+                            meeting_id.strip(),
+                            parent_pin.strip()
                         )
                     )
     
@@ -347,7 +356,8 @@ def student_management():
                 email,
                 phone,
                 zoom_link,
-                meeting_id
+                meeting_id,
+                parent_pin
             FROM students
             ORDER BY id DESC
             """
@@ -379,6 +389,17 @@ def student_management():
                 e_zoom = st.text_input("Zoom Link", value=str(student_row["zoom_link"]) if student_row["zoom_link"] and str(student_row["zoom_link"]) != "nan" else "")
                 e_meeting = st.text_input("Meeting ID", value=str(student_row["meeting_id"]) if student_row["meeting_id"] and str(student_row["meeting_id"]) != "nan" else "")
 
+                e_parent_pin = st.text_input(
+                    "Parent PIN",
+                    type="password",
+                    value=str(student_row["parent_pin"])
+                    if student_row["parent_pin"]
+                    and str(student_row["parent_pin"]) != "nan"
+                    else "",
+                    key=f"edit_parent_pin_{student_id}",
+                    help="PIN used by the parent to access confidential financial information."
+                )
+                
                 submit_edit = st.form_submit_button("Update Student Record")
 
                 if submit_edit:
@@ -397,10 +418,11 @@ def student_management():
                                     email = %s,
                                     phone = %s,
                                     zoom_link = %s,
-                                    meeting_id = %s
+                                    meeting_id = %s,
+                                    parent_pin = %s
                                 WHERE id = %s
                                 """,
-                                (e_code, e_first, e_last, e_grade, e_subject, e_email, e_phone, e_zoom, e_meeting, student_id)
+                                (e_code, e_first, e_last, e_grade, e_subject, e_email, e_phone, e_zoom, e_meeting, e_parent_pin.strip(), student_id)
                             )
                             
                             st.cache_data.clear()

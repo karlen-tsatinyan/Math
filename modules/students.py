@@ -93,7 +93,7 @@ def student_management():
         parent_pin = st.text_input(
             "Parent PIN",
             type="password",
-            value="",
+            value="pin_for_parent",
             key="add_parent_pin",
             help="PIN used by the parent to access confidential financial information."
         )

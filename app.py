@@ -26,16 +26,24 @@ st.markdown(
     """
     <style>
 
-    [data-testid="stStatusWidget"]{
-        display:none !important;
+    /* Hide Streamlit automatic page navigation */
+    [data-testid="stSidebarNav"] {
+        display: none !important;
     }
 
-    header [data-testid="stDecoration"]{
-        display:none !important;
+    /* Hide status / running indicator */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
     }
 
-    footer{
-        visibility:hidden;
+    /* Hide top decoration */
+    header [data-testid="stDecoration"] {
+        display: none !important;
+    }
+
+    /* Hide footer */
+    footer {
+        visibility: hidden;
     }
 
     </style>

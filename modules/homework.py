@@ -377,142 +377,528 @@ def homework_management():
             st.cache_data.clear()
             st.rerun()
 
-# ============================================================
+# ==========================================
 # STUDENT HOMEWORK PORTAL
-# ============================================================
+# ==========================================
+
 def student_homework():
+
     student_id = st.session_state.user["student_id"]
-    st.header("My Homework")
+
+    st.header("📚 My Homework")
+
+    # --------------------------------------
+    # Get student's homework
+    # --------------------------------------
+
     homework = query_dataframe(
         """
         SELECT
             id,
             title,
+            description,
             curriculum_topic,
             assigned_date,
             due_date,
             priority,
             assignment_file,
-            student_file,
             file_link,
+            student_file,
             comment,
             teacher_feedback,
             grade,
             status,
-            deleted_assignment_file,
-            deleted_student_file,
+            created_at,
             submitted_at,
             reviewed_at,
-            created_at
+            deleted_assignment_file,
+            deleted_student_file
         FROM homework
         WHERE student_id=%s
-        ORDER BY created_at DESC
+        AND archived=0
+        ORDER BY
+            CASE
+                WHEN status='Assigned' THEN 0
+                WHEN status='Submitted' THEN 1
+                WHEN status='Reviewed' THEN 2
+                ELSE 3
+            END,
+            due_date ASC NULLS LAST,
+            created_at DESC
         """,
         (student_id,)
     )
+
+    # --------------------------------------
+    # No homework
+    # --------------------------------------
+
     if homework.empty:
-        st.info("No homework assigned.")
+
+        st.info(
+            "🎉 You currently have no homework assignments."
+        )
+
         return
 
-    # ========================================================
-    # DISPLAY HOMEWORK
-    # ========================================================
+    # --------------------------------------
+    # Homework selector
+    # --------------------------------------
+
+    st.subheader("Select Homework")
+
+    homework_options = []
+
     for _, row in homework.iterrows():
-        title = safe_text(row["title"])
-        st.subheader(title if title else f"Homework #{int(row['id'])}")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("📚 Topic:", safe_text(row["curriculum_topic"]))
-            st.write("📅 Assigned:", safe_text(row["assigned_date"]))
-            st.write("⏰ Due:", safe_text(row["due_date"]))
-        with col2:
-            st.write("Priority:", safe_text(row["priority"]))
-            st.write("Status:", safe_text(row["status"]))
-            grade = safe_text(row["grade"])
-            if grade:
-                st.success(f"Grade: {grade}")
 
-        # ----------------------------------------------------
-        # INSTRUCTIONS
-        # ----------------------------------------------------
-        comment = safe_text(row["comment"])
-        if comment:
-            st.write("**Instructions:**")
-            st.info(comment)
+        title = (
+            str(row["title"])
+            if pd.notna(row["title"])
+            and str(row["title"]).strip()
+            else f"Homework #{row['id']}"
+        )
 
-        # ----------------------------------------------------
-        # ORIGINAL ASSIGNMENT
-        # ----------------------------------------------------
-        assignment_file = safe_text(row["assignment_file"])
-        assignment_link = safe_text(row["file_link"])
-        assignment_deleted = int(row["deleted_assignment_file"] or 0)
+        status = (
+            str(row["status"])
+            if pd.notna(row["status"])
+            else "Assigned"
+        )
 
-        if assignment_deleted == 0:
-            if assignment_file:
-                if os.path.exists(assignment_file):
-                    with open(assignment_file, "rb") as f:
-                        assignment_data = f.read()
-                    st.download_button(
-                        "📥 Open / Download Assignment",
-                        data=assignment_data,
-                        file_name=os.path.basename(assignment_file),
-                        mime="application/pdf",
-                        key=f"student_assignment_{int(row['id'])}"
-                    )
-                else:
-                    st.warning("Assignment file is not currently available.")
-            elif assignment_link:
-                st.link_button("🔗 Open Google Drive Assignment", assignment_link)
+        due = (
+            str(row["due_date"])
+            if pd.notna(row["due_date"])
+            else "No due date"
+        )
 
-        # ----------------------------------------------------
-        # TEACHER FEEDBACK
-        # ----------------------------------------------------
-        teacher_feedback = safe_text(row["teacher_feedback"])
-        if teacher_feedback:
-            st.success("👩‍🏫 Teacher Feedback: " + teacher_feedback)
+        homework_options.append(
+            f"{title}  |  Due: {due}  |  {status}"
+        )
+
+    selected_option = st.selectbox(
+        "Homework Assignment",
+        homework_options,
+        key="student_homework_selector"
+    )
+
+    selected_index = homework_options.index(
+        selected_option
+    )
+
+    selected = homework.iloc[selected_index]
+
+    selected_id = int(selected["id"])
+
+    st.divider()
+
+    # ======================================
+    # SELECTED HOMEWORK DETAILS
+    # ======================================
+
+    title = (
+        str(selected["title"])
+        if pd.notna(selected["title"])
+        and str(selected["title"]).strip()
+        else f"Homework #{selected_id}"
+    )
+
+    st.title(f"📘 {title}")
+
+    # --------------------------------------
+    # Status / Grade
+    # --------------------------------------
+
+    status = (
+        str(selected["status"])
+        if pd.notna(selected["status"])
+        else "Assigned"
+    )
+
+    grade = selected["grade"]
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+
+        st.metric(
+            "Status",
+            status
+        )
+
+    with c2:
+
+        due_display = (
+            str(selected["due_date"])
+            if pd.notna(selected["due_date"])
+            else "No due date"
+        )
+
+        st.metric(
+            "Due Date",
+            due_display
+        )
+
+    with c3:
+
+        if (
+            pd.notna(grade)
+            and str(grade).strip()
+        ):
+
+            st.metric(
+                "Grade",
+                str(grade)
+            )
+
+        else:
+
+            st.metric(
+                "Grade",
+                "Not graded"
+            )
+
+    # ======================================
+    # ASSIGNMENT INFORMATION
+    # ======================================
+
+    st.divider()
+
+    st.subheader("📋 Assignment Information")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        topic = selected["curriculum_topic"]
+
+        st.write(
+            "**📚 Curriculum Topic:**",
+            topic
+            if pd.notna(topic) and str(topic).strip()
+            else "Not specified"
+        )
+
+        assigned_date = selected["assigned_date"]
+
+        st.write(
+            "**📅 Assigned:**",
+            assigned_date
+            if pd.notna(assigned_date)
+            else "Not specified"
+        )
+
+    with col2:
+
+        priority = selected["priority"]
+
+        st.write(
+            "**⚡ Priority:**",
+            priority
+            if pd.notna(priority) and str(priority).strip()
+            else "Normal"
+        )
+
+        due_date = selected["due_date"]
+
+        st.write(
+            "**⏰ Due:**",
+            due_date
+            if pd.notna(due_date)
+            else "No due date"
+        )
+
+    # ======================================
+    # INSTRUCTIONS
+    # ======================================
+
+    instructions = selected["comment"]
+
+    description = selected["description"]
+
+    if (
+        pd.notna(instructions)
+        and str(instructions).strip()
+    ):
+
+        st.subheader("📝 Instructions")
+
+        st.info(
+            str(instructions)
+        )
+
+    elif (
+        pd.notna(description)
+        and str(description).strip()
+    ):
+
+        st.subheader("📝 Instructions")
+
+        st.info(
+            str(description)
+        )
+
+    # ======================================
+    # ORIGINAL ASSIGNMENT
+    # ======================================
+
+    st.divider()
+
+    st.subheader(
+        "📄 Original Assignment"
+    )
+
+    assignment_file = selected["assignment_file"]
+
+    assignment_link = selected["file_link"]
+
+    assignment_deleted = selected[
+        "deleted_assignment_file"
+    ]
+
+    if (
+        pd.notna(assignment_file)
+        and str(assignment_file).strip()
+        and not assignment_deleted
+    ):
+
+        assignment_file = str(
+            assignment_file
+        ).strip()
+
+        if os.path.exists(
+            assignment_file
+        ):
+
+            with open(
+                assignment_file,
+                "rb"
+            ) as f:
+
+                assignment_data = f.read()
+
+            st.download_button(
+                "📥 Open / Download Assignment",
+                data=assignment_data,
+                file_name=os.path.basename(
+                    assignment_file
+                ),
+                mime="application/pdf",
+                key=f"student_assignment_{selected_id}"
+            )
+
+        else:
+
+            st.warning(
+                "The original assignment file "
+                "is no longer available."
+            )
+
+    elif (
+        pd.notna(assignment_link)
+        and str(assignment_link).strip()
+    ):
+
+        st.link_button(
+            "🔗 Open Google Drive Assignment",
+            str(assignment_link).strip()
+        )
+
+    else:
+
+        st.info(
+            "No original assignment file or link is available."
+        )
+
+    # ======================================
+    # STUDENT SUBMISSION
+    # ======================================
+
+    st.divider()
+
+    st.subheader(
+        "📤 My Submission"
+    )
+
+    student_file = selected["student_file"]
+
+    student_file_deleted = selected[
+        "deleted_student_file"
+    ]
+
+    if (
+        pd.notna(student_file)
+        and str(student_file).strip()
+        and not student_file_deleted
+    ):
+
+        student_file = str(
+            student_file
+        ).strip()
+
+        if os.path.exists(
+            student_file
+        ):
+
+            st.success(
+                "Your completed homework has been submitted."
+            )
+
+            with open(
+                student_file,
+                "rb"
+            ) as f:
+
+                student_data = f.read()
+
+            st.download_button(
+                "📥 View / Download My Submission",
+                data=student_data,
+                file_name=os.path.basename(
+                    student_file
+                ),
+                mime="application/pdf",
+                key=f"student_submission_{selected_id}"
+            )
+
+        else:
+
+            st.warning(
+                "Your submission record exists, "
+                "but the file is no longer available."
+            )
+
+    elif status == "Reviewed":
+
+        st.info(
+            "Your homework has been reviewed."
+        )
+
+    else:
+
+        st.info(
+            "You have not submitted this homework yet."
+        )
+
+    # ======================================
+    # UPLOAD COMPLETED HOMEWORK
+    # ======================================
+
+    if status != "Reviewed":
+
         st.divider()
 
-    # ========================================================
-    # STUDENT SUBMISSION
-    # ========================================================
-    st.subheader("📤 Submit Completed Homework")
-    selectable_homework = homework[homework["status"].isin(["Assigned", "Submitted", "Reviewed"])]
-    if selectable_homework.empty:
-        st.info("There are no assignments available for submission.")
-        return
-
-    assignment_labels = {}
-    for _, row in selectable_homework.iterrows():
-        label = f"#{int(row['id'])} — {safe_text(row['title'])}"
-        assignment_labels[label] = int(row["id"])
-
-    selected_assignment_label = st.selectbox("Assignment", list(assignment_labels.keys()), key="student_assignment_select")
-    selected_assignment_id = assignment_labels[selected_assignment_label]
-    upload = st.file_uploader("Upload Your Solution", type=["pdf", "jpg", "jpeg", "png"], key="student_homework_upload")
-
-    if st.button("📤 Submit Homework", key="submit_homework_button"):
-        if not upload:
-            st.error("Please upload your completed homework first.")
-            return
-
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        path = os.path.join(UPLOAD_FOLDER, f"student_{student_id}_{selected_assignment_id}_{upload.name}")
-        with open(path, "wb") as f:
-            f.write(upload.getbuffer())
-
-        execute(
-            """
-            UPDATE homework
-            SET
-                student_file=%s,
-                status='Submitted',
-                submitted_at=CURRENT_TIMESTAMP,
-                deleted_student_file=0
-            WHERE id=%s
-              AND student_id=%s
-            """,
-            (path, selected_assignment_id, student_id)
+        st.subheader(
+            "📤 Submit Completed Homework"
         )
-        st.success("✅ Homework submitted successfully.")
-        st.cache_data.clear()
-        st.rerun()
+
+        upload = st.file_uploader(
+            "Upload Your Solution",
+            type=[
+                "pdf",
+                "jpg",
+                "jpeg",
+                "png"
+            ],
+            key=f"student_upload_{selected_id}"
+        )
+
+        if st.button(
+            "Submit Homework",
+            key=f"submit_homework_{selected_id}"
+        ):
+
+            if upload is None:
+
+                st.warning(
+                    "Please select a file before submitting."
+                )
+
+            else:
+
+                os.makedirs(
+                    UPLOAD_FOLDER,
+                    exist_ok=True
+                )
+
+                safe_filename = (
+                    f"student_{student_id}_"
+                    f"{selected_id}_"
+                    f"{upload.name}"
+                )
+
+                path = os.path.join(
+                    UPLOAD_FOLDER,
+                    safe_filename
+                )
+
+                with open(
+                    path,
+                    "wb"
+                ) as f:
+
+                    f.write(
+                        upload.getbuffer()
+                    )
+
+                execute(
+                    """
+                    UPDATE homework
+                    SET
+                        student_file=%s,
+                        status='Submitted',
+                        submitted_at=CURRENT_TIMESTAMP,
+                        deleted_student_file=0
+                    WHERE id=%s
+                    AND student_id=%s
+                    """,
+                    (
+                        path,
+                        selected_id,
+                        student_id
+                    )
+                )
+
+                st.cache_data.clear()
+
+                st.success(
+                    "✅ Homework submitted successfully!"
+                )
+
+                st.rerun()
+
+    # ======================================
+    # TEACHER FEEDBACK
+    # ======================================
+
+    if (
+        pd.notna(selected["teacher_feedback"])
+        and str(selected["teacher_feedback"]).strip()
+    ):
+
+        st.divider()
+
+        st.subheader(
+            "👩‍🏫 Teacher Feedback"
+        )
+
+        st.success(
+            str(selected["teacher_feedback"])
+        )
+
+    # ======================================
+    # GRADE
+    # ======================================
+
+    if (
+        pd.notna(grade)
+        and str(grade).strip()
+    ):
+
+        st.divider()
+
+        st.subheader(
+            "🏆 Your Grade"
+        )
+
+        st.success(
+            f"Grade: **{grade}**"
+        )

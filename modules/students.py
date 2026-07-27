@@ -389,6 +389,14 @@ def student_management():
                 e_zoom = st.text_input("Zoom Link", value=str(student_row["zoom_link"]) if student_row["zoom_link"] and str(student_row["zoom_link"]) != "nan" else "")
                 e_meeting = st.text_input("Meeting ID", value=str(student_row["meeting_id"]) if student_row["meeting_id"] and str(student_row["meeting_id"]) != "nan" else "")
 
+                st.markdown("---")
+                st.markdown("**Portal Login Credentials**")
+                e_password = st.text_input(
+                    "New Password (leave blank to keep current)",
+                    type="password",
+                    key=f"edit_password_{student_id}",
+                    placeholder="Enter new password if changing"
+                )
                 e_parent_pin = st.text_input(
                     "Parent PIN",
                     type="password",
@@ -399,12 +407,7 @@ def student_management():
                     key=f"edit_parent_pin_{student_id}",
                     help="PIN used by the parent to access confidential financial information."
                 )
-                e_password = st.text_input(
-                    "New Password (leave blank to keep current)",
-                    type="password",
-                    key=f"edit_password_{student_id}",
-                    placeholder="Enter new password if changing"
-                )
+                
                 
                 submit_edit = st.form_submit_button("Update Student Record")
 

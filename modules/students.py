@@ -399,6 +399,12 @@ def student_management():
                     key=f"edit_parent_pin_{student_id}",
                     help="PIN used by the parent to access confidential financial information."
                 )
+                e_password = st.text_input(
+                    "New Password (leave blank to keep current)",
+                    type="password",
+                    key=f"edit_password_{student_id}",
+                    placeholder="Enter new password if changing"
+                )
                 
                 submit_edit = st.form_submit_button("Update Student Record")
 

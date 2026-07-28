@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import psycopg2
 import streamlit as st
-from psycopg2 import pool
 
 
 # ============================================================
@@ -25,45 +24,18 @@ def convert_params(params):
 
 
 # ============================================================
-# SUPABASE CONNECTION POOL
+# DATABASE CONNECTION
 # ============================================================
-
-@st.cache_resource
-def get_connection_pool():
-    """
-    Create one reusable PostgreSQL connection pool.
-
-    This prevents the application from opening a brand-new
-    Supabase connection for every database query.
-    """
-
-    return pool.SimpleConnectionPool(
-        minconn=1,
-        maxconn=5,
-        dsn=st.secrets["postgres"]["url"]
-    )
-
 
 def get_connection():
     """
-    Get an available connection from the pool.
+    Create a PostgreSQL connection using the Supabase
+    connection URL stored in Streamlit secrets.
     """
 
-    connection_pool = get_connection_pool()
-
-    return connection_pool.getconn()
-
-
-def release_connection(conn):
-    """
-    Return the connection to the pool.
-    """
-
-    if conn is not None:
-
-        connection_pool = get_connection_pool()
-
-        connection_pool.putconn(conn)
+    return psycopg2.connect(
+        st.secrets["postgres"]["url"]
+    )
 
 
 # ============================================================
@@ -127,7 +99,7 @@ def query_dataframe(query, params=()):
 
         if conn is not None:
 
-            release_connection(conn)
+            conn.close()
 
 
 # ============================================================
@@ -168,7 +140,7 @@ def execute(query, params=()):
 
         if conn is not None:
 
-            release_connection(conn)
+            conn.close()
 
 
 # ============================================================
@@ -209,7 +181,7 @@ def get_single(query, params=()):
 
         if conn is not None:
 
-            release_connection(conn)
+            conn.close()
 
 
 # ============================================================
@@ -253,7 +225,7 @@ def execute_many(query, data):
 
         if conn is not None:
 
-            release_connection(conn)
+            conn.close()
 
 
 # ============================================================
@@ -298,4 +270,4 @@ def execute_returning(query, params=()):
 
         if conn is not None:
 
-            release_connection(conn)
+            conn.close()

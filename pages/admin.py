@@ -29,6 +29,98 @@ st.markdown(
 )
 
 
+# ==========================================
+# CACHED DATABASE FETCHERS
+# ==========================================
+
+@st.cache_data
+def get_admin_dashboard_metrics(today_date):
+    """Fetches all dashboard KPI metrics and lists with caching."""
+    student_count = query_dataframe("""
+        SELECT COUNT(*) AS total
+        FROM students
+    """)
+
+    homework_waiting = query_dataframe("""
+        SELECT COUNT(*) AS total
+        FROM homework
+        WHERE status='Submitted'
+    """)
+
+    homework_due = query_dataframe("""
+        SELECT COUNT(*) AS total
+        FROM homework
+        WHERE
+            status='Assigned'
+            AND archived=0
+    """)
+
+    today_sessions = query_dataframe(
+        """
+        SELECT COUNT(*) AS total
+        FROM sessions
+        WHERE session_date = %s
+        """,
+        (today_date,),
+    )
+
+    today_schedule = query_dataframe(
+        """
+        SELECT
+            s.first_name,
+            s.last_name,
+            ss.session_time,
+            ss.topic,
+            s.zoom_link,
+            ss.notes
+        FROM sessions ss
+        JOIN students s
+            ON ss.student_id = s.id
+        WHERE ss.session_date = %s
+        ORDER BY ss.session_time
+        """,
+        (today_date,),
+    )
+
+    upcoming_sessions = query_dataframe(
+        """
+        SELECT
+            s.first_name || ' ' || s.last_name AS Student,
+            ss.session_date AS Date,
+            ss.session_time AS Time,
+            ss.topic AS Lesson
+        FROM sessions ss
+        JOIN students s
+            ON ss.student_id = s.id
+        WHERE ss.session_date > %s
+        ORDER BY ss.session_date, ss.session_time
+        LIMIT 10
+        """,
+        (today_date,),
+    )
+
+    waiting_homework = query_dataframe("""
+        SELECT
+            s.first_name || ' ' || s.last_name AS Student,
+            h.created_at AS Submitted_Date
+        FROM homework h
+        JOIN students s
+            ON h.student_id = s.id
+        WHERE h.status='Submitted'
+        ORDER BY h.created_at DESC
+    """)
+
+    return {
+        "student_count": student_count,
+        "homework_waiting": homework_waiting,
+        "homework_due": homework_due,
+        "today_sessions": today_sessions,
+        "today_schedule": today_schedule,
+        "upcoming_sessions": upcoming_sessions,
+        "waiting_homework": waiting_homework,
+    }
+
+
 def admin_page():
     # Hide default sidebar navigation headers
     st.markdown(
@@ -71,48 +163,19 @@ def admin_page():
     if option == "Dashboard":
         st.title("📊 Math Tutoring Dashboard")
 
-        # ----------------------------
-        # KPI Queries
-        # ----------------------------
-
-        student_count = query_dataframe("""
-            SELECT COUNT(*) AS total
-            FROM students
-        """)
-
-        homework_waiting = query_dataframe("""
-            SELECT COUNT(*) AS total
-            FROM homework
-            WHERE status='Submitted'
-        """)
-
-        homework_due = query_dataframe("""
-            SELECT COUNT(*) AS total
-            FROM homework
-            WHERE
-                status='Assigned'
-                AND archived=0
-        """)
-
-        today_sessions = query_dataframe(
-            """
-            SELECT COUNT(*) AS total
-            FROM sessions
-            WHERE session_date = %s
-            """,
-            (today_str(),),
-        )
+        # Fetch all dashboard metrics cleanly from cache
+        metrics = get_admin_dashboard_metrics(today_str())
 
         col1, col2, col3, col4 = st.columns(4)
 
-        col1.metric("👨‍🎓 Students", int(student_count.iloc[0]["total"]))
+        col1.metric("👨‍🎓 Students", int(metrics["student_count"].iloc[0]["total"]))
         col2.metric(
-            "📅 Today's Sessions", int(today_sessions.iloc[0]["total"])
+            "📅 Today's Sessions", int(metrics["today_sessions"].iloc[0]["total"])
         )
         col3.metric(
-            "📚 Homework Waiting", int(homework_waiting.iloc[0]["total"])
+            "📚 Homework Waiting", int(metrics["homework_waiting"].iloc[0]["total"])
         )
-        col4.metric("📝 Homework Due", int(homework_due.iloc[0]["total"]))
+        col4.metric("📝 Homework Due", int(metrics["homework_due"].iloc[0]["total"]))
 
         st.divider()
 
@@ -122,23 +185,7 @@ def admin_page():
 
         st.subheader("📅 Today's Schedule")
 
-        today = query_dataframe(
-            """
-            SELECT
-                s.first_name,
-                s.last_name,
-                ss.session_time,
-                ss.topic,
-                s.zoom_link,
-                ss.notes
-            FROM sessions ss
-            JOIN students s
-                ON ss.student_id = s.id
-            WHERE ss.session_date = %s
-            ORDER BY ss.session_time
-            """,
-            (today_str(),),
-        )
+        today = metrics["today_schedule"]
 
         if today.empty:
             st.info("There is no session for today.")
@@ -181,22 +228,7 @@ def admin_page():
 
         st.subheader("📅 Upcoming Sessions")
 
-        upcoming = query_dataframe(
-            """
-            SELECT
-                s.first_name || ' ' || s.last_name AS Student,
-                ss.session_date AS Date,
-                ss.session_time AS Time,
-                ss.topic AS Lesson
-            FROM sessions ss
-            JOIN students s
-                ON ss.student_id = s.id
-            WHERE ss.session_date > %s
-            ORDER BY ss.session_date, ss.session_time
-            LIMIT 10
-            """,
-            (today_str(),),
-        )
+        upcoming = metrics["upcoming_sessions"]
 
         if len(upcoming) == 0:
             st.info("No upcoming sessions.")
@@ -205,16 +237,7 @@ def admin_page():
 
         st.subheader("📚 Homework Waiting For Review")
 
-        waiting = query_dataframe("""
-            SELECT
-                s.first_name || ' ' || s.last_name AS Student,
-                h.created_at AS Submitted_Date
-            FROM homework h
-            JOIN students s
-                ON h.student_id = s.id
-            WHERE h.status='Submitted'
-            ORDER BY h.created_at DESC
-        """)
+        waiting = metrics["waiting_homework"]
 
         if len(waiting) == 0:
             st.success("Nothing waiting 🎉")

@@ -88,14 +88,13 @@ def get_student_portal_data(student_id, today_date):
             s.topic, 
             st.zoom_link 
         FROM sessions s
-        JOIN  st ON s.student_id = st.id
+        JOIN students st ON s.student_id = st.id
         WHERE s.student_id = %s AND s.session_date >= %s 
         ORDER BY s.session_date ASC, s.session_time ASC 
         LIMIT 1
         """,
         (student_id, today_date)
     )
-
     # 6. Homework Grades
     grades = query_dataframe(
         """

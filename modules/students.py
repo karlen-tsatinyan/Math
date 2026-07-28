@@ -161,7 +161,7 @@ def student_management():
                 
                 existing_user = query_dataframe(
                     """
-                    SELECT id
+                    SELECT s.id
                     FROM users u
                     JOIN students s
                         ON u.student_id = s.id

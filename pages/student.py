@@ -1,38 +1,103 @@
 import streamlit as st
+
 from utils.datetime_utils import today_str
-from database import execute, query_dataframe
+from database import query_dataframe
 
 
-def ensure_student_portal_schema():
-    """Safely ensure essential columns exist in PostgreSQL."""
-    columns_to_add = [
-        ("students", "first_name", "TEXT DEFAULT ''"),
-        ("students", "last_name", "TEXT DEFAULT ''"),
-        ("students", "grade", "TEXT DEFAULT 'N/A'"),
-        ("students", "subject", "TEXT DEFAULT 'N/A'"),
-        ("students", "zoom_link", "TEXT"),
-        ("students", "meeting_id", "TEXT"),
-        ("sessions", "zoom_link", "TEXT"),
-        ("homework", "archived", "INTEGER DEFAULT 0"),
-        ("homework", "status", "TEXT DEFAULT 'Assigned'"),
-        ("payments", "period", "TEXT"),
-        ("payments", "payment_date", "DATE DEFAULT CURRENT_DATE"),
-        ("payments", "amount", "NUMERIC DEFAULT 0.00"),
-    ]
+# ============================================================
+# CACHE SETTINGS
+# ============================================================
 
-    for table_name, col_name, col_type in columns_to_add:
+CACHE_TTL = 300  # 5 minutes
+
+
+# ============================================================
+# STUDENT ID RESOLUTION
+# ============================================================
+
+def get_student_id():
+
+    user = st.session_state.get("user", {})
+
+    # Preferred method:
+    # student_id should already be attached to logged-in user
+    student_id = user.get("student_id")
+
+    if student_id is not None:
+
         try:
-            execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
-        except Exception:
+            return int(student_id)
+
+        except (ValueError, TypeError):
             pass
 
-def get_student_portal_data(student_id, today_date):
-    """Fetches all student portal information with caching to eliminate lag."""
-    
-    # 1. Student Info
-    student_df = query_dataframe(
+    # Fallback only if student_id is not already available
+    user_id = user.get("id")
+
+    if user_id:
+
+        result = query_dataframe(
+            """
+            SELECT student_id
+            FROM users
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+
+        if not result.empty:
+
+            value = result.iloc[0]["student_id"]
+
+            if value is not None:
+
+                try:
+                    return int(value)
+
+                except (ValueError, TypeError):
+                    pass
+
+    # Final fallback using username
+    username = user.get("username")
+
+    if username:
+
+        result = query_dataframe(
+            """
+            SELECT student_id
+            FROM users
+            WHERE LOWER(username) = LOWER(%s)
+            LIMIT 1
+            """,
+            (username,)
+        )
+
+        if not result.empty:
+
+            value = result.iloc[0]["student_id"]
+
+            if value is not None:
+
+                try:
+                    return int(value)
+
+                except (ValueError, TypeError):
+                    pass
+
+    return None
+
+
+# ============================================================
+# STUDENT INFORMATION
+# ============================================================
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_student_info(student_id):
+
+    return query_dataframe(
         """
-        SELECT 
+        SELECT
             id,
             COALESCE(first_name, '') AS first_name,
             COALESCE(last_name, '') AS last_name,
@@ -42,59 +107,92 @@ def get_student_portal_data(student_id, today_date):
             meeting_id
         FROM students
         WHERE id = %s
+        LIMIT 1
         """,
         (student_id,)
     )
 
-    # 2. Homework Due Count
+
+# ============================================================
+# DASHBOARD DATA
+# ============================================================
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_dashboard_data(student_id, today_date):
+
     homework_due = query_dataframe(
         """
-        SELECT COUNT(*) AS total 
-        FROM homework 
-        WHERE student_id = %s AND status = 'Assigned' AND archived = 0
+        SELECT COUNT(*) AS total
+        FROM homework
+        WHERE student_id = %s
+          AND status = 'Assigned'
+          AND archived = 0
         """,
         (student_id,)
     )
 
-    # 3. Upcoming Sessions Count
     sessions_count = query_dataframe(
         """
-        SELECT COUNT(*) AS total 
-        FROM sessions 
-        WHERE student_id = %s 
+        SELECT COUNT(*) AS total
+        FROM sessions
+        WHERE student_id = %s
           AND session_date >= %s
         """,
-        (student_id, today_date)
+        (
+            student_id,
+            today_date
+        )
     )
 
-    # 4. Payments Summary
     payments_summary = query_dataframe(
         """
-        SELECT COALESCE(SUM(amount), 0) AS total 
-        FROM payments 
+        SELECT
+            COALESCE(SUM(amount), 0) AS total
+        FROM payments
         WHERE student_id = %s
         """,
         (student_id,)
     )
 
-    # 5. Single Next Session
     next_session = query_dataframe(
         """
-        SELECT 
-            s.session_date, 
-            s.session_time, 
-            s.topic, 
-            st.zoom_link 
+        SELECT
+            s.session_date,
+            s.session_time,
+            s.topic,
+            st.zoom_link
         FROM sessions s
-        JOIN students st ON s.student_id = st.id
-        WHERE s.student_id = %s AND s.session_date >= %s 
-        ORDER BY s.session_date ASC, s.session_time ASC 
+        JOIN students st
+            ON s.student_id = st.id
+        WHERE s.student_id = %s
+          AND s.session_date >= %s
+        ORDER BY
+            s.session_date ASC,
+            s.session_time ASC
         LIMIT 1
         """,
-        (student_id, today_date)
+        (
+            student_id,
+            today_date
+        )
     )
-    # 6. Homework Grades
-    grades = query_dataframe(
+
+    return {
+        "homework_due": homework_due,
+        "sessions_count": sessions_count,
+        "payments_summary": payments_summary,
+        "next_session": next_session
+    }
+
+
+# ============================================================
+# PERFORMANCE DATA
+# ============================================================
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_grades(student_id):
+
+    return query_dataframe(
         """
         SELECT
             title AS "Homework",
@@ -111,8 +209,11 @@ def get_student_portal_data(student_id, today_date):
         (student_id,)
     )
 
-    # 7. Session History
-    sessions_history = query_dataframe(
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_session_history(student_id):
+
+    return query_dataframe(
         """
         SELECT
             s.session_date AS "Date",
@@ -120,133 +221,293 @@ def get_student_portal_data(student_id, today_date):
             s.duration AS "Duration",
             s.topic AS "Topic",
             s.status AS "Status",
-            COALESCE(a.status, 'Pending') AS attendance_status,
+            COALESCE(
+                a.status,
+                'Pending'
+            ) AS attendance_status,
             s.notes
         FROM sessions s
-        LEFT JOIN attendance a ON a.student_id = s.student_id AND a.session_date = s.session_date
+
+        LEFT JOIN attendance a
+            ON a.student_id = s.student_id
+            AND a.session_date = s.session_date
+
         WHERE s.student_id = %s
-        ORDER BY s.session_date DESC, s.session_time DESC
+
+        ORDER BY
+            s.session_date DESC,
+            s.session_time DESC
         """,
         (student_id,)
     )
 
-    # 8. Payments History
-    payments_history = query_dataframe(
+
+# ============================================================
+# FINANCIAL DATA
+# ============================================================
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_payment_history(student_id):
+
+    return query_dataframe(
         """
-        SELECT amount, payment_date, period 
-        FROM payments 
-        WHERE student_id = %s 
+        SELECT
+            amount,
+            payment_date,
+            period
+        FROM payments
+        WHERE student_id = %s
         ORDER BY payment_date DESC
         """,
         (student_id,)
     )
 
-    return {
-        "student_df": student_df,
-        "homework_due": homework_due,
-        "sessions_count": sessions_count,
-        "payments_summary": payments_summary,
-        "next_session": next_session,
-        "grades": grades,
-        "sessions_history": sessions_history,
-        "payments_history": payments_history,
-    }
 
+@st.cache_data(ttl=CACHE_TTL)
+def get_parent_pin(student_id):
+
+    return query_dataframe(
+        """
+        SELECT
+            parent_pin
+        FROM students
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (student_id,)
+    )
+
+
+# ============================================================
+# STUDENT PAGE
+# ============================================================
 
 def student_page():
-    # Make sure missing columns are added automatically
-    ensure_student_portal_schema()
 
-    user = st.session_state.get("user", {})
-    user_id = user.get("id")
-    username = user.get("username")
+    # --------------------------------------------------------
+    # Resolve Student
+    # --------------------------------------------------------
 
-    student_id = None
-
-    # Dynamically resolve student_id from the database users table
-    try:
-        if user_id:
-            res = query_dataframe("SELECT student_id FROM users WHERE id = %s", (user_id,))
-            if not res.empty and res.iloc[0]["student_id"] is not None:
-                student_id = int(res.iloc[0]["student_id"])
-        elif username:
-            res = query_dataframe("SELECT student_id FROM users WHERE username = %s", (username,))
-            if not res.empty and res.iloc[0]["student_id"] is not None:
-                student_id = int(res.iloc[0]["student_id"])
-    except Exception:
-        pass
-
-    # Fallback to direct session dictionary value if query lookup is empty
-    if not student_id and user.get("student_id"):
-        try:
-            student_id = int(user.get("student_id"))
-        except (ValueError, TypeError):
-            pass
+    student_id = get_student_id()
 
     if not student_id:
-        st.error("No linked student profile found for this user account. Please check with your administrator.")
+
+        st.error(
+            "No linked student profile found for this user account. "
+            "Please check with your administrator."
+        )
+
         return
 
+
+    # --------------------------------------------------------
+    # Sidebar
+    # --------------------------------------------------------
+
     st.sidebar.title("Student Portal")
-    option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Performance & Account", "Schedule"])
 
-    # Fetch cached bundle of student portal data
-    data = get_student_portal_data(student_id, today_str())
+    option = st.sidebar.radio(
+        "Menu",
+        [
+            "Dashboard",
+            "Homework",
+            "Performance & Account",
+            "Schedule"
+        ],
+        key="student_portal_menu"
+    )
 
-    # ==========================
+
+    # --------------------------------------------------------
+    # Manual Refresh
+    # --------------------------------------------------------
+
+    st.sidebar.divider()
+
+    if st.sidebar.button(
+        "🔄 Refresh Data",
+        use_container_width=True,
+        key="student_manual_refresh"
+    ):
+
+        # Clear cached database results
+        st.cache_data.clear()
+
+        st.rerun()
+
+
+    # --------------------------------------------------------
+    # Student Information
+    #
+    # This is cached and used by multiple sections.
+    # --------------------------------------------------------
+
+    student_df = get_student_info(student_id)
+
+
+    if student_df.empty:
+
+        st.error(
+            f"No student record found for Student ID: {student_id}"
+        )
+
+        return
+
+
+    student = student_df.iloc[0]
+
+
+    # --------------------------------------------------------
     # DASHBOARD
-    # ==========================
+    # --------------------------------------------------------
+
     if option == "Dashboard":
+
         st.title("Student Dashboard")
 
-        student = data["student_df"]
 
-        if not student.empty:
-            row = student.iloc[0]
-            st.success(
-                f"Welcome {row['first_name']} {row['last_name']} | "
-                f"Grade: {row['grade']} | Subject: {row['subject']}"
+        st.success(
+            f"Welcome {student['first_name']} "
+            f"{student['last_name']} | "
+            f"Grade: {student['grade']} | "
+            f"Subject: {student['subject']}"
+        )
+
+
+        # Only Dashboard data is loaded here
+        dashboard = get_dashboard_data(
+            student_id,
+            today_str()
+        )
+
+
+        homework_due = dashboard["homework_due"]
+
+        sessions_count = dashboard["sessions_count"]
+
+        payments_summary = dashboard["payments_summary"]
+
+
+        hw_total = (
+            int(homework_due.iloc[0]["total"])
+            if not homework_due.empty
+            else 0
+        )
+
+
+        sess_total = (
+            int(sessions_count.iloc[0]["total"])
+            if not sessions_count.empty
+            else 0
+        )
+
+
+        pay_total = (
+            float(payments_summary.iloc[0]["total"])
+            if not payments_summary.empty
+            else 0.0
+        )
+
+
+        c1, c2, c3 = st.columns(3)
+
+
+        c1.metric(
+            "📚 Homework Due",
+            hw_total
+        )
+
+
+        c2.metric(
+            "📅 Total Upcoming",
+            sess_total
+        )
+
+
+        c3.metric(
+            "💰 Payments Made",
+            f"${pay_total:,.2f}"
+        )
+
+
+        st.divider()
+
+
+        st.subheader(
+            "Next Upcoming Session"
+        )
+
+
+        next_session = dashboard["next_session"]
+
+
+        if not next_session.empty:
+
+            s = next_session.iloc[0]
+
+
+            session_date = s["session_date"]
+
+            session_time = s["session_time"]
+
+            topic = s["topic"]
+
+
+            st.info(
+                f"**Date:** {session_date} "
+                f"at {session_time} | "
+                f"**Topic:** {topic}"
             )
 
-            hw_total = int(data["homework_due"].iloc[0]["total"]) if not data["homework_due"].empty else 0
-            sess_total = int(data["sessions_count"].iloc[0]["total"]) if not data["sessions_count"].empty else 0
-            pay_total = float(data["payments_summary"].iloc[0]["total"]) if not data["payments_summary"].empty else 0.0
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("📚 Homework Due", hw_total)
-            c2.metric("📅 Total Upcoming", sess_total)
-            c3.metric("💰 Payments Made", f"${pay_total:,.2f}")
+            zoom_url = s.get("zoom_link")
 
-            st.divider()
-            st.subheader("Next Upcoming Session")
-            
-            next_session = data["next_session"]
-            if not next_session.empty:
-                s = next_session.iloc[0]
-                st.info(f"**Date:** {s['session_date']} at {s['session_time']} | **Topic:** {s['topic']}")
-                
-                zoom_url = s.get("zoom_link")
-                if zoom_url and str(zoom_url).strip() not in ["", "nan", "None"]:
-                    st.markdown(f"🔗 [Join Zoom Meeting]({zoom_url})")
-                else:
-                    st.caption("No Zoom link assigned for this session yet.")
+
+            if (
+                zoom_url
+                and str(zoom_url).strip()
+                not in ["", "nan", "None"]
+            ):
+
+                st.markdown(
+                    f"🔗 [Join Zoom Meeting]({zoom_url})"
+                )
+
             else:
-                st.write("No upcoming sessions scheduled.")
-        else:
-            st.warning(f"No student record found for Student ID: {student_id}")
 
-    # ==========================
+                st.caption(
+                    "No Zoom link assigned for this session yet."
+                )
+
+
+        else:
+
+            st.write(
+                "No upcoming sessions scheduled."
+            )
+
+
+    # ========================================================
     # HOMEWORK
-    # ==========================
+    # ========================================================
+
     elif option == "Homework":
+
         from modules.homework import student_homework
+
         student_homework()
 
-    # ============================================================
+
+    # ========================================================
     # PERFORMANCE & ACCOUNT
-    # ============================================================
+    # ========================================================
+
     elif option == "Performance & Account":
-        st.title("📊 Performance & Account")
+
+        st.title(
+            "📊 Performance & Account"
+        )
+
 
         tab_grades, tab_sessions, tab_financial = st.tabs(
             [
@@ -256,74 +517,204 @@ def student_page():
             ]
         )
 
-        # ========================================================
+
+        # ----------------------------------------------------
         # HOMEWORK GRADES
-        # ========================================================
+        # ----------------------------------------------------
+
         with tab_grades:
-            st.subheader("Homework Grades")
-            grades = data["grades"]
+
+            st.subheader(
+                "Homework Grades"
+            )
+
+
+            grades = get_grades(
+                student_id
+            )
+
 
             if grades.empty:
-                st.info("No graded homework available yet.")
-            else:
-                st.dataframe(grades, use_container_width=True, hide_index=True)
 
-        # ========================================================
+                st.info(
+                    "No graded homework available yet."
+                )
+
+            else:
+
+                st.dataframe(
+                    grades,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+
+        # ----------------------------------------------------
         # SESSION HISTORY
-        # ========================================================
+        # ----------------------------------------------------
+
         with tab_sessions:
-            st.subheader("Session History")
-            sessions = data["sessions_history"][["Date", "Time", "Duration", "Topic", "Status"]]
 
-            if sessions.empty:
-                st.info("No session history available.")
+            st.subheader(
+                "Session History"
+            )
+
+
+            sessions_history = get_session_history(
+                student_id
+            )
+
+
+            if sessions_history.empty:
+
+                st.info(
+                    "No session history available."
+                )
+
             else:
-                st.dataframe(sessions, use_container_width=True, hide_index=True)
+
+                sessions = sessions_history[
+                    [
+                        "Date",
+                        "Time",
+                        "Duration",
+                        "Topic",
+                        "Status"
+                    ]
+                ]
 
 
-        # ========================================================
+                st.dataframe(
+                    sessions,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+
+        # ----------------------------------------------------
         # FINANCIAL STATEMENT
-        # ========================================================
-        with tab_financial:
-            st.subheader("🔒 Financial Statement")
+        # ----------------------------------------------------
 
-            auth_key = f"parent_authenticated_{student_id}"
+        with tab_financial:
+
+            st.subheader(
+                "🔒 Financial Statement"
+            )
+
+
+            auth_key = (
+                f"parent_authenticated_{student_id}"
+            )
+
 
             if auth_key not in st.session_state:
+
                 st.session_state[auth_key] = False
 
+
+            # ================================================
+            # AUTHENTICATED
+            # ================================================
+
             if st.session_state[auth_key]:
-                col1, col2 = st.columns([4, 1])
+
+                col1, col2 = st.columns(
+                    [4, 1]
+                )
+
 
                 with col1:
-                    st.success("🔓 Parent Access Authenticated")
+
+                    st.success(
+                        "🔓 Parent Access Authenticated"
+                    )
+
 
                 with col2:
-                    if st.button("🔒 Lock", key=f"lock_financial_{student_id}"):
-                        st.session_state[auth_key] = False
+
+                    if st.button(
+                        "🔒 Lock",
+                        key=f"lock_financial_{student_id}"
+                    ):
+
+                        st.session_state[
+                            auth_key
+                        ] = False
+
                         st.rerun()
 
-                payments = data["payments_history"]
+
+                # Only load payments after authentication
+                payments = get_payment_history(
+                    student_id
+                )
+
 
                 if payments.empty:
-                    st.info("No payment statements available.")
-                else:
-                    formatted_payments = payments.rename(columns={
-                        "payment_date": "Payment Date",
-                        "amount": "Amount Paid",
-                        "period": "Period"
-                    })
-                    st.dataframe(formatted_payments, use_container_width=True, hide_index=True)
 
-                    total_paid = formatted_payments["Amount Paid"].fillna(0).sum()
-                    st.metric("Total Paid", f"${float(total_paid):,.2f}")
+                    st.info(
+                        "No payment statements available."
+                    )
+
+                else:
+
+                    formatted_payments = payments.rename(
+                        columns={
+                            "payment_date": "Payment Date",
+                            "amount": "Amount Paid",
+                            "period": "Period"
+                        }
+                    )
+
+
+                    st.dataframe(
+                        formatted_payments,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+
+                    total_paid = (
+                        formatted_payments[
+                            "Amount Paid"
+                        ]
+                        .fillna(0)
+                        .sum()
+                    )
+
+
+                    st.metric(
+                        "Total Paid",
+                        f"${float(total_paid):,.2f}"
+                    )
+
+
+            # ================================================
+            # NOT AUTHENTICATED
+            # ================================================
 
             else:
-                st.warning("🔒 Financial information is confidential and requires Parent Authorization.")
 
-                with st.container(border=True):
-                    st.markdown("### 🔑 Parent Authentication Gateway")
-                    st.write("Please enter the Parent Access PIN provided by the parent/guardian.")
+                st.warning(
+                    "🔒 Financial information is confidential "
+                    "and requires Parent Authorization."
+                )
+
+
+                with st.container(
+                    border=True
+                ):
+
+                    st.markdown(
+                        "### 🔑 Parent Authentication Gateway"
+                    )
+
+
+                    st.write(
+                        "Please enter the Parent Access PIN "
+                        "provided by the parent/guardian."
+                    )
+
 
                     pin_input = st.text_input(
                         "Parent Access PIN",
@@ -331,65 +722,167 @@ def student_page():
                         key=f"parent_pin_input_{student_id}"
                     )
 
-                    if st.button("Verify Identity & Unlock Financial Statement", type="primary", key=f"verify_parent_{student_id}"):
-                        stored_pin_result = query_dataframe(
-                            """
-                            SELECT parent_pin
-                            FROM students
-                            WHERE id = %s
-                            LIMIT 1
-                            """,
-                            (student_id,)
+
+                    if st.button(
+                        "Verify Identity & Unlock Financial Statement",
+                        type="primary",
+                        key=f"verify_parent_{student_id}"
+                    ):
+
+                        stored_pin_result = get_parent_pin(
+                            student_id
                         )
 
+
                         if stored_pin_result.empty:
-                            st.error("No Parent Access PIN has been configured for this student.")
+
+                            st.error(
+                                "No Parent Access PIN has been "
+                                "configured for this student."
+                            )
+
                         else:
-                            stored_pin = stored_pin_result.iloc[0]["parent_pin"]
 
-                            if stored_pin is not None and pin_input.strip() == str(stored_pin).strip():
-                                st.session_state[auth_key] = True
+                            stored_pin = (
+                                stored_pin_result.iloc[0][
+                                    "parent_pin"
+                                ]
+                            )
+
+
+                            if (
+                                stored_pin is not None
+                                and pin_input.strip()
+                                == str(stored_pin).strip()
+                            ):
+
+                                st.session_state[
+                                    auth_key
+                                ] = True
+
                                 st.rerun()
+
                             else:
-                                st.error("Invalid Parent Access PIN.")
 
-    # ==========================
+                                st.error(
+                                    "Invalid Parent Access PIN."
+                                )
+
+
+    # ========================================================
     # SCHEDULE
-    # ==========================
-    elif option == "Schedule":
-        st.title("My Sessions")
-        sessions = data["sessions_history"]
-        
-        if sessions.empty:
-            st.info("No sessions found.")
-        else:
-            for _, row in sessions.iterrows():
-                with st.container():
-                    att_status = row.get("attendance_status", "Pending")
-                    if att_status == "Present":
-                        badge = "✅ **Present**"
-                    elif att_status == "Absent":
-                        badge = "❌ **Absent**"
-                    elif att_status == "Late":
-                        badge = "⚠️ **Late**"
-                    else:
-                        badge = "⏳ **Pending / Not Marked**"
+    # ========================================================
 
-                    st.write(f"📅 **Date:** {row['Date']} at {row['Time']} | **Topic:** {row.get('Topic', 'N/A')} | **Attendance:** {badge}")
-                    
+    elif option == "Schedule":
+
+        st.title(
+            "My Sessions"
+        )
+
+
+        # Only session history is loaded here
+        sessions = get_session_history(
+            student_id
+        )
+
+
+        if sessions.empty:
+
+            st.info(
+                "No sessions found."
+            )
+
+        else:
+
+            for _, row in sessions.iterrows():
+
+                with st.container():
+
+                    att_status = row.get(
+                        "attendance_status",
+                        "Pending"
+                    )
+
+
+                    if att_status == "Present":
+
+                        badge = "✅ **Present**"
+
+                    elif att_status == "Absent":
+
+                        badge = "❌ **Absent**"
+
+                    elif att_status == "Late":
+
+                        badge = "⚠️ **Late**"
+
+                    else:
+
+                        badge = (
+                            "⏳ **Pending / Not Marked**"
+                        )
+
+
+                    st.write(
+                        f"📅 **Date:** {row['Date']} "
+                        f"at {row['Time']} | "
+                        f"**Topic:** {row.get('Topic', 'N/A')} | "
+                        f"**Attendance:** {badge}"
+                    )
+
+
                     if row.get("notes"):
-                        st.caption(f"📝 Notes: {row['notes']}")
+
+                        st.caption(
+                            f"📝 Notes: {row['notes']}"
+                        )
+
+
                     st.divider()
 
-        # Render permanent classroom info in sidebar from cached student record
-        student = data["student_df"]
-        if not student.empty:
-            z_link = student.iloc[0].get("zoom_link")
-            m_id = student.iloc[0].get("meeting_id")
-            if z_link or m_id:
-                st.sidebar.divider()
-                st.sidebar.subheader("Permanent Classroom Info")
-                if z_link:
-                    st.sidebar.markdown(f"🔗 [General Zoom Room]({z_link})")
-                if m_id:
-                    st.sidebar.text(f"Meeting ID: {m_id}")
+
+        # ----------------------------------------------------
+        # PERMANENT CLASSROOM INFO
+        # ----------------------------------------------------
+
+        z_link = student.get(
+            "zoom_link"
+        )
+
+        m_id = student.get(
+            "meeting_id"
+        )
+
+
+        if (
+            z_link
+            or m_id
+        ):
+
+            st.sidebar.divider()
+
+            st.sidebar.subheader(
+                "Permanent Classroom Info"
+            )
+
+
+            if (
+                z_link
+                and str(z_link).strip()
+                not in ["", "nan", "None"]
+            ):
+
+                st.sidebar.markdown(
+                    f"🔗 [General Zoom Room]({z_link})"
+                )
+
+
+            if (
+                m_id
+                and str(m_id).strip()
+                not in ["", "nan", "None"]
+            ):
+
+                st.sidebar.text(
+                    f"Meeting ID: {m_id}"
+                )

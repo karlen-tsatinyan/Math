@@ -133,12 +133,9 @@ def main():
     # -------------------------------
 
     if st.sidebar.button(
-        "🔄 Refresh Data",
+        "🔄 Refresh UI",
         use_container_width=True
     ):
-
-        st.cache_data.clear()
-
         st.rerun()
 
 

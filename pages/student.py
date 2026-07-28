@@ -395,11 +395,3 @@ def student_page():
                     st.sidebar.markdown(f"🔗 [General Zoom Room]({z_link})")
                 if m_id:
                     st.sidebar.text(f"Meeting ID: {m_id}")
-
-    # ==========================
-    # PAYMENTS
-    # ==========================
-    elif option == "Payments":
-        st.title("Payment History")
-        payments = data["payments_history"]
-        st.dataframe(payments, use_container_width=True)

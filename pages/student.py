@@ -26,8 +26,6 @@ def ensure_student_portal_schema():
         except Exception:
             pass
 
-@st.cache_data(ttl=60)
-
 def get_student_portal_data(student_id, today_date):
     """Fetches all student portal information with caching to eliminate lag."""
     

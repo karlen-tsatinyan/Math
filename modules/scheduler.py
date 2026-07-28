@@ -169,7 +169,7 @@ def get_scheduler_students():
             id,
             first_name,
             last_name
-        FROM public.students
+        FROM students
         ORDER BY last_name, first_name
         """
     )

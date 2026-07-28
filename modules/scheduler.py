@@ -1,31 +1,11 @@
 import uuid
 from datetime import datetime, timedelta
+
+import pandas as pd
 import streamlit as st
 from streamlit_calendar import calendar
 
 from database import execute, query_dataframe
-
-# =====================================================
-# SCHEMA SAFETY CHECK
-# =====================================================
-
-def ensure_sessions_schema():
-    """Ensure all required columns exist in PostgreSQL/SQLite sessions table."""
-    columns_to_check = [
-        ("duration", "INTEGER DEFAULT 60"),
-        ("repeat_type", "TEXT DEFAULT 'None'"),
-        ("recurring_group", "TEXT"),
-        ("topic", "TEXT"),
-        ("notes", "TEXT"),
-        ("status", "TEXT DEFAULT 'Scheduled'")
-        # zoom_link is now tracked at the student level in students.py, so it's removed here
-    ]
-    for col_name, col_type in columns_to_check:
-        try:
-            execute(f"ALTER TABLE sessions ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
-        except Exception:
-            # Fallback for SQLite versions that don't support ADD COLUMN IF NOT EXISTS
-            pass
 
 
 # =====================================================
@@ -34,12 +14,17 @@ def ensure_sessions_schema():
 
 def generate_time_slots():
     slots = []
+
     start = datetime.strptime("08:00 AM", "%I:%M %p")
     end = datetime.strptime("08:00 PM", "%I:%M %p")
+
     current = start
 
     while current <= end:
-        slots.append(current.strftime("%I:%M %p").lstrip("0"))
+        slots.append(
+            current.strftime("%I:%M %p").lstrip("0")
+        )
+
         current += timedelta(minutes=15)
 
     return slots
@@ -50,334 +35,1114 @@ TIME_SLOTS = generate_time_slots()
 
 def convert_time(time_string):
     """
-    Convert '4:15 PM' or '04:15 PM' into '16:15:00'
+    Convert:
+        4:15 PM
+        04:15 PM
+    into:
+        16:15:00
     """
+
+    if not time_string:
+        return "00:00:00"
+
     time_str = str(time_string).strip()
-    if ":" in time_str:
-        parts = time_str.split(":")
-        if len(parts[0]) == 1:
-            time_str = "0" + time_str
-        try:
-            return datetime.strptime(time_str, "%I:%M %p").strftime("%H:%M:%S")
-        except ValueError:
-            return time_str
-    return "00:00:00"
 
-
-def calculate_end_time(date_str, time_str, duration_minutes):
-    """
-    Returns ISO datetime string for FullCalendar end time
-    """
     try:
-        duration_val = int(duration_minutes) if duration_minutes else 60
-        start_dt = datetime.strptime(f"{date_str} {convert_time(time_str)}", "%Y-%m-%d %H:%M:%S")
-        end_dt = start_dt + timedelta(minutes=duration_val)
-        return end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+        if len(time_str) >= 2 and time_str[1] == ":":
+            time_str = "0" + time_str
+
+        return datetime.strptime(
+            time_str,
+            "%I:%M %p"
+        ).strftime("%H:%M:%S")
+
+    except ValueError:
+
+        return time_str
+
+
+def calculate_end_time(
+    date_str,
+    time_str,
+    duration_minutes
+):
+
+    try:
+
+        duration_val = (
+            int(duration_minutes)
+            if duration_minutes
+            else 60
+        )
+
+        start_dt = datetime.strptime(
+            f"{date_str} {convert_time(time_str)}",
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        end_dt = (
+            start_dt
+            + timedelta(minutes=duration_val)
+        )
+
+        return end_dt.strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
+
     except Exception:
+
         return f"{date_str}T23:59:59"
 
 
 # =====================================================
-# SESSION SCHEDULER MATRIX
+# CACHED DATABASE FETCHERS
+# =====================================================
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_scheduler_students():
+
+    return query_dataframe(
+        """
+        SELECT
+            id,
+            first_name || ' ' || last_name AS name
+        FROM students
+        WHERE COALESCE(active, TRUE) = TRUE
+        ORDER BY last_name, first_name
+        """
+    )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_scheduler_sessions():
+
+    return query_dataframe(
+        """
+        SELECT
+            ss.id,
+            ss.student_id,
+            ss.session_date::text AS session_date,
+            ss.session_time,
+            COALESCE(ss.duration, 60) AS duration,
+            COALESCE(ss.topic, '') AS topic,
+            COALESCE(ss.notes, '') AS notes,
+            ss.repeat_type,
+            ss.repeat_until,
+            ss.recurring_group,
+            COALESCE(
+                ss.status,
+                'Scheduled'
+            ) AS status,
+
+            s.first_name || ' ' || s.last_name
+                AS student
+
+        FROM sessions ss
+
+        JOIN students s
+            ON ss.student_id = s.id
+
+        ORDER BY
+            ss.session_date,
+            ss.session_time
+        """
+    )
+
+
+# =====================================================
+# CACHE REFRESH
+# =====================================================
+
+def refresh_scheduler_cache():
+
+    get_scheduler_students.clear()
+    get_scheduler_sessions.clear()
+
+
+# =====================================================
+# SESSION SCHEDULER
 # =====================================================
 
 def scheduler_management():
-    st.header("📅 Interactive Session Scheduler Matrix")
 
-    # Run auto-migration check to ensure missing columns do not cause errors
-    ensure_sessions_schema()
+    # -------------------------------------------------
+    # PAGE HEADER
+    # -------------------------------------------------
 
-    # Compact calendar size styling
+    header_col1, header_col2 = st.columns(
+        [5, 1]
+    )
+
+    with header_col1:
+
+        st.header(
+            "📅 Interactive Session Scheduler"
+        )
+
+    with header_col2:
+
+        if st.button(
+            "🔄 Refresh Schedule",
+            use_container_width=True
+        ):
+
+            refresh_scheduler_cache()
+
+            st.session_state.pop(
+                "selected_session_id",
+                None
+            )
+
+            st.session_state.pop(
+                "selected_group",
+                None
+            )
+
+            st.session_state.pop(
+                "active_action",
+                None
+            )
+
+            st.rerun()
+
+
+    # -------------------------------------------------
+    # CALENDAR CSS
+    # -------------------------------------------------
+
     st.markdown(
         """
         <style>
+
         .fc {
             max-height: 520px !important;
             font-size: 0.85em !important;
         }
+
         .fc .fc-scroller-harness {
             max-height: 430px !important;
         }
+
         </style>
         """,
         unsafe_allow_html=True
     )
 
+
     # =================================================
-    # STUDENT LIST (Fetching zoom_link from students table via cache)
+    # LOAD STUDENTS
     # =================================================
-    students = query_dataframe(
-        """
-        SELECT 
-            id, 
-            first_name || ' ' || last_name AS name,
-            COALESCE(zoom_link, '') AS zoom_link
-        FROM students 
-        ORDER BY last_name
-        """
-    )
+
+    students = get_scheduler_students()
+
 
     if students.empty:
-        st.info("Enroll students first.")
+
+        st.info(
+            "Enroll students first."
+        )
+
         return
 
-    student_map = {row["name"]: row["id"] for _, row in students.iterrows()}
-    student_zoom_map = {row["id"]: row["zoom_link"] for _, row in students.iterrows()}
+
+    student_map = {
+        row["name"]: int(row["id"])
+        for _, row in students.iterrows()
+    }
+
 
     # =================================================
-    # LOAD SESSIONS (Pulling student zoom_link via JOIN with cache)
+    # LOAD SESSIONS
     # =================================================
-    sessions = query_dataframe(
-        """
-        SELECT 
-            sessions.id,
-            sessions.student_id,
-            sessions.session_date::text AS session_date,
-            sessions.session_time,
-            COALESCE(sessions.duration, 60) AS duration,
-            COALESCE(sessions.topic, '') AS topic,
-            COALESCE(sessions.notes, '') AS notes,
-            sessions.recurring_group,
-            COALESCE(sessions.status, 'Scheduled') AS status,
-            students.first_name || ' ' || students.last_name AS student,
-            COALESCE(students.zoom_link, '') AS zoom_link
-        FROM sessions
-        JOIN students ON sessions.student_id = students.id
-        ORDER BY sessions.session_date, sessions.session_time
-        """
-    )
+
+    sessions = get_scheduler_sessions()
+
 
     # =================================================
     # CREATE CALENDAR EVENTS
     # =================================================
+
     calendar_events = []
 
-    if not sessions.empty:
-        for _, row in sessions.iterrows():
-            rec_group = row.get("recurring_group")
-            is_recurring = (
-                rec_group is not None 
-                and str(rec_group).strip() not in ["nan", "", "None", "none"]
-            )
-            color = "#2E7D32" if is_recurring else "#1E88E5"
-            
-            s_date = str(row['session_date'])
-            s_time = str(row['session_time'])
-            
-            start_iso = f"{s_date}T{convert_time(s_time)}"
-            end_iso = calculate_end_time(s_date, s_time, row.get("duration", 60))
 
-            calendar_events.append({
-                "id": str(row["id"]),
-                "title": f"{s_time} - {row['student']}",
-                "start": start_iso,
-                "end": end_iso,
-                "allDay": False,
-                "backgroundColor": color,
-                "borderColor": color,
-                "extendedProps": {
-                    "student": str(row["student"]),
-                    "topic": str(row["topic"]),
-                    "notes": str(row["notes"]),
-                    "zoom_link": str(row["zoom_link"]),
-                    "group": str(rec_group) if is_recurring else ""
+    if not sessions.empty:
+
+        for _, row in sessions.iterrows():
+
+            recurring_group = row[
+                "recurring_group"
+            ]
+
+            is_recurring = (
+                pd.notna(recurring_group)
+                and str(
+                    recurring_group
+                ).strip()
+                not in [
+                    "",
+                    "None",
+                    "none",
+                    "nan"
+                ]
+            )
+
+
+            if is_recurring:
+
+                event_color = "#2E7D32"
+
+            else:
+
+                event_color = "#1E88E5"
+
+
+            session_date = str(
+                row["session_date"]
+            )
+
+            session_time = str(
+                row["session_time"]
+            )
+
+
+            start_iso = (
+                f"{session_date}T"
+                f"{convert_time(session_time)}"
+            )
+
+
+            end_iso = calculate_end_time(
+                session_date,
+                session_time,
+                row["duration"]
+            )
+
+
+            calendar_events.append(
+                {
+                    "id": str(row["id"]),
+
+                    "title": (
+                        f"{session_time} - "
+                        f"{row['student']}"
+                    ),
+
+                    "start": start_iso,
+
+                    "end": end_iso,
+
+                    "allDay": False,
+
+                    "backgroundColor": event_color,
+
+                    "borderColor": event_color,
+
+                    "extendedProps": {
+
+                        "student": str(
+                            row["student"]
+                        ),
+
+                        "topic": str(
+                            row["topic"]
+                        ),
+
+                        "notes": str(
+                            row["notes"]
+                        ),
+
+                        "group": (
+                            str(
+                                recurring_group
+                            )
+                            if is_recurring
+                            else ""
+                        ),
+
+                    }
                 }
-            })
+            )
+
 
     # =================================================
     # TWO COLUMN LAYOUT
     # =================================================
-    col_calendar, col_control = st.columns([1.25, 1], gap="large")
+
+    col_calendar, col_control = st.columns(
+        [1.25, 1],
+        gap="large"
+    )
+
+
+    # =================================================
+    # CALENDAR
+    # =================================================
 
     with col_calendar:
-        st.subheader("Monthly Calendar")
-        
+
+        st.subheader(
+            "Monthly Calendar"
+        )
+
+
         calendar_options = {
-            "initialView": "dayGridMonth",
-            "height": 480,
+
+            "initialView":
+                "dayGridMonth",
+
+            "height":
+                480,
+
             "headerToolbar": {
-                "left": "prev,next today",
-                "center": "title",
-                "right": "dayGridMonth"
+
+                "left":
+                    "prev,next today",
+
+                "center":
+                    "title",
+
+                "right":
+                    "dayGridMonth"
             },
-            "eventOrder": "start",
-            "displayEventTime": False,
-            "selectable": True,
-            "editable": False
+
+            "eventOrder":
+                "start",
+
+            "displayEventTime":
+                False,
+
+            "selectable":
+                True,
+
+            "editable":
+                False
         }
 
+
         state = calendar(
+
             events=calendar_events,
+
             options=calendar_options,
+
             key="scheduler_matrix"
         )
 
-    # State update handling from Calendar
+
+    # =================================================
+    # HANDLE CALENDAR CALLBACK
+    # =================================================
+
     if state and "callback" in state:
-        cb = state.get("callback")
-        if cb == "eventClick":
-            st.session_state.active_action = "eventClick"
-            event_id = state.get("eventClick", {}).get("event", {}).get("id")
-            if event_id:
-                try:
-                    st.session_state.selected_session_id = int(event_id)
-                except ValueError:
-                    st.session_state.selected_session_id = event_id
-        elif cb == "dateClick":
-            st.session_state.active_action = "dateClick"
-            raw_date = state.get("dateClick", {}).get("dateStr") or state.get("dateClick", {}).get("date", "")
-            st.session_state.calendar_date = raw_date.split("T")[0]
-            # Clear selection when clicking a new date
-            st.session_state.pop("selected_session_id", None)
-            st.session_state.pop("selected_group", None)
 
-    active_action = st.session_state.get("active_action")
+        callback = state.get(
+            "callback"
+        )
 
-    # =================================================
-    # RIGHT CONTROL PANEL
-    # =================================================
-    with col_control:
 
         # ---------------------------------------------
         # EXISTING SESSION CLICKED
         # ---------------------------------------------
-        if active_action == "eventClick" and "selected_session_id" in st.session_state:
-            selected_id = st.session_state.selected_session_id
-            selected_event = sessions[sessions["id"].astype(str) == str(selected_id)]
 
-            if not selected_event.empty:
-                event = selected_event.iloc[0]
-                st.session_state.selected_group = event["recurring_group"]
+        if callback == "eventClick":
 
-                st.subheader("Manage Session")
-                st.warning(f"Selected: {event['student']}")
-                st.write(f"📅 **Date:** {event['session_date']}")
-                st.write(f"⏰ **Time:** {event['session_time']} ({event['duration']} mins)")
-                
-                if event["topic"]:
-                    st.write(f"📖 **Topic:** {event['topic']}")
-                if event["notes"]:
-                    st.caption(f"📝 Notes: {event['notes']}")
-                
-                # Zoom link dynamically pulled from student profile record
-                zoom_url = event.get("zoom_link")
-                if zoom_url and zoom_url.strip() not in ["", "nan", "None"]:
-                    st.markdown(f"🔗 **Zoom Link:** [Join Meeting]({zoom_url})")
-                else:
-                    st.caption("No Zoom link assigned to this student profile.")
-                
-                rec_grp = event["recurring_group"]
-                if rec_grp and str(rec_grp).strip() not in ["nan", "", "None"]:
-                    st.info("🔄 Part of a recurring series.")
+            st.session_state.active_action = (
+                "eventClick"
+            )
+
+
+            event_id = (
+                state
+                .get("eventClick", {})
+                .get("event", {})
+                .get("id")
+            )
+
+
+            if event_id:
+
+                try:
+
+                    st.session_state.selected_session_id = (
+                        int(event_id)
+                    )
+
+                except ValueError:
+
+                    st.session_state.selected_session_id = (
+                        event_id
+                    )
+
 
         # ---------------------------------------------
         # EMPTY DATE CLICKED
         # ---------------------------------------------
-        elif active_action == "dateClick" and "calendar_date" in st.session_state:
-            clicked_date = st.session_state.calendar_date
 
-            st.subheader("➕ Create New Session")
-            st.info(f"Selected Date: **{clicked_date}**")
+        elif callback == "dateClick":
 
-            with st.form("new_session_form"):
-                selected_student = st.selectbox("Student", list(student_map.keys()))
-                selected_time = st.selectbox("Start Time", TIME_SLOTS)
-                duration = st.selectbox("Duration (minutes)", [30, 45, 60, 75, 90, 120], index=2)
-                topic = st.text_input("Lesson Topic")
-                notes = st.text_area("Notes")
-                recurring = st.checkbox("Repeat weekly?")
-                
-                weeks = 1
+            st.session_state.active_action = (
+                "dateClick"
+            )
+
+
+            raw_date = (
+                state
+                .get("dateClick", {})
+                .get("dateStr")
+                or
+                state
+                .get("dateClick", {})
+                .get("date", "")
+            )
+
+
+            st.session_state.calendar_date = (
+                raw_date.split("T")[0]
+            )
+
+
+            st.session_state.pop(
+                "selected_session_id",
+                None
+            )
+
+
+            st.session_state.pop(
+                "selected_group",
+                None
+            )
+
+
+    active_action = st.session_state.get(
+        "active_action"
+    )
+
+
+    # =================================================
+    # RIGHT CONTROL PANEL
+    # =================================================
+
+    with col_control:
+
+
+        # =================================================
+        # EXISTING SESSION
+        # =================================================
+
+        if (
+            active_action == "eventClick"
+            and
+            "selected_session_id"
+            in st.session_state
+        ):
+
+            selected_id = (
+                st.session_state
+                .selected_session_id
+            )
+
+
+            selected_event = sessions[
+                sessions["id"].astype(str)
+                ==
+                str(selected_id)
+            ]
+
+
+            if not selected_event.empty:
+
+                event = selected_event.iloc[0]
+
+
+                st.session_state.selected_group = (
+                    event["recurring_group"]
+                )
+
+
+                st.subheader(
+                    "Manage Session"
+                )
+
+
+                st.warning(
+                    f"Selected: {event['student']}"
+                )
+
+
+                st.write(
+                    f"📅 **Date:** "
+                    f"{event['session_date']}"
+                )
+
+
+                st.write(
+                    f"⏰ **Time:** "
+                    f"{event['session_time']} "
+                    f"({event['duration']} mins)"
+                )
+
+
+                if (
+                    pd.notna(event["topic"])
+                    and
+                    str(event["topic"]).strip()
+                ):
+
+                    st.write(
+                        f"📖 **Topic:** "
+                        f"{event['topic']}"
+                    )
+
+
+                if (
+                    pd.notna(event["notes"])
+                    and
+                    str(event["notes"]).strip()
+                ):
+
+                    st.caption(
+                        f"📝 Notes: "
+                        f"{event['notes']}"
+                    )
+
+
+                # ------------------------------------------------
+                # RECURRING INFORMATION
+                # ------------------------------------------------
+
+                recurring_group = (
+                    event["recurring_group"]
+                )
+
+
+                repeat_type = (
+                    event["repeat_type"]
+                )
+
+
+                repeat_until = (
+                    event["repeat_until"]
+                )
+
+
+                if (
+                    pd.notna(recurring_group)
+                    and
+                    str(
+                        recurring_group
+                    ).strip()
+                    not in [
+                        "",
+                        "None",
+                        "none",
+                        "nan"
+                    ]
+                ):
+
+                    st.info(
+                        "🔄 Part of a recurring "
+                        "weekly series."
+                    )
+
+
+                    if (
+                        pd.notna(repeat_until)
+                        and
+                        str(
+                            repeat_until
+                        ).strip()
+                        not in [
+                            "",
+                            "None",
+                            "none",
+                            "nan"
+                        ]
+                    ):
+
+                        st.write(
+                            f"📆 **Repeats Until:** "
+                            f"{repeat_until}"
+                        )
+
+
+        # =================================================
+        # NEW SESSION
+        # =================================================
+
+        elif (
+            active_action == "dateClick"
+            and
+            "calendar_date"
+            in st.session_state
+        ):
+
+            clicked_date = (
+                st.session_state
+                .calendar_date
+            )
+
+
+            st.subheader(
+                "➕ Create New Session"
+            )
+
+
+            st.info(
+                f"Selected Date: "
+                f"**{clicked_date}**"
+            )
+
+
+            with st.form(
+                "new_session_form"
+            ):
+
+                selected_student = (
+                    st.selectbox(
+                        "Student",
+                        list(
+                            student_map.keys()
+                        )
+                    )
+                )
+
+
+                selected_time = (
+                    st.selectbox(
+                        "Start Time",
+                        TIME_SLOTS
+                    )
+                )
+
+
+                duration = (
+                    st.selectbox(
+                        "Duration (minutes)",
+                        [
+                            30,
+                            45,
+                            60,
+                            75,
+                            90,
+                            120
+                        ],
+                        index=2
+                    )
+                )
+
+
+                topic = st.text_input(
+                    "Lesson Topic"
+                )
+
+
+                notes = st.text_area(
+                    "Notes"
+                )
+
+
+                recurring = st.checkbox(
+                    "Repeat weekly?"
+                )
+
+
+                repeat_until = None
+
+
                 if recurring:
-                    weeks = st.number_input("Number of weeks", min_value=2, max_value=52, value=4)
 
-                save = st.form_submit_button("Confirm Reservation", use_container_width=True)
+                    default_until = (
+                        datetime.strptime(
+                            clicked_date,
+                            "%Y-%m-%d"
+                        ).date()
+                        + timedelta(
+                            weeks=4
+                        )
+                    )
+
+
+                    repeat_until = st.date_input(
+                        "Repeat Until",
+                        value=default_until,
+                        min_value=datetime.strptime(
+                            clicked_date,
+                            "%Y-%m-%d"
+                        ).date()
+                    )
+
+
+                    st.caption(
+                        "The session will be created "
+                        "weekly from the selected date "
+                        "through the Repeat Until date."
+                    )
+
+
+                save = (
+                    st.form_submit_button(
+                        "Confirm Reservation",
+                        use_container_width=True
+                    )
+                )
+
 
                 if save:
-                    group_id = str(uuid.uuid4()) if recurring else None
-                    start_date = datetime.strptime(clicked_date, "%Y-%m-%d").date()
 
-                    for i in range(int(weeks)):
-                        session_day = start_date + timedelta(weeks=i)
+                    start_date = datetime.strptime(
+                        clicked_date,
+                        "%Y-%m-%d"
+                    ).date()
+
+
+                    # ==========================================
+                    # SINGLE SESSION
+                    # ==========================================
+
+                    if not recurring:
+
                         execute(
                             """
-                            INSERT INTO sessions (
-                                student_id, session_date, session_time, duration,
-                                repeat_type, recurring_group, topic, notes, status
-                            )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """,
+                            INSERT INTO sessions
                             (
-                                student_map[selected_student],
-                                str(session_day),
-                                selected_time,
+                                student_id,
+                                session_date,
+                                session_time,
                                 duration,
-                                "Weekly" if recurring else "None",
-                                group_id,
+                                repeat_type,
+                                repeat_until,
+                                recurring_group,
                                 topic,
                                 notes,
+                                status
+                            )
+                            VALUES
+                            (
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s,
+                                %s
+                            )
+                            """,
+                            (
+                                student_map[
+                                    selected_student
+                                ],
+
+                                start_date,
+
+                                selected_time,
+
+                                duration,
+
+                                "None",
+
+                                None,
+
+                                None,
+
+                                topic.strip(),
+
+                                notes.strip(),
+
                                 "Scheduled"
                             )
                         )
 
-                    # Clear cache so new schedule updates display instantly
-                    st.cache_data.clear()
-                    st.success("Session(s) created successfully.")
-                    st.session_state.active_action = None
+
+                    # ==========================================
+                    # RECURRING SESSION
+                    # ==========================================
+
+                    else:
+
+                        if repeat_until < start_date:
+
+                            st.error(
+                                "Repeat Until date "
+                                "cannot be before "
+                                "the session date."
+                            )
+
+                            st.stop()
+
+
+                        group_id = str(
+                            uuid.uuid4()
+                        )
+
+
+                        current_date = (
+                            start_date
+                        )
+
+
+                        while (
+                            current_date
+                            <= repeat_until
+                        ):
+
+                            execute(
+                                """
+                                INSERT INTO sessions
+                                (
+                                    student_id,
+                                    session_date,
+                                    session_time,
+                                    duration,
+                                    repeat_type,
+                                    repeat_until,
+                                    recurring_group,
+                                    topic,
+                                    notes,
+                                    status
+                                )
+                                VALUES
+                                (
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s,
+                                    %s
+                                )
+                                """,
+                                (
+                                    student_map[
+                                        selected_student
+                                    ],
+
+                                    current_date,
+
+                                    selected_time,
+
+                                    duration,
+
+                                    "Weekly",
+
+                                    repeat_until,
+
+                                    group_id,
+
+                                    topic.strip(),
+
+                                    notes.strip(),
+
+                                    "Scheduled"
+                                )
+                            )
+
+
+                            current_date += (
+                                timedelta(
+                                    weeks=1
+                                )
+                            )
+
+
+                    # ==========================================
+                    # REFRESH ONLY SCHEDULER DATA
+                    # ==========================================
+
+                    refresh_scheduler_cache()
+
+
+                    st.session_state.active_action = (
+                        None
+                    )
+
+
+                    st.session_state.pop(
+                        "calendar_date",
+                        None
+                    )
+
+
+                    st.success(
+                        "Session(s) created successfully."
+                    )
+
+
                     st.rerun()
 
-        # ---------------------------------------------
-        # DEFAULT / NO SELECTION
-        # ---------------------------------------------
+
+        # =================================================
+        # DEFAULT
+        # =================================================
+
         else:
-            st.subheader("Interactive Console")
+
+            st.subheader(
+                "Interactive Console"
+            )
+
+
             st.info(
                 """
-                • Click an empty calendar date to schedule a lesson.
-                
-                • Click an existing colored session to view or manage it.
-                
-                • **Green** sessions belong to recurring series.
-                
-                • **Blue** sessions are single events.
+                • Click an empty calendar date
+                  to schedule a lesson.
+
+                • Click an existing session
+                  to view its details.
+
+                • 🟢 Green sessions are
+                  recurring sessions.
+
+                • 🔵 Blue sessions are
+                  single sessions.
+
+                • Use **Refresh Schedule**
+                  whenever you want to reload
+                  the latest database data.
                 """
             )
 
-    # =================================================
+
+    # =====================================================
     # DELETE SECTION
-    # =================================================
-    if active_action == "eventClick" and "selected_session_id" in st.session_state:
+    # =====================================================
+
+    if (
+        active_action == "eventClick"
+        and
+        "selected_session_id"
+        in st.session_state
+    ):
+
         st.divider()
-        st.subheader("🗑️ Remove Selected Session")
 
-        selected_id = st.session_state.selected_session_id
-        group_id = st.session_state.get("selected_group")
 
-        is_recurring = (
-            group_id is not None 
-            and str(group_id).strip() not in ["nan", "", "None", "none"]
+        st.subheader(
+            "🗑️ Remove Selected Session"
         )
 
-        if is_recurring:
-            delete_option = st.radio(
-                "Delete options",
-                ["Delete only this session", "Delete entire recurring series"]
+
+        selected_id = (
+            st.session_state
+            .selected_session_id
+        )
+
+
+        group_id = (
+            st.session_state.get(
+                "selected_group"
             )
+        )
+
+
+        is_recurring = (
+
+            group_id is not None
+
+            and
+
+            str(
+                group_id
+            ).strip()
+
+            not in [
+                "",
+                "None",
+                "none",
+                "nan"
+            ]
+        )
+
+
+        if is_recurring:
+
+            delete_option = st.radio(
+
+                "Delete options",
+
+                [
+                    "Delete only this session",
+                    "Delete entire recurring series"
+                ]
+
+            )
+
         else:
-            delete_option = "Delete only this session"
 
-        if st.button("Confirm Delete", type="primary"):
-            if is_recurring and delete_option == "Delete entire recurring series":
-                execute("DELETE FROM sessions WHERE recurring_group = %s", (group_id,))
+            delete_option = (
+                "Delete only this session"
+            )
+
+
+        if st.button(
+            "Confirm Delete",
+            type="primary"
+        ):
+
+            if (
+                is_recurring
+                and
+                delete_option
+                ==
+                "Delete entire recurring series"
+            ):
+
+                execute(
+                    """
+                    DELETE FROM sessions
+                    WHERE recurring_group = %s
+                    """,
+                    (
+                        group_id,
+                    )
+                )
+
             else:
-                execute("DELETE FROM sessions WHERE id = %s", (selected_id,))
 
-            # Clear cache on deletion
-            st.cache_data.clear()
-            st.success("Session(s) removed.")
-            
-            # Clean up session state
-            st.session_state.pop("selected_session_id", None)
-            st.session_state.pop("selected_group", None)
-            st.session_state.active_action = None
+                execute(
+                    """
+                    DELETE FROM sessions
+                    WHERE id = %s
+                    """,
+                    (
+                        selected_id,
+                    )
+                )
+
+
+            # ---------------------------------------------
+            # Refresh ONLY scheduler cache
+            # ---------------------------------------------
+
+            refresh_scheduler_cache()
+
+
+            st.session_state.pop(
+                "selected_session_id",
+                None
+            )
+
+
+            st.session_state.pop(
+                "selected_group",
+                None
+            )
+
+
+            st.session_state.active_action = (
+                None
+            )
+
+
+            st.success(
+                "Session(s) removed."
+            )
+
+
             st.rerun()

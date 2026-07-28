@@ -337,7 +337,7 @@ def student_page():
                         stored_pin_result = query_dataframe(
                             """
                             SELECT parent_pin
-                            FROM users
+                            FROM students
                             WHERE student_id = %s
                               AND role = 'student'
                             LIMIT 1

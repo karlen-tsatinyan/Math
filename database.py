@@ -7,14 +7,10 @@ from psycopg2 import pool
 
 
 # ============================================================
-# PARAMETER CONVERSION
+# CONVERT PARAMETERS
 # ============================================================
 
 def convert_params(params):
-    """
-    Convert NumPy/Pandas numeric values into
-    native Python types that psycopg2 can handle.
-    """
 
     if params is None:
         return ()
@@ -26,29 +22,20 @@ def convert_params(params):
 
 
 # ============================================================
-# SUPABASE CONNECTION POOL
+# CONNECTION POOL
 # ============================================================
 
 @st.cache_resource
 def get_connection_pool():
-    """
-    Create one reusable PostgreSQL connection pool.
-
-    This prevents the application from opening a brand-new
-    Supabase connection for every database query.
-    """
 
     return pool.SimpleConnectionPool(
-        minconn=1,
-        maxconn=5,
+        1,
+        5,
         dsn=st.secrets["postgres"]["url"]
     )
 
 
 def get_connection():
-    """
-    Get an available connection from the pool.
-    """
 
     connection_pool = get_connection_pool()
 
@@ -56,9 +43,6 @@ def get_connection():
 
 
 def release_connection(conn):
-    """
-    Return the connection to the pool.
-    """
 
     if conn is not None:
 
@@ -122,7 +106,7 @@ def query_dataframe(query, params=()):
         print("PARAMS:")
         print(params)
 
-        raise e
+        raise
 
     finally:
 
@@ -163,7 +147,7 @@ def execute(query, params=()):
             except Exception:
                 pass
 
-        raise e
+        raise
 
     finally:
 
@@ -173,7 +157,7 @@ def execute(query, params=()):
 
 
 # ============================================================
-# GET SINGLE ROW
+# GET SINGLE
 # ============================================================
 
 def get_single(query, params=()):
@@ -195,7 +179,7 @@ def get_single(query, params=()):
 
             return cur.fetchone()
 
-    except Exception as e:
+    except Exception:
 
         if conn is not None:
 
@@ -204,7 +188,7 @@ def get_single(query, params=()):
             except Exception:
                 pass
 
-        raise e
+        raise
 
     finally:
 
@@ -239,7 +223,7 @@ def execute_many(query, data):
 
         conn.commit()
 
-    except Exception as e:
+    except Exception:
 
         if conn is not None:
 
@@ -248,7 +232,7 @@ def execute_many(query, data):
             except Exception:
                 pass
 
-        raise e
+        raise
 
     finally:
 
@@ -284,7 +268,7 @@ def execute_returning(query, params=()):
 
         return row
 
-    except Exception as e:
+    except Exception:
 
         if conn is not None:
 
@@ -293,7 +277,7 @@ def execute_returning(query, params=()):
             except Exception:
                 pass
 
-        raise e
+        raise
 
     finally:
 

@@ -42,7 +42,7 @@ def get_student_portal_data(student_id, today_date):
             COALESCE(subject, 'N/A') AS subject,
             zoom_link,
             meeting_id
-        FROM students
+        FROM 
         WHERE id = %s
         """,
         (student_id,)
@@ -88,7 +88,7 @@ def get_student_portal_data(student_id, today_date):
             s.topic, 
             st.zoom_link 
         FROM sessions s
-        JOIN students st ON s.student_id = st.id
+        JOIN  st ON s.student_id = st.id
         WHERE s.student_id = %s AND s.session_date >= %s 
         ORDER BY s.session_date ASC, s.session_time ASC 
         LIMIT 1
@@ -339,7 +339,6 @@ def student_page():
                             SELECT parent_pin
                             FROM students
                             WHERE student_id = %s
-                              AND role = 'student'
                             LIMIT 1
                             """,
                             (student_id,)

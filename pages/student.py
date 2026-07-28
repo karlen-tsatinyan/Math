@@ -190,7 +190,7 @@ def student_page():
         return
 
     st.sidebar.title("Student Portal")
-    option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Performance & Account", "Schedule", "Payments"])
+    option = st.sidebar.radio("Menu", ["Dashboard", "Homework", "Performance & Account", "Schedule"])
 
     # Fetch cached bundle of student portal data
     data = get_student_portal_data(student_id, today_str())

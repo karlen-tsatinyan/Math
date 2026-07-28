@@ -43,7 +43,7 @@ def get_connection_pool():
         dsn=st.secrets["postgres"]["url"]
     )
 
-@st.cache_data(ttl=60)
+
 def get_connection():
     """
     Get an available connection from the pool.
@@ -53,7 +53,7 @@ def get_connection():
 
     return connection_pool.getconn()
 
-@st.cache_data(ttl=60)
+
 def release_connection(conn):
     """
     Return the connection to the pool.
@@ -174,7 +174,7 @@ def execute(query, params=()):
 # ============================================================
 # GET SINGLE ROW
 # ============================================================
-@st.cache_data(ttl=60)
+
 def get_single(query, params=()):
 
     params = convert_params(params)
@@ -215,7 +215,7 @@ def get_single(query, params=()):
 # ============================================================
 # EXECUTE MANY
 # ============================================================
-@st.cache_data(ttl=60)
+
 def execute_many(query, data):
 
     converted_data = [
@@ -259,7 +259,7 @@ def execute_many(query, data):
 # ============================================================
 # EXECUTE RETURNING
 # ============================================================
-@st.cache_data(ttl=60)
+
 def execute_returning(query, params=()):
 
     params = convert_params(params)

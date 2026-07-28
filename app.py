@@ -133,9 +133,11 @@ def main():
     # -------------------------------
 
     if st.sidebar.button(
-        "🔄 Refresh UI",
+        "🔄 Refresh Data",
         use_container_width=True
     ):
+        # Set a flag to force data reload on the next fetch
+        st.session_state.force_refresh = True
         st.rerun()
 
 

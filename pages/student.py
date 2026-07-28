@@ -283,6 +283,7 @@ def student_page():
             else:
                 st.dataframe(sessions, use_container_width=True, hide_index=True)
 
+
         # ========================================================
         # FINANCIAL STATEMENT
         # ========================================================

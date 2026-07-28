@@ -42,7 +42,7 @@ def get_student_portal_data(student_id, today_date):
             COALESCE(subject, 'N/A') AS subject,
             zoom_link,
             meeting_id
-        FROM 
+        FROM students
         WHERE id = %s
         """,
         (student_id,)

@@ -1,10 +1,10 @@
 from datetime import date
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from database import query_dataframe
+
 from modules.attendance import attendance_management
 from modules.curriculum import curriculum_management
 from modules.homework import homework_management
@@ -14,48 +14,91 @@ from modules.reports import reports_management
 from modules.scheduler import scheduler_management
 from modules.student_profile import student_profile
 from modules.students import student_management
+
 from utils.datetime_utils import today_str
 
-# Hide default Streamlit status indicators
+
+# ============================================================
+# PAGE / CACHE SETTINGS
+# ============================================================
+
+CACHE_TTL = 300  # 5 minutes
+
+
+# ============================================================
+# HIDE STREAMLIT UI ELEMENTS
+# ============================================================
+
 st.markdown(
     """
     <style>
+
     [data-testid="stStatusWidget"] {
-        display: none;
+        display: none !important;
     }
+
+    header [data-testid="stDecoration"] {
+        display: none !important;
+    }
+
+    [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-# ==========================================
-# CACHED DATABASE FETCHERS
-# ==========================================
+# ============================================================
+# DASHBOARD — CACHED DATA
+# ============================================================
 
-@st.cache_data
-def get_admin_dashboard_metrics(today_date):
-    """Fetches all dashboard KPI metrics and lists with caching."""
-    student_count = query_dataframe("""
+@st.cache_data(ttl=CACHE_TTL)
+def get_student_count():
+
+    return query_dataframe(
+        """
         SELECT COUNT(*) AS total
         FROM students
-    """)
+        """
+    )
 
-    homework_waiting = query_dataframe("""
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_homework_waiting_count():
+
+    return query_dataframe(
+        """
         SELECT COUNT(*) AS total
         FROM homework
-        WHERE status='Submitted'
-    """)
+        WHERE status = 'Submitted'
+        """
+    )
 
-    homework_due = query_dataframe("""
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_homework_due_count():
+
+    return query_dataframe(
+        """
         SELECT COUNT(*) AS total
         FROM homework
-        WHERE
-            status='Assigned'
-            AND archived=0
-    """)
+        WHERE status = 'Assigned'
+          AND archived = 0
+        """
+    )
 
-    today_sessions = query_dataframe(
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_today_session_count(today_date):
+
+    return query_dataframe(
         """
         SELECT COUNT(*) AS total
         FROM sessions
@@ -64,7 +107,11 @@ def get_admin_dashboard_metrics(today_date):
         (today_date,),
     )
 
-    today_schedule = query_dataframe(
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_today_schedule(today_date):
+
+    return query_dataframe(
         """
         SELECT
             s.first_name,
@@ -82,61 +129,428 @@ def get_admin_dashboard_metrics(today_date):
         (today_date,),
     )
 
-    upcoming_sessions = query_dataframe(
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_upcoming_sessions(today_date):
+
+    return query_dataframe(
         """
         SELECT
-            s.first_name || ' ' || s.last_name AS Student,
-            ss.session_date AS Date,
-            ss.session_time AS Time,
-            ss.topic AS Lesson
+            s.first_name || ' ' || s.last_name AS "Student",
+            ss.session_date AS "Date",
+            ss.session_time AS "Time",
+            ss.topic AS "Lesson"
         FROM sessions ss
         JOIN students s
             ON ss.student_id = s.id
         WHERE ss.session_date > %s
-        ORDER BY ss.session_date, ss.session_time
+        ORDER BY
+            ss.session_date,
+            ss.session_time
         LIMIT 10
         """,
         (today_date,),
     )
 
-    waiting_homework = query_dataframe("""
+
+@st.cache_data(ttl=CACHE_TTL)
+def get_waiting_homework():
+
+    return query_dataframe(
+        """
         SELECT
-            s.first_name || ' ' || s.last_name AS Student,
-            h.created_at AS Submitted_Date
+            s.first_name || ' ' || s.last_name AS "Student",
+            h.created_at AS "Submitted Date"
         FROM homework h
         JOIN students s
             ON h.student_id = s.id
-        WHERE h.status='Submitted'
+        WHERE h.status = 'Submitted'
         ORDER BY h.created_at DESC
-    """)
-
-    return {
-        "student_count": student_count,
-        "homework_waiting": homework_waiting,
-        "homework_due": homework_due,
-        "today_sessions": today_sessions,
-        "today_schedule": today_schedule,
-        "upcoming_sessions": upcoming_sessions,
-        "waiting_homework": waiting_homework,
-    }
-
-
-def admin_page():
-    # Hide default sidebar navigation headers
-    st.markdown(
         """
-        <style>
-            [data-testid="stSidebarNav"] {
-                display: none;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
     )
 
-    st.sidebar.title("Admin Control Panel")
 
-    default_option = st.session_state.get("admin_option", "Dashboard")
+# ============================================================
+# DASHBOARD
+# ============================================================
+
+def show_dashboard():
+
+    st.title("📊 Math Tutoring Dashboard")
+
+    today_date = today_str()
+
+
+    # --------------------------------------------------------
+    # KPI DATA
+    # --------------------------------------------------------
+
+    student_count = get_student_count()
+
+    today_sessions = get_today_session_count(
+        today_date
+    )
+
+    homework_waiting = get_homework_waiting_count()
+
+    homework_due = get_homework_due_count()
+
+
+    # --------------------------------------------------------
+    # SAFE KPI VALUES
+    # --------------------------------------------------------
+
+    student_total = (
+        int(student_count.iloc[0]["total"])
+        if not student_count.empty
+        else 0
+    )
+
+    session_total = (
+        int(today_sessions.iloc[0]["total"])
+        if not today_sessions.empty
+        else 0
+    )
+
+    waiting_total = (
+        int(homework_waiting.iloc[0]["total"])
+        if not homework_waiting.empty
+        else 0
+    )
+
+    due_total = (
+        int(homework_due.iloc[0]["total"])
+        if not homework_due.empty
+        else 0
+    )
+
+
+    # --------------------------------------------------------
+    # KPI DISPLAY
+    # --------------------------------------------------------
+
+    col1, col2, col3, col4 = st.columns(4)
+
+
+    col1.metric(
+        "👨‍🎓 Students",
+        student_total
+    )
+
+
+    col2.metric(
+        "📅 Today's Sessions",
+        session_total
+    )
+
+
+    col3.metric(
+        "📚 Homework Waiting",
+        waiting_total
+    )
+
+
+    col4.metric(
+        "📝 Homework Due",
+        due_total
+    )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # TODAY'S SCHEDULE
+    # ========================================================
+
+    st.subheader(
+        "📅 Today's Schedule"
+    )
+
+
+    today = get_today_schedule(
+        today_date
+    )
+
+
+    if today.empty:
+
+        st.info(
+            "There is no session for today."
+        )
+
+    else:
+
+        for _, row in today.iterrows():
+
+            with st.container(border=True):
+
+                student_name = (
+                    f"{row['first_name']} "
+                    f"{row['last_name']}"
+                )
+
+                session_time = row["session_time"]
+
+                lesson_topic = row["topic"]
+
+                zoom_url = row["zoom_link"]
+
+                notes = row["notes"]
+
+
+                st.write(
+                    f"""
+                    **Student:** {student_name}
+
+                    **Time:** {
+                        session_time
+                        if session_time
+                        else "Not Set"
+                    }
+
+                    **Lesson:** {
+                        lesson_topic
+                        if lesson_topic
+                        else "Not Entered"
+                    }
+                    """
+                )
+
+
+                if (
+                    zoom_url
+                    and str(zoom_url).strip()
+                    not in [
+                        "",
+                        "nan",
+                        "None"
+                    ]
+                ):
+
+                    st.markdown(
+                        f"🔗 [Join Zoom Meeting]({zoom_url})"
+                    )
+
+
+                if (
+                    notes
+                    and str(notes).strip()
+                    not in [
+                        "",
+                        "nan",
+                        "None"
+                    ]
+                ):
+
+                    st.caption(
+                        f"📝 Notes: {notes}"
+                    )
+
+
+                st.divider()
+
+
+    # ========================================================
+    # UPCOMING SESSIONS
+    # ========================================================
+
+    st.subheader(
+        "📅 Upcoming Sessions"
+    )
+
+
+    upcoming = get_upcoming_sessions(
+        today_date
+    )
+
+
+    if upcoming.empty:
+
+        st.info(
+            "No upcoming sessions."
+        )
+
+    else:
+
+        st.dataframe(
+            upcoming,
+            hide_index=True,
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # HOMEWORK WAITING
+    # ========================================================
+
+    st.subheader(
+        "📚 Homework Waiting For Review"
+    )
+
+
+    waiting = get_waiting_homework()
+
+
+    if waiting.empty:
+
+        st.success(
+            "Nothing waiting 🎉"
+        )
+
+    else:
+
+        st.dataframe(
+            waiting,
+            hide_index=True,
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # STUDENT SEARCH
+    # ========================================================
+
+    st.subheader(
+        "🔍 Student Search"
+    )
+
+
+    keyword = st.text_input(
+        "Search by name",
+        key="admin_student_search"
+    )
+
+
+    if keyword.strip():
+
+        search_text = (
+            keyword.strip()
+        )
+
+
+        results = query_dataframe(
+            """
+            SELECT
+                first_name,
+                last_name,
+                grade,
+                subject
+            FROM students
+            WHERE
+                LOWER(first_name)
+                LIKE LOWER(%s)
+                OR
+                LOWER(last_name)
+                LIKE LOWER(%s)
+            ORDER BY
+                first_name,
+                last_name
+            """,
+            (
+                f"%{search_text}%",
+                f"%{search_text}%"
+            ),
+        )
+
+
+        if results.empty:
+
+            st.info(
+                "No students found."
+            )
+
+        else:
+
+            st.dataframe(
+                results,
+                hide_index=True,
+                use_container_width=True
+            )
+
+
+    # ========================================================
+    # QUICK ACTIONS
+    # ========================================================
+
+    st.subheader(
+        "⚡ Quick Actions"
+    )
+
+
+    col1, col2, col3, col4 = st.columns(4)
+
+
+    with col1:
+
+        if st.button(
+            "➕ Add Student",
+            use_container_width=True,
+            key="quick_add_student"
+        ):
+
+            st.session_state.admin_option = (
+                "Students"
+            )
+
+            st.rerun()
+
+
+    with col2:
+
+        if st.button(
+            "📅 Schedule",
+            use_container_width=True,
+            key="quick_schedule"
+        ):
+
+            st.session_state.admin_option = (
+                "Schedule"
+            )
+
+            st.rerun()
+
+
+    with col3:
+
+        if st.button(
+            "💰 Payment",
+            use_container_width=True,
+            key="quick_payment"
+        ):
+
+            st.session_state.admin_option = (
+                "Payments"
+            )
+
+            st.rerun()
+
+
+    with col4:
+
+        if st.button(
+            "📚 Homework",
+            use_container_width=True,
+            key="quick_homework"
+        ):
+
+            st.session_state.admin_option = (
+                "Homework"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# MAIN ADMIN PAGE
+# ============================================================
+
+def admin_page():
+
+    st.sidebar.title(
+        "Admin Control Panel"
+    )
+
 
     menu_options = [
         "Dashboard",
@@ -151,169 +565,139 @@ def admin_page():
         "Reports",
     ]
 
-    if default_option not in menu_options:
-        default_option = "Dashboard"
+
+    # --------------------------------------------------------
+    # CURRENT MENU
+    # --------------------------------------------------------
+
+    current_option = st.session_state.get(
+        "admin_option",
+        "Dashboard"
+    )
+
+
+    if current_option not in menu_options:
+
+        current_option = "Dashboard"
+
 
     option = st.sidebar.radio(
-        "Admin Menu", menu_options, index=menu_options.index(default_option)
+        "Admin Menu",
+        menu_options,
+        index=menu_options.index(
+            current_option
+        ),
+        key="admin_menu_radio"
     )
+
 
     st.session_state.admin_option = option
 
+
+    # ========================================================
+    # MANUAL REFRESH
+    # ========================================================
+
+    st.sidebar.divider()
+
+
+    if st.sidebar.button(
+        "🔄 Refresh Data",
+        use_container_width=True,
+        key="admin_manual_refresh"
+    ):
+
+        # Clear all cached read-only database queries
+        st.cache_data.clear()
+
+        st.rerun()
+
+
+    # ========================================================
+    # DASHBOARD
+    # ========================================================
+
     if option == "Dashboard":
-        st.title("📊 Math Tutoring Dashboard")
 
-        # Fetch all dashboard metrics cleanly from cache
-        metrics = get_admin_dashboard_metrics(today_str())
+        show_dashboard()
 
-        col1, col2, col3, col4 = st.columns(4)
 
-        col1.metric("👨‍🎓 Students", int(metrics["student_count"].iloc[0]["total"]))
-        col2.metric(
-            "📅 Today's Sessions", int(metrics["today_sessions"].iloc[0]["total"])
-        )
-        col3.metric(
-            "📚 Homework Waiting", int(metrics["homework_waiting"].iloc[0]["total"])
-        )
-        col4.metric("📝 Homework Due", int(metrics["homework_due"].iloc[0]["total"]))
-
-        st.divider()
-
-        # ============================
-        # TODAY'S SCHEDULE
-        # ============================
-
-        st.subheader("📅 Today's Schedule")
-
-        today = metrics["today_schedule"]
-
-        if today.empty:
-            st.info("There is no session for today.")
-        else:
-            for _, row in today.iterrows():
-                with st.container(border=True):
-                    student_name = (
-                        str(row["first_name"]) + " " + str(row["last_name"])
-                    )
-                    session_time = row["session_time"]
-                    lesson_topic = row["topic"]
-                    zoom_url = row["zoom_link"]
-                    notes = row["notes"]
-
-                    st.write(
-                        f"""
-                        **Student:** {student_name}
-
-                        **Time:** {session_time if session_time else "Not Set"}
-
-                        **Lesson:** {lesson_topic if lesson_topic else "Not Entered"}
-                        """
-                    )
-
-                    if zoom_url and str(zoom_url).strip() not in [
-                        "",
-                        "nan",
-                        "None",
-                    ]:
-                        st.markdown(f"🔗 [Join Zoom Meeting]({zoom_url})")
-
-                    if notes and str(notes).strip() not in ["", "nan", "None"]:
-                        st.caption(f"📝 Notes: {notes}")
-
-                    st.divider()
-
-        # ============================
-        # UPCOMING SESSIONS
-        # ============================
-
-        st.subheader("📅 Upcoming Sessions")
-
-        upcoming = metrics["upcoming_sessions"]
-
-        if len(upcoming) == 0:
-            st.info("No upcoming sessions.")
-        else:
-            st.dataframe(upcoming, hide_index=True, use_container_width=True)
-
-        st.subheader("📚 Homework Waiting For Review")
-
-        waiting = metrics["waiting_homework"]
-
-        if len(waiting) == 0:
-            st.success("Nothing waiting 🎉")
-        else:
-            st.dataframe(waiting, hide_index=True, use_container_width=True)
-
-        st.subheader("🔍 Student Search")
-
-        keyword = st.text_input("Search by name")
-
-        if keyword:
-            results = query_dataframe(
-                """
-                SELECT
-                    first_name,
-                    last_name,
-                    grade,
-                    subject
-                FROM students
-                WHERE
-                    first_name LIKE %s
-                    OR
-                    last_name LIKE %s
-                """,
-                (f"%{keyword}%", f"%{keyword}%"),
-            )
-
-            st.dataframe(results, hide_index=True, use_container_width=True)
-
-        st.subheader("⚡ Quick Actions")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            if st.button("➕ Add Student"):
-                st.session_state.admin_option = "Students"
-                st.rerun()
-
-        with col2:
-            if st.button("📅 Schedule"):
-                st.session_state.admin_option = "Schedule"
-                st.rerun()
-
-        with col3:
-            if st.button("💰 Payment"):
-                st.session_state.admin_option = "Payments"
-                st.rerun()
-
-        with col4:
-            if st.button("📚 Homework"):
-                st.session_state.admin_option = "Homework"
-                st.rerun()
+    # ========================================================
+    # STUDENTS
+    # ========================================================
 
     elif option == "Students":
+
         student_management()
 
+
+    # ========================================================
+    # STUDENT PROFILE
+    # ========================================================
+
     elif option == "Student Profile":
+
         student_profile()
 
-    elif option == "Payments":
-        payment_management()
+
+    # ========================================================
+    # PERFORMANCE
+    # ========================================================
 
     elif option == "Performance":
+
         performance_dashboard()
 
+
+    # ========================================================
+    # PAYMENTS
+    # ========================================================
+
+    elif option == "Payments":
+
+        payment_management()
+
+
+    # ========================================================
+    # HOMEWORK
+    # ========================================================
+
     elif option == "Homework":
+
         homework_management()
 
+
+    # ========================================================
+    # SCHEDULE
+    # ========================================================
+
     elif option == "Schedule":
+
         scheduler_management()
 
+
+    # ========================================================
+    # ATTENDANCE
+    # ========================================================
+
     elif option == "Attendance":
+
         attendance_management()
 
+
+    # ========================================================
+    # CURRICULUM
+    # ========================================================
+
     elif option == "Live Curriculum Board":
+
         curriculum_management()
 
+
+    # ========================================================
+    # REPORTS
+    # ========================================================
+
     elif option == "Reports":
+
         reports_management()

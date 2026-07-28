@@ -338,7 +338,7 @@ def student_page():
                             """
                             SELECT parent_pin
                             FROM students
-                            WHERE student_id = %s
+                            WHERE id = %s
                             LIMIT 1
                             """,
                             (student_id,)

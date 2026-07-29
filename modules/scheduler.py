@@ -1055,149 +1055,162 @@ def scheduler_management():
         # =================================================
         # CREATE NEW SESSION
         # =================================================
-
+        
         elif (
             active_action == "dateClick"
             and "calendar_date" in st.session_state
         ):
-
+        
             clicked_date = st.session_state.calendar_date
-
+        
             try:
                 selected_date = datetime.strptime(
                     clicked_date,
                     "%Y-%m-%d"
                 ).date()
-
+        
             except Exception:
                 selected_date = datetime.today().date()
-
+        
             st.subheader("➕ Create New Session")
-
+        
             st.info(
                 f"Selected Date: **{selected_date.strftime('%B %d, %Y')}**"
             )
-
-            # -------------------------------------------------
-            # ONE SINGLE FORM
-            # -------------------------------------------------
-
-            with st.form("new_session_form", clear_on_submit=False):
-
+        
+            # =================================================
+            # ONE FORM ONLY
+            # =================================================
+            #
+            # IMPORTANT:
+            # Everything is inside ONE form.
+            #
+            # Therefore checking "Repeat weekly" does NOT
+            # submit the form and does NOT create anything.
+            #
+            # The Repeat Until date is displayed as part of
+            # the same form and is saved only when the user
+            # clicks Confirm Reservation.
+            # =================================================
+        
+            with st.form(
+                "new_session_form",
+                clear_on_submit=False
+            ):
+        
                 selected_student = st.selectbox(
                     "Student",
                     list(student_map.keys()),
                     key="new_session_student"
                 )
-
+        
                 selected_time = st.selectbox(
                     "Start Time",
                     TIME_SLOTS,
                     key="new_session_time"
                 )
-
+        
                 duration = st.selectbox(
                     "Duration (minutes)",
                     [30, 45, 60, 75, 90, 120],
                     index=2,
                     key="new_session_duration"
                 )
-
+        
                 topic = st.text_input(
                     "Lesson Topic",
                     key="new_session_topic"
                 )
-
+        
                 notes = st.text_area(
                     "Notes",
                     key="new_session_notes"
                 )
-
+        
                 st.markdown("### 🔄 Recurring Session")
-
+        
                 recurring = st.checkbox(
                     "Repeat this session weekly",
                     value=False,
                     key="new_session_recurring"
                 )
-
+        
                 # -------------------------------------------------
-                # ONLY SHOW REPEAT UNTIL WHEN RECURRING IS CHECKED
+                # REPEAT UNTIL
                 # -------------------------------------------------
-
+                #
+                # Because this is inside st.form(), checking the
+                # checkbox does NOT immediately submit the form.
+                #
+                # The date is available when the form is submitted.
+                # -------------------------------------------------
+        
                 if recurring:
-
-                    default_repeat_until = (
-                        selected_date + timedelta(weeks=4)
-                    )
-
+        
                     repeat_until = st.date_input(
                         "Repeat Until",
-                        value=default_repeat_until,
+                        value=selected_date + timedelta(weeks=2),
                         min_value=selected_date,
                         key="new_session_repeat_until"
                     )
-
+        
                     st.caption(
-                        f"Weekly sessions will be created from "
-                        f"{selected_date.strftime('%b %d, %Y')} "
-                        f"through "
-                        f"{repeat_until.strftime('%b %d, %Y')}."
+                        "The starting date and Repeat Until date "
+                        "are both included."
                     )
-
+        
                 else:
-
+        
                     repeat_until = None
-
+        
                 st.divider()
-
+        
                 save = st.form_submit_button(
                     "💾 Confirm Reservation",
                     use_container_width=True,
                     type="primary"
                 )
-
+        
             # =================================================
-            # PROCESS SUBMISSION
+            # PROCESS ONLY AFTER CONFIRM RESERVATION
             # =================================================
-
+        
             if save:
-
+        
                 # -------------------------------------------------
-                # VALIDATE
+                # VALIDATION
                 # -------------------------------------------------
-
+        
                 if recurring and repeat_until is None:
-
+        
                     st.error(
                         "Please select a Repeat Until date."
                     )
-
+        
                 elif (
                     recurring
                     and repeat_until < selected_date
                 ):
-
+        
                     st.error(
-                        "Repeat Until must be on or after "
-                        "the first session date."
+                        "Repeat Until cannot be before the session date."
                     )
-
+        
                 else:
-
+        
                     try:
-
+        
                         student_id = int(
                             student_map[selected_student]
                         )
-
+        
                         # =================================================
                         # SINGLE SESSION
                         # =================================================
-
+        
                         if not recurring:
-
-                            execute(
+        
+                            inserted = execute_returning(
                                 """
                                 INSERT INTO sessions
                                 (
@@ -1231,6 +1244,7 @@ def scheduler_management():
                                         AND session_date = %s
                                         AND session_time = %s
                                 )
+                                RETURNING id
                                 """,
                                 (
                                     student_id,
@@ -1241,32 +1255,59 @@ def scheduler_management():
                                     topic.strip(),
                                     notes.strip(),
                                     "Scheduled",
-
-                                    # duplicate check
+        
+                                    # Duplicate protection
                                     student_id,
                                     selected_date,
                                     selected_time
                                 )
                             )
-
-                            message = (
-                                "Session created successfully."
-                            )
-
+        
+                            if inserted:
+        
+                                message = (
+                                    "Session reserved successfully."
+                                )
+        
+                            else:
+        
+                                message = (
+                                    "That student already has a session "
+                                    "at that date and time."
+                                )
+        
                         # =================================================
-                        # RECURRING WEEKLY SERIES
+                        # RECURRING WEEKLY SESSION
                         # =================================================
-
+        
                         else:
-
+        
                             group_id = str(uuid.uuid4())
-
+        
                             current_date = selected_date
+        
                             session_count = 0
-
+        
+                            # -------------------------------------------------
+                            # IMPORTANT:
+                            # <= means Repeat Until is INCLUDED.
+                            #
+                            # Example:
+                            #
+                            # Start:       July 28
+                            # Repeat Until: August 11
+                            #
+                            # Creates:
+                            # July 28
+                            # August 4
+                            # August 11
+                            #
+                            # Exactly 3 sessions.
+                            # -------------------------------------------------
+        
                             while current_date <= repeat_until:
-
-                                execute(
+        
+                                inserted = execute_returning(
                                     """
                                     INSERT INTO sessions
                                     (
@@ -1300,6 +1341,7 @@ def scheduler_management():
                                             AND session_date = %s
                                             AND session_time = %s
                                     )
+                                    RETURNING id
                                     """,
                                     (
                                         student_id,
@@ -1312,54 +1354,78 @@ def scheduler_management():
                                         topic.strip(),
                                         notes.strip(),
                                         "Scheduled",
-
-                                        # duplicate protection
+        
+                                        # Duplicate protection
                                         student_id,
                                         current_date,
                                         selected_time
                                     )
                                 )
-
-                                session_count += 1
-
+        
+                                # ONLY count a session if PostgreSQL
+                                # actually inserted it.
+                                if inserted:
+                                    session_count += 1
+        
                                 current_date += timedelta(
                                     weeks=1
                                 )
-
-                            message = (
-                                f"{session_count} weekly sessions "
-                                f"created successfully."
-                            )
-
+        
+                            # -------------------------------------------------
+                            # ACCURATE SUCCESS MESSAGE
+                            # -------------------------------------------------
+        
+                            if session_count == 0:
+        
+                                message = (
+                                    "No new sessions were reserved. "
+                                    "Those dates already contain sessions "
+                                    "for this student."
+                                )
+        
+                            elif session_count == 1:
+        
+                                message = (
+                                    "1 weekly session reserved successfully."
+                                )
+        
+                            else:
+        
+                                message = (
+                                    f"{session_count} weekly sessions "
+                                    f"reserved successfully."
+                                )
+        
                         # =================================================
-                        # CLEAR SCHEDULER STATE BEFORE RERUN
+                        # REFRESH SCHEDULER
                         # =================================================
-
+        
                         refresh_scheduler_data()
-
+        
+                        # Clear the selected calendar date
                         st.session_state.pop(
                             "calendar_date",
                             None
                         )
-
+        
                         st.session_state.pop(
                             "selected_session_id",
                             None
                         )
-
+        
                         st.session_state.pop(
                             "selected_group",
                             None
                         )
-
+        
                         st.session_state.active_action = None
-
+        
                         st.success(message)
-
+        
                         st.rerun()
-
+        
                     except Exception as e:
-
+        
                         st.error(
                             f"Unable to create session: {e}"
                         )

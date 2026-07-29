@@ -129,7 +129,7 @@ def student_management():
                 clean_first = first.strip()
                 clean_last = last.strip()
                 clean_email = email.strip().lower()
-                clean_username = username.strip().lower()
+                clean_username = username.strip()
                 
                 #---------------------------------
                 # Student ID Code Check

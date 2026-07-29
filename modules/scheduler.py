@@ -624,14 +624,10 @@ def scheduler_management():
 
         if (
             active_action == "eventClick"
-            and "selected_session_id"
-            in st.session_state
+            and "selected_session_id" in st.session_state
         ):
 
-            selected_id = (
-                st.session_state
-                .selected_session_id
-            )
+            selected_id = st.session_state.selected_session_id
 
             selected_rows = sessions[
                 sessions["id"].astype(str)
@@ -648,38 +644,31 @@ def scheduler_management():
 
             event = selected_rows.iloc[0]
 
-            recurring_group = (
-                event["recurring_group"]
-            )
+            recurring_group = event["recurring_group"]
 
-            st.session_state.selected_group = (
-                recurring_group
-            )
+            st.session_state.selected_group = recurring_group
 
             is_recurring = (
                 recurring_group is not None
-                and str(
-                    recurring_group
-                ).strip()
+                and str(recurring_group).strip()
                 not in [
                     "",
                     "nan",
                     "None",
-                    "none"
+                    "none",
+                    "null"
                 ]
             )
 
-            st.subheader(
-                "✏️ Edit Session"
-            )
+            st.subheader("✏️ Edit Session")
 
             st.info(
                 f"Student: **{event['student']}**"
             )
 
-            # ---------------------------------------------
-            # CURRENT INFORMATION
-            # ---------------------------------------------
+            # =================================================
+            # CURRENT SESSION INFORMATION
+            # =================================================
 
             try:
 
@@ -698,10 +687,8 @@ def scheduler_management():
 
             try:
 
-                current_time_index = (
-                    TIME_SLOTS.index(
-                        current_time
-                    )
+                current_time_index = TIME_SLOTS.index(
+                    current_time
                 )
 
             except ValueError:
@@ -735,9 +722,93 @@ def scheduler_management():
 
                 duration_options.sort()
 
-            # ---------------------------------------------
-            # EDIT FORM
-            # ---------------------------------------------
+            # =================================================
+            # RECURRING SERIES CONTROLS
+            # OUTSIDE FORM SO THEY UPDATE IMMEDIATELY
+            # =================================================
+
+            if is_recurring:
+
+                st.markdown(
+                    "### 🔄 Recurring Series"
+                )
+
+                st.caption(
+                    "This session belongs to a weekly recurring series."
+                )
+
+                # ---------------------------------------------
+                # CURRENT REPEAT-UNTIL DATE
+                # ---------------------------------------------
+
+                existing_not_after = event["not_after"]
+
+                if (
+                    existing_not_after
+                    and str(existing_not_after).strip()
+                    not in [
+                        "",
+                        "None",
+                        "nan",
+                        "null"
+                    ]
+                ):
+
+                    try:
+
+                        current_not_after = datetime.strptime(
+                            str(existing_not_after),
+                            "%Y-%m-%d"
+                        ).date()
+
+                    except Exception:
+
+                        current_not_after = current_date
+
+                else:
+
+                    current_not_after = current_date
+
+                # ---------------------------------------------
+                # REPEAT UNTIL
+                # ---------------------------------------------
+
+                edit_not_after = st.date_input(
+                    "Repeat Until",
+                    value=current_not_after,
+                    min_value=current_date,
+                    key=f"edit_repeat_until_{selected_id}"
+                )
+
+                # ---------------------------------------------
+                # APPLY CHANGES
+                # ---------------------------------------------
+
+                edit_scope = st.radio(
+                    "Apply changes to",
+                    [
+                        "This session only",
+                        "Entire recurring series"
+                    ],
+                    key=f"edit_scope_{selected_id}"
+                )
+
+                st.caption(
+                    f"Current series ends: "
+                    f"**{current_not_after.strftime('%b %d, %Y')}**"
+                )
+
+            else:
+
+                edit_not_after = None
+
+                edit_scope = (
+                    "This session only"
+                )
+
+            # =================================================
+            # EDIT SESSION FORM
+            # =================================================
 
             with st.form(
                 f"edit_session_form_{selected_id}"
@@ -745,27 +816,28 @@ def scheduler_management():
 
                 edit_student = st.selectbox(
                     "Student",
-                    list(
-                        student_map.keys()
-                    ),
+                    list(student_map.keys()),
                     index=(
                         list(
                             student_map.values()
                         ).index(
                             event["student_id"]
                         )
-                    )
+                    ),
+                    key=f"edit_student_{selected_id}"
                 )
 
                 edit_date = st.date_input(
                     "Session Date",
-                    value=current_date
+                    value=current_date,
+                    key=f"edit_date_{selected_id}"
                 )
 
                 edit_time = st.selectbox(
                     "Start Time",
                     TIME_SLOTS,
-                    index=current_time_index
+                    index=current_time_index,
+                    key=f"edit_time_{selected_id}"
                 )
 
                 edit_duration = st.selectbox(
@@ -773,29 +845,28 @@ def scheduler_management():
                     duration_options,
                     index=duration_options.index(
                         current_duration
-                    )
+                    ),
+                    key=f"edit_duration_{selected_id}"
                 )
 
                 edit_topic = st.text_input(
                     "Lesson Topic",
-                    value=str(
-                        event["topic"]
-                    )
-                    if pd.notna(
-                        event["topic"]
-                    )
-                    else ""
+                    value=(
+                        str(event["topic"])
+                        if pd.notna(event["topic"])
+                        else ""
+                    ),
+                    key=f"edit_topic_{selected_id}"
                 )
 
                 edit_notes = st.text_area(
                     "Notes",
-                    value=str(
-                        event["notes"]
-                    )
-                    if pd.notna(
-                        event["notes"]
-                    )
-                    else ""
+                    value=(
+                        str(event["notes"])
+                        if pd.notna(event["notes"])
+                        else ""
+                    ),
+                    key=f"edit_notes_{selected_id}"
                 )
 
                 status_options = [
@@ -820,82 +891,13 @@ def scheduler_management():
                     status_options,
                     index=status_options.index(
                         current_status
-                    )
+                    ),
+                    key=f"edit_status_{selected_id}"
                 )
 
-                # -----------------------------------------
-                # RECURRING SESSION
-                # -----------------------------------------
-
-                if is_recurring:
-
-                    st.markdown(
-                        "### 🔄 Recurring Series"
-                    )
-
-                    st.caption(
-                        "This session belongs to a weekly recurring series."
-                    )
-
-                    existing_not_after = (
-                        event["not_after"]
-                    )
-
-                    if (
-                        existing_not_after
-                        and str(
-                            existing_not_after
-                        ).strip()
-                        not in [
-                            "",
-                            "None",
-                            "nan"
-                        ]
-                    ):
-
-                        try:
-
-                            current_not_after = (
-                                datetime.strptime(
-                                    str(
-                                        existing_not_after
-                                    ),
-                                    "%Y-%m-%d"
-                                ).date()
-                            )
-
-                        except Exception:
-
-                            current_not_after = (
-                                edit_date
-                            )
-
-                    else:
-
-                        current_not_after = (
-                            edit_date
-                        )
-
-                    edit_not_after = st.date_input(
-                        "Repeat Until",
-                        value=current_not_after
-                    )
-
-                    edit_scope = st.radio(
-                        "Apply changes to",
-                        [
-                            "This session only",
-                            "Entire recurring series"
-                        ]
-                    )
-
-                else:
-
-                    edit_not_after = None
-
-                    edit_scope = (
-                        "This session only"
-                    )
+                # ---------------------------------------------
+                # SAVE
+                # ---------------------------------------------
 
                 save_edit = st.form_submit_button(
                     "💾 Save Changes",
@@ -903,11 +905,15 @@ def scheduler_management():
                     type="primary"
                 )
 
-            # ---------------------------------------------
+            # =================================================
             # SAVE EDIT
-            # ---------------------------------------------
+            # =================================================
 
             if save_edit:
+
+                # ---------------------------------------------
+                # VALIDATE REPEAT DATE
+                # ---------------------------------------------
 
                 if (
                     is_recurring
@@ -916,22 +922,23 @@ def scheduler_management():
                 ):
 
                     st.error(
-                        "Repeat Until cannot be earlier than the session date."
+                        "Repeat Until cannot be earlier "
+                        "than the session date."
                     )
 
                 else:
 
                     try:
 
+                        # =================================================
+                        # ENTIRE RECURRING SERIES
+                        # =================================================
+
                         if (
                             is_recurring
                             and edit_scope
                             == "Entire recurring series"
                         ):
-
-                            # ---------------------------------
-                            # Update the entire recurring series
-                            # ---------------------------------
 
                             execute(
                                 """
@@ -947,13 +954,17 @@ def scheduler_management():
                                 WHERE recurring_group = %s
                                 """,
                                 (
-                                    student_map[
-                                        edit_student
-                                    ],
+                                    int(
+                                        student_map[
+                                            edit_student
+                                        ]
+                                    ),
 
                                     edit_time,
 
-                                    edit_duration,
+                                    int(
+                                        edit_duration
+                                    ),
 
                                     edit_topic.strip(),
 
@@ -967,11 +978,16 @@ def scheduler_management():
                                 )
                             )
 
-                        else:
+                            message = (
+                                "✅ Entire recurring series "
+                                "updated successfully."
+                            )
 
-                            # ---------------------------------
-                            # Update only selected session
-                            # ---------------------------------
+                        # =================================================
+                        # ONLY THIS SESSION
+                        # =================================================
+
+                        else:
 
                             execute(
                                 """
@@ -988,15 +1004,19 @@ def scheduler_management():
                                 WHERE id = %s
                                 """,
                                 (
-                                    student_map[
-                                        edit_student
-                                    ],
+                                    int(
+                                        student_map[
+                                            edit_student
+                                        ]
+                                    ),
 
                                     edit_date,
 
                                     edit_time,
 
-                                    edit_duration,
+                                    int(
+                                        edit_duration
+                                    ),
 
                                     edit_topic.strip(),
 
@@ -1006,13 +1026,17 @@ def scheduler_management():
 
                                     edit_not_after,
 
-                                    selected_id
+                                    int(selected_id)
                                 )
                             )
 
-                        # -----------------------------------------
-                        # Refresh ONLY scheduler cache
-                        # -----------------------------------------
+                            message = (
+                                "✅ Session updated successfully."
+                            )
+
+                        # =================================================
+                        # REFRESH SCHEDULER
+                        # =================================================
 
                         refresh_scheduler_data()
 
@@ -1026,13 +1050,9 @@ def scheduler_management():
                             None
                         )
 
-                        st.session_state.active_action = (
-                            None
-                        )
+                        st.session_state.active_action = None
 
-                        st.success(
-                            "Session updated successfully."
-                        )
+                        st.success(message)
 
                         st.rerun()
 
@@ -1042,14 +1062,15 @@ def scheduler_management():
                             f"Unable to update session: {e}"
                         )
 
-            # ---------------------------------------------
+            # =================================================
             # SERIES INFORMATION
-            # ---------------------------------------------
+            # =================================================
 
             if is_recurring:
 
                 st.info(
-                    "🔄 This is part of a recurring weekly series."
+                    "🔄 This session is part of a recurring "
+                    "weekly series."
                 )
 
         # =================================================

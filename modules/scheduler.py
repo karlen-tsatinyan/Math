@@ -1062,17 +1062,6 @@ def scheduler_management():
                             f"Unable to update session: {e}"
                         )
 
-            # =================================================
-            # SERIES INFORMATION
-            # =================================================
-
-            if is_recurring:
-
-                st.info(
-                    "🔄 This session is part of a recurring "
-                    "weekly series."
-                )
-
         # =================================================
         # CREATE NEW SESSION
         # =================================================

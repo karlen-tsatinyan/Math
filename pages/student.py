@@ -92,7 +92,6 @@ def get_student_id():
 # STUDENT INFORMATION
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
 def get_student_info(student_id):
 
     return query_dataframe(

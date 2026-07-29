@@ -434,6 +434,17 @@ def student_management():
                                 (e_code, e_first, e_last, e_grade, e_subject, e_email, e_phone, e_zoom, e_meeting, e_parent_pin.strip(), student_id)
                             )
                             
+                            # Update password in users table if a new one was entered
+                            if e_password.strip():
+                                execute(
+                                    """
+                                    UPDATE users
+                                    SET password = %s
+                                    WHERE student_id = %s
+                                    """,
+                                    (e_password.strip(), student_id)
+                                )
+                            
                             st.cache_data.clear()
                             st.cache_resource.clear()
                             

@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 from supabase import create_client
 
@@ -7,16 +8,16 @@ st.title("Supabase Storage Connection Test")
 
 try:
 
-    # -----------------------------------------
-    # Get Supabase credentials
-    # -----------------------------------------
+    # =========================================================
+    # GET SUPABASE CREDENTIALS
+    # =========================================================
 
     supabase_url = st.secrets["supabase"]["url"]
     supabase_key = st.secrets["supabase"]["key"]
 
-    # -----------------------------------------
-    # Create Supabase client
-    # -----------------------------------------
+    # =========================================================
+    # CREATE SUPABASE CLIENT
+    # =========================================================
 
     supabase = create_client(
         supabase_url,
@@ -25,60 +26,40 @@ try:
 
     st.success("✅ Supabase client connected successfully.")
 
-    # -----------------------------------------
-    # Test Storage
-    # -----------------------------------------
+    # =========================================================
+    # CONNECT DIRECTLY TO HOMEWORK BUCKET
+    # =========================================================
 
-    buckets = supabase.storage.list_buckets()
+    bucket = supabase.storage.from_("homework-files")
 
-    st.success("✅ Supabase Storage connection works.")
+    st.success("✅ homework-files bucket connection works.")
 
-    st.subheader("Available Storage Buckets")
+    # =========================================================
+    # TEST PUBLIC URL GENERATION
+    # =========================================================
 
-    if buckets:
+    test_path = "test/connection-test.txt"
 
-        for bucket in buckets:
+    public_url = bucket.get_public_url(
+        test_path
+    )
 
-            st.write(
-                f"📦 {bucket.name}"
-            )
+    st.success("✅ Supabase Storage public URL generation works.")
 
-    else:
+    st.write("Test URL:")
+    st.code(public_url)
 
-        st.warning(
-            "No Storage buckets were found."
-        )
-
-    # -----------------------------------------
-    # Check homework-files bucket
-    # -----------------------------------------
-
-    homework_bucket = None
-
-    for bucket in buckets:
-
-        if bucket.name == "homework-files":
-
-            homework_bucket = bucket
-            break
-
-    if homework_bucket:
-
-        st.success(
-            "✅ homework-files bucket was found!"
-        )
-
-    else:
-
-        st.error(
-            "❌ homework-files bucket was NOT found."
-        )
+    st.info(
+        "The bucket connection is working. "
+        "We have not uploaded a real homework file yet."
+    )
 
 
 except Exception as e:
 
     st.error(
-        "❌ Supabase connection test failed."
+        "❌ Supabase Storage connection test failed."
     )
 
     st.exception(e)
+```

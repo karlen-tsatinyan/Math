@@ -17,7 +17,7 @@ def safe_text(value):
     return str(value).strip()
 
 def get_homework_file_url(storage_path):
-    """Create a temporary signed URL for a homework file."""
+    """Create a 7-day signed URL for a private Supabase Storage file."""
 
     if not storage_path:
         return None
@@ -25,24 +25,41 @@ def get_homework_file_url(storage_path):
     try:
         supabase = get_supabase()
 
-        signed_url = (
+        storage_path = str(storage_path).strip().lstrip("/")
+
+        result = (
             supabase
             .storage
             .from_("homework-files")
             .create_signed_url(
-                str(storage_path).strip().lstrip("/"),
-                2592000 #1 month
+                storage_path,
+                604800
             )
         )
 
-        if isinstance(signed_url, dict):
-            return signed_url.get("signedURL")
+        # Supabase Python client normally returns:
+        # {"signedURL": "..."}
+        if isinstance(result, dict):
 
-        return signed_url
+            signed_url = (
+                result.get("signedURL")
+                or result.get("signedUrl")
+                or result.get("signed_url")
+            )
+
+            if signed_url:
+                return signed_url
+
+        return None
 
     except Exception as e:
-        st.error(f"Unable to create homework file link: {e}")
+
+        st.error(
+            f"Unable to create homework file link: {e}"
+        )
+
         return None
+        
 # ============================================================
 # ADMIN HOMEWORK MANAGEMENT
 # ============================================================

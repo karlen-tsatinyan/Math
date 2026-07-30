@@ -120,7 +120,7 @@ def student_management():
         )
 
         # ------------------------------------------------------
-        # ADD STUDENT BUTTON
+        # ADD STUDENT
         # ------------------------------------------------------
 
         if st.button(
@@ -275,6 +275,8 @@ def student_management():
 
                     # ==================================================
                     # CREATE STUDENT LOGIN
+                    #
+                    # Existing login system remains unchanged.
                     # ==================================================
 
                     execute(
@@ -476,7 +478,7 @@ def student_management():
                 email,
                 phone
             FROM students
-            WHERE archived = 1
+            WHERE COALESCE(archived, 0) = 1
             ORDER BY id DESC
             """
         )
@@ -783,7 +785,10 @@ def student_management():
 
                 if submit_edit:
 
-                    if not e_first.strip() or not e_last.strip():
+                    if (
+                        not e_first.strip()
+                        or not e_last.strip()
+                    ):
 
                         st.error(
                             "First name and last name are required."

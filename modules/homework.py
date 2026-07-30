@@ -106,7 +106,7 @@ def homework_management():
                                 uploaded_file.type
                                 or "application/octet-stream"
                             ),
-                            "upsert": True,
+                            "upsert": "true",
                         },
                     )
             

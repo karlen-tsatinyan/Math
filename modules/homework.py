@@ -17,7 +17,7 @@ def safe_text(value):
     return str(value).strip()
 
 def get_homework_file_url(storage_path):
-    """Create a 7-day signed URL for a private Supabase Storage file."""
+    """Create a signed URL for a private homework assignment."""
 
     if not storage_path:
         return None
@@ -25,7 +25,14 @@ def get_homework_file_url(storage_path):
     try:
         supabase = get_supabase()
 
-        storage_path = str(storage_path).strip().lstrip("/")
+        storage_path = str(storage_path).strip()
+
+        # If the database accidentally contains the bucket name,
+        # remove it before asking Supabase for the object.
+        prefix = "homework-files/"
+
+        if storage_path.startswith(prefix):
+            storage_path = storage_path[len(prefix):]
 
         result = (
             supabase
@@ -37,18 +44,13 @@ def get_homework_file_url(storage_path):
             )
         )
 
-        # Supabase Python client normally returns:
-        # {"signedURL": "..."}
         if isinstance(result, dict):
 
-            signed_url = (
+            return (
                 result.get("signedURL")
                 or result.get("signedUrl")
                 or result.get("signed_url")
             )
-
-            if signed_url:
-                return signed_url
 
         return None
 

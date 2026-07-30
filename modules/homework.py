@@ -380,7 +380,7 @@ def homework_management():
         elif pd.notna(assignment_file) and str(assignment_file).strip():
         
             storage_path = str(assignment_file).strip()
-            st.warning(f"Original assignment path: `{storage_path}`")        
+            st.warning(f"Original assignment path: `{storage_path}`")         
             assignment_url = get_homework_file_url(
                 storage_path
             )
@@ -811,10 +811,11 @@ def student_homework():
         and str(assignment_file).strip()
     ):
     
-        storage_path = str(
-            assignment_file
-        ).strip()
-    
+        storage_path = str(assignment_file).strip()
+
+        st.warning(f"Original assignment path: `{storage_path}`")
+        st.warning(f"Homework ID: `{selected_id}`")
+        
         assignment_url = get_homework_file_url(
             storage_path
         )

@@ -6,27 +6,66 @@ from pages.student import student_page
 
 from supabase_client import get_supabase
 
-st.title("Supabase Project Test")
+st.title("Supabase Homework File Test")
 
 try:
     supabase = get_supabase()
 
-    st.success("✅ Supabase client connected")
+    bucket_name = "homework-files"
 
+    st.success("✅ Supabase connected")
+
+    # Check bucket
     buckets = supabase.storage.list_buckets()
 
-    st.write("Buckets visible to this application:")
-
-    for bucket in buckets:
-        st.write("📦", bucket.name)
-
-    if any(bucket.name == "homework-files" for bucket in buckets):
-        st.success("✅ homework-files FOUND")
+    if any(b.name == bucket_name for b in buckets):
+        st.success("✅ homework-files bucket found")
     else:
-        st.error("❌ homework-files NOT FOUND")
+        st.error("❌ homework-files bucket not found")
+
+    # List files
+    st.subheader("Files in assignments/student_1")
+
+    files = supabase.storage.from_(bucket_name).list(
+        "assignments/student_1"
+    )
+
+    if files:
+        st.success(f"✅ Found {len(files)} item(s)")
+
+        for file in files:
+            st.write(file)
+
+            file_name = file.get("name")
+
+            if file_name:
+                storage_path = (
+                    f"assignments/student_1/{file_name}"
+                )
+
+                st.write("Storage path:", storage_path)
+
+                public_url = supabase.storage.from_(
+                    bucket_name
+                ).get_public_url(
+                    storage_path
+                )
+
+                st.write("Public URL:")
+                st.code(public_url)
+
+                st.link_button(
+                    "🔗 Open Assignment",
+                    public_url
+                )
+
+    else:
+        st.warning(
+            "No files were found in assignments/student_1."
+        )
 
 except Exception as e:
-    st.error("❌ Supabase test failed")
+    st.error("❌ Supabase Storage test failed")
     st.exception(e)
 
 # ==========================================

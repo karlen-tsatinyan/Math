@@ -901,30 +901,53 @@ def student_homework():
 
             else:
 
-                os.makedirs(
-                    UPLOAD_FOLDER,
-                    exist_ok=True
+                # ==========================================
+                # SAVE STUDENT SUBMISSION TO SUPABASE
+                # ==========================================
+                
+                supabase = get_supabase()
+                
+                bucket_name = "homework-files"
+                
+                safe_filename = os.path.basename(upload.name)
+                
+                storage_path = (
+                    f"submissions/"
+                    f"student_{student_id}/"
+                    f"homework_{selected_id}_"
+                    f"{safe_filename}"
                 )
-
-                safe_filename = (
-                    f"student_{student_id}_"
-                    f"{selected_id}_"
-                    f"{upload.name}"
-                )
-
-                path = os.path.join(
-                    UPLOAD_FOLDER,
-                    safe_filename
-                )
-
-                with open(
-                    path,
-                    "wb"
-                ) as f:
-
-                    f.write(
-                        upload.getbuffer()
+                
+                file_bytes = upload.getvalue()
+                
+                try:
+                
+                    supabase.storage.from_(
+                        bucket_name
+                    ).upload(
+                        path=storage_path,
+                        file=file_bytes,
+                        file_options={
+                            "content-type": (
+                                upload.type
+                                or "application/octet-stream"
+                            ),
+                            "upsert": "true"
+                        }
                     )
+                
+                except Exception as e:
+                
+                    st.error(
+                        "❌ Your homework could not be uploaded."
+                    )
+                
+                    st.exception(e)
+                
+                    return
+                
+                # Store the Supabase Storage path
+                path = storage_path
 
                 execute(
                     """

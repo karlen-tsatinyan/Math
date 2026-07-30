@@ -17,40 +17,76 @@ def safe_text(value):
     return str(value).strip()
 
 def get_homework_file_url(storage_path):
-    """Create a signed URL for a private homework assignment."""
+    """Create a 7-day signed URL for a private Supabase Storage object."""
 
-    if not storage_path:
+    if storage_path is None:
         return None
 
     try:
         supabase = get_supabase()
 
-        storage_path = str(storage_path).strip()
+        path = str(storage_path).strip()
 
-        # If the database accidentally contains the bucket name,
-        # remove it before asking Supabase for the object.
-        prefix = "homework-files/"
+        if not path:
+            return None
 
-        if storage_path.startswith(prefix):
-            storage_path = storage_path[len(prefix):]
+        # ----------------------------------------------------
+        # Normalize different formats that may be stored
+        # in the database.
+        # ----------------------------------------------------
+
+        # Case 1:
+        # homework-files/assignments/student_1/file.pdf
+        if path.startswith("homework-files/"):
+            path = path[len("homework-files/"):]
+
+        # Case 2:
+        # /storage/v1/object/public/homework-files/assignments/...
+        if "/storage/v1/object/" in path:
+
+            path = path.split("/storage/v1/object/", 1)[1]
+
+            # Remove public/ or sign/ portion
+            if path.startswith("public/"):
+                path = path[len("public/"):]
+
+            elif path.startswith("sign/"):
+                path = path[len("sign/"):]
+
+            # Remove bucket name
+            if path.startswith("homework-files/"):
+                path = path[len("homework-files/"):]
+
+        # Case 3:
+        # Full Supabase public URL
+        if "homework-files/" in path and path.startswith("http"):
+
+            path = path.split("homework-files/", 1)[1]
+
+        # ----------------------------------------------------
+        # Create signed URL
+        # ----------------------------------------------------
 
         result = (
             supabase
             .storage
             .from_("homework-files")
             .create_signed_url(
-                storage_path,
+                path,
                 604800
             )
         )
 
         if isinstance(result, dict):
 
-            return (
+            signed_url = (
                 result.get("signedURL")
                 or result.get("signedUrl")
                 or result.get("signed_url")
             )
+
+            if signed_url:
+                return signed_url
 
         return None
 

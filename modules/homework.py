@@ -98,18 +98,16 @@ def homework_management():
             
                 try:
             
-                    result = supabase.storage.from_(
-                        bucket_name
-                    ).upload(
+                    supabase.storage.from_(bucket_name).upload(
                         path=storage_path,
                         file=file_bytes,
                         file_options={
                             "content-type": (
                                 uploaded_file.type
                                 or "application/octet-stream"
-                            },
-                            "upsert": "true"
-                        }
+                            ),
+                            "upsert": True,
+                        },
                     )
             
                     file_path = storage_path

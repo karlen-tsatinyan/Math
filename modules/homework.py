@@ -18,17 +18,16 @@ def safe_text(value):
 
 
 def get_homework_file_url(storage_path):
-    """Return the public Supabase Storage URL for an assignment."""
+    """Build the public Supabase Storage URL for an assignment."""
     if not storage_path:
         return None
 
     try:
-        supabase = get_supabase()
+        supabase_url = st.secrets["supabase"]["url"].rstrip("/")
 
-        return supabase.storage.from_(
-            "homework-files"
-        ).get_public_url(
-            storage_path
+        return (
+            f"{supabase_url}/storage/v1/object/public/"
+            f"homework-files/{storage_path.lstrip('/')}"
         )
 
     except Exception:
@@ -720,71 +719,68 @@ def student_homework():
     # ======================================
     # ORIGINAL ASSIGNMENT
     # ======================================
-
+    
     st.divider()
-
+    
     st.subheader(
         "📄 Original Assignment"
     )
-
+    
     assignment_file = selected["assignment_file"]
-
     assignment_link = selected["file_link"]
-
-    assignment_deleted = selected[
-        "deleted_assignment_file"
-    ]
-
+    assignment_deleted = selected["deleted_assignment_file"]
+    
     if (
+        pd.notna(assignment_deleted)
+        and int(assignment_deleted or 0) == 1
+    ):
+    
+        st.warning(
+            "The original assignment file has been deleted."
+        )
+    
+    elif (
         pd.notna(assignment_file)
         and str(assignment_file).strip()
-        and not assignment_deleted
     ):
-
-        assignment_file = str(
+    
+        storage_path = str(
             assignment_file
         ).strip()
-
-        if os.path.exists(
-            assignment_file
-        ):
-
-            with open(
-                assignment_file,
-                "rb"
-            ) as f:
-
-                assignment_data = f.read()
-
-            st.download_button(
+    
+        assignment_url = get_homework_file_url(
+            storage_path
+        )
+    
+        if assignment_url:
+    
+            st.link_button(
                 "📥 Open / Download Assignment",
-                data=assignment_data,
-                file_name=os.path.basename(
-                    assignment_file
-                ),
-                mime="application/pdf",
-                key=f"student_assignment_{selected_id}"
+                assignment_url
             )
-
+    
+            st.caption(
+                "The original assignment is stored in Supabase Storage."
+            )
+    
         else:
-
-            st.warning(
-                "The original assignment file "
-                "is no longer available."
+    
+            st.error(
+                "Unable to create the Supabase Storage link."
             )
-
+    
     elif (
         pd.notna(assignment_link)
         and str(assignment_link).strip()
     ):
-
+    
         st.link_button(
             "🔗 Open Google Drive Assignment",
             str(assignment_link).strip()
         )
-
+    
     else:
-
+    
         st.info(
             "No original assignment file or link is available."
         )

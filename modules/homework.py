@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import date
 from database import execute, query_dataframe
 from config import UPLOAD_FOLDER
+from supabase_client import get_supabase
 
 # ============================================================
 # HELPER: SAFE VALUE
@@ -74,17 +75,43 @@ def homework_management():
                 return
 
             file_path = None
+
             # ------------------------------------------------
-            # SAVE ASSIGNMENT FILE
+            # SAVE ASSIGNMENT FILE TO SUPABASE STORAGE
             # ------------------------------------------------
             if uploaded_file:
-                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-                file_path = os.path.join(
-                    UPLOAD_FOLDER,
-                    f"{student_id}_{date.today()}_{uploaded_file.name}"
+            
+                supabase = get_supabase()
+            
+                bucket_name = "homework-files"
+            
+                safe_filename = os.path.basename(
+                    uploaded_file.name
                 )
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            
+                storage_path = (
+                    f"assignments/"
+                    f"student_{student_id}/"
+                    f"{date.today()}_"
+                    f"{safe_filename}"
+                )
+            
+                file_bytes = uploaded_file.getvalue()
+            
+                supabase.storage.from_(
+                    bucket_name
+                ).upload(
+                    storage_path,
+                    file_bytes,
+                    {
+                        "content-type": (
+                            uploaded_file.type
+                            or "application/octet-stream"
+                        }
+                    }
+                )
+            
+                file_path = storage_path
 
             # ------------------------------------------------
             # INSERT HOMEWORK

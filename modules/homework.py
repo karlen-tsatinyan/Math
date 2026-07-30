@@ -31,7 +31,7 @@ def get_homework_file_url(storage_path):
             .from_("homework-files")
             .create_signed_url(
                 str(storage_path).strip().lstrip("/"),
-                3600
+                604800 #1week
             )
         )
 

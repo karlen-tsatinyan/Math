@@ -2,1071 +2,1647 @@ import streamlit as st
 import os
 import pandas as pd
 from datetime import date
+
 from database import execute, query_dataframe
-from config import UPLOAD_FOLDER
 from supabase_client import get_supabase
 
 # ============================================================
+
 # HELPER: SAFE VALUE
+
 # ============================================================
+
 def safe_text(value):
-    if value is None:
-        return ""
+"""
+Safely convert database values to clean strings.
+"""
+if value is None:
+return ""
+
+```
+try:
     if pd.isna(value):
         return ""
-    return str(value).strip()
+except Exception:
+    pass
+
+return str(value).strip()
+```
+
+# ============================================================
+
+# HELPER: NORMALIZE SUPABASE STORAGE PATH
+
+# ============================================================
+
+def normalize_storage_path(storage_path):
+"""
+Convert different possible stored formats into the
+path expected by Supabase Storage.
+
+```
+Expected final format:
+
+    assignments/student_1/file.pdf
+
+or
+
+    submissions/student_1/file.pdf
+"""
+
+if storage_path is None:
+    return None
+
+path = str(storage_path).strip()
+
+if not path:
+    return None
+
+# --------------------------------------------------------
+# Remove bucket prefix
+# --------------------------------------------------------
+
+if path.startswith("homework-files/"):
+    path = path[len("homework-files/"):]
+
+# --------------------------------------------------------
+# Handle full Supabase Storage URLs
+# --------------------------------------------------------
+
+if "/storage/v1/object/" in path:
+
+    path = path.split(
+        "/storage/v1/object/",
+        1
+    )[1]
+
+    if path.startswith("public/"):
+        path = path[len("public/"):]
+
+    elif path.startswith("sign/"):
+        path = path[len("sign/"):]
+
+    elif path.startswith("authenticated/"):
+        path = path[len("authenticated/"):]
+
+    if path.startswith("homework-files/"):
+        path = path[len("homework-files/"):]
+
+# --------------------------------------------------------
+# Handle full URL containing bucket name
+# --------------------------------------------------------
+
+if path.startswith("http"):
+
+    if "homework-files/" in path:
+
+        path = path.split(
+            "homework-files/",
+            1
+        )[1]
+
+return path.strip("/")
+```
+
+# ============================================================
+
+# HELPER: CREATE SIGNED URL
+
+# ============================================================
 
 def get_homework_file_url(storage_path):
-    """Create a 7-day signed URL for a private Supabase Storage object."""
+"""
+Create a temporary signed URL for a private Supabase
+Storage object.
 
-    if storage_path is None:
-        return None
+```
+Bucket:
+    homework-files
 
-    try:
-        supabase = get_supabase()
+Signed URL lifetime:
+    1 hour
+"""
 
-        path = str(storage_path).strip()
+path = normalize_storage_path(
+    storage_path
+)
 
-        st.warning(f"🔎 Original Assignment path being requested: `{path}`")
-        
-        if not path:
-            return None
+if not path:
+    return None
 
-        # ----------------------------------------------------
-        # Normalize different formats that may be stored
-        # in the database.
-        # ----------------------------------------------------
+try:
 
-        # Case 1:
-        # homework-files/assignments/student_1/file.pdf
-        if path.startswith("homework-files/"):
-            path = path[len("homework-files/"):]
+    supabase = get_supabase()
 
-        # Case 2:
-        # /storage/v1/object/public/homework-files/assignments/...
-        if "/storage/v1/object/" in path:
+    result = (
+        supabase
+        .storage
+        .from_("homework-files")
+        .create_signed_url(
+            path,
+            3600
+        )
+    )
 
-            path = path.split("/storage/v1/object/", 1)[1]
+    # Supabase Python client may return a dictionary
+    # or an object containing .data.
 
-            # Remove public/ or sign/ portion
-            if path.startswith("public/"):
-                path = path[len("public/"):]
+    data = result
 
-            elif path.startswith("sign/"):
-                path = path[len("sign/"):]
+    if hasattr(result, "data"):
+        data = result.data
 
-            # Remove bucket name
-            if path.startswith("homework-files/"):
-                path = path[len("homework-files/"):]
+    if isinstance(data, dict):
 
-        # Case 3:
-        # Full Supabase public URL
-        if "homework-files/" in path and path.startswith("http"):
-
-            path = path.split("homework-files/", 1)[1]
-
-        # ----------------------------------------------------
-        # Create signed URL
-        # ----------------------------------------------------
-
-        result = (
-            supabase
-            .storage
-            .from_("homework-files")
-            .create_signed_url(
-                path,
-                604800
-            )
+        signed_url = (
+            data.get("signedURL")
+            or data.get("signedUrl")
+            or data.get("signed_url")
+            or data.get("url")
         )
 
-        if isinstance(result, dict):
+        if signed_url:
+            return signed_url
 
-            signed_url = (
-                result.get("signedURL")
-                or result.get("signedUrl")
-                or result.get("signed_url")
-            )
+    return None
 
-            if signed_url:
-                return signed_url
+except Exception as e:
 
-        return None
+    st.error(
+        f"Unable to create homework file link: {e}"
+    )
 
-    except Exception as e:
+    return None
+```
 
-        st.error(
-            f"Unable to create homework file link: {e}"
-        )
-
-        return None
-        
 # ============================================================
+
+# HELPER: DELETE SUPABASE STORAGE FILE
+
+# ============================================================
+
+def delete_homework_file(storage_path):
+"""
+Delete a homework file from Supabase Storage.
+
+```
+Returns:
+    True  = successful
+    False = failed
+"""
+
+path = normalize_storage_path(
+    storage_path
+)
+
+if not path:
+    return True
+
+try:
+
+    supabase = get_supabase()
+
+    result = (
+        supabase
+        .storage
+        .from_("homework-files")
+        .remove(
+            [path]
+        )
+    )
+
+    return True
+
+except Exception as e:
+
+    st.error(
+        f"Unable to delete file from Supabase Storage: {e}"
+    )
+
+    return False
+```
+
+# ============================================================
+
 # ADMIN HOMEWORK MANAGEMENT
+
 # ============================================================
+
 def homework_management():
-    st.header("Teacher Homework Management")
-    tab1, tab2 = st.tabs(["Assign Homework", "Review & Grade Submissions"])
 
-    # ========================================================
-    # GET STUDENTS
-    # ========================================================
-    students = query_dataframe(
-        """
-        SELECT
-            id,
-            first_name || ' ' || last_name AS name
-        FROM students
-        ORDER BY last_name, first_name
-        """
-    )
-    if students.empty:
-        st.warning("No students available.")
-        return
+```
+st.header(
+    "Teacher Homework Management"
+)
 
-    selected_student_id = st.session_state.get("selected_student")
-    student_names = students["name"].tolist()
-    default_index = 0
-    if selected_student_id is not None:
-        match = students[students["id"] == selected_student_id]
-        if not match.empty:
-            default_index = match.index[0]
+tab1, tab2 = st.tabs(
+    [
+        "Assign Homework",
+        "Review & Grade Submissions"
+    ]
+)
 
-    # ========================================================
-    # TAB 1 — ASSIGN HOMEWORK
-    # ========================================================
-    with tab1:
-        st.subheader("Assign New Homework")
-        student_name = st.selectbox("Student", student_names, index=default_index, key="assign_student")
-        student_id = int(students[students["name"] == student_name]["id"].iloc[0])
-        st.session_state.selected_student = student_id
+# ========================================================
+# GET STUDENTS
+# ========================================================
 
-        title = st.text_input("Homework Title", key="homework_title")
-        curriculum = st.text_input("Curriculum Topic", key="homework_curriculum")
-        assigned_date = st.date_input("Assigned Date", value=date.today(), key="homework_assigned_date")
-        due_date = st.date_input("Due Date", key="homework_due_date")
-        priority = st.selectbox("Priority", ["Normal", "Important"], key="homework_priority")
-        uploaded_file = st.file_uploader("Upload Assignment", type=["pdf", "jpg", "jpeg", "png"], key="teacher_upload")
-        drive_link = st.text_input("Google Drive Link", key="homework_drive_link")
-        comment = st.text_area("Instructions / Comments", key="homework_comment")
-        st.divider()
+students = query_dataframe(
+    """
+    SELECT
+        id,
+        first_name || ' ' || last_name AS name
+    FROM students
+    WHERE COALESCE(archived, 0) = 0
+    ORDER BY last_name, first_name
+    """
+)
 
-        if st.button("➕ Assign Homework", key="assign_homework_button"):
-            if not title.strip():
-                st.error("Please enter a Homework Title.")
-                return
-            if not uploaded_file and not drive_link.strip():
-                st.error("Please upload an assignment PDF/image or provide a Google Drive link.")
-                return
+if students.empty:
 
-            file_path = None
-
-            # ------------------------------------------------
-            # SAVE ASSIGNMENT FILE TO SUPABASE STORAGE
-            # ------------------------------------------------
-            if uploaded_file:
-            
-                supabase = get_supabase()
-            
-                bucket_name = "homework-files"
-            
-                safe_filename = os.path.basename(uploaded_file.name)
-            
-                storage_path = (
-                    f"assignments/"
-                    f"student_{student_id}/"
-                    f"{date.today()}_"
-                    f"{safe_filename}"
-                )
-            
-                file_bytes = uploaded_file.getvalue()
-            
-                try:
-            
-                    supabase.storage.from_(bucket_name).upload(
-                        path=storage_path,
-                        file=file_bytes,
-                        file_options={
-                            "content-type": (
-                                uploaded_file.type
-                                or "application/octet-stream"
-                            ),
-                            "upsert": "true",
-                        },
-                    )
-            
-                    file_path = storage_path
-            
-                    st.success(
-                        f"📁 Assignment uploaded to Supabase: {storage_path}"
-                    )
-            
-                except Exception as e:
-            
-                    st.error(
-                        "❌ The assignment could not be uploaded to Supabase Storage."
-                    )
-            
-                    st.exception(e)
-            
-                    return
-
-            # ------------------------------------------------
-            # INSERT HOMEWORK
-            # ------------------------------------------------
-            execute(
-                """
-                INSERT INTO homework
-                (
-                    student_id,
-                    uploaded_by,
-                    title,
-                    curriculum_topic,
-                    assigned_date,
-                    due_date,
-                    priority,
-                    assignment_file,
-                    file_link,
-                    comment,
-                    status,
-                    archived,
-                    deleted_assignment_file,
-                    deleted_student_file
-                )
-                VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    student_id,
-                    "admin",
-                    title.strip(),
-                    curriculum.strip(),
-                    str(assigned_date),
-                    str(due_date),
-                    priority,
-                    file_path,
-                    drive_link.strip() or None,
-                    comment.strip(),
-                    "Assigned",
-                    0,
-                    0,
-                    0
-                )
-            )
-            st.success("✅ Homework assigned successfully.")
-            st.cache_data.clear()
-
-    # ========================================================
-    # TAB 2 — REVIEW & GRADE
-    # ========================================================
-    with tab2:
-        st.subheader("Review & Grade Submissions")
-        submissions = query_dataframe(
-            """
-            SELECT
-                h.id,
-                h.student_id,
-                s.first_name || ' ' || s.last_name AS student_name,
-                h.title,
-                h.curriculum_topic,
-                h.assigned_date,
-                h.due_date,
-                h.priority,
-                h.assignment_file,
-                h.student_file,
-                h.file_link,
-                h.status,
-                h.comment,
-                h.teacher_feedback,
-                h.grade,
-                h.deleted_assignment_file,
-                h.deleted_student_file,
-                h.submitted_at,
-                h.reviewed_at,
-                h.created_at
-            FROM homework h
-            JOIN students s
-                ON h.student_id = s.id
-            ORDER BY h.created_at DESC
-            """
-        )
-        if submissions.empty:
-            st.info("No homework submissions found.")
-            return
-
-        # ====================================================
-        # SUBMISSION TABLE
-        # ====================================================
-        display_columns = [
-            "id",
-            "student_name",
-            "title",
-            "status",
-            "grade",
-            "due_date",
-            "submitted_at"
-        ]
-        st.dataframe(
-            submissions[display_columns].rename(
-                columns={
-                    "id": "Homework ID",
-                    "student_name": "Student",
-                    "title": "Homework",
-                    "status": "Status",
-                    "grade": "Grade",
-                    "due_date": "Due Date",
-                    "submitted_at": "Submitted"
-                }
-            ),
-            use_container_width=True,
-            hide_index=True
-        )
-        st.divider()
-
-        # ====================================================
-        # SELECT HOMEWORK
-        # ====================================================
-        homework_options = {}
-        for _, row in submissions.iterrows():
-            label = (
-                f"#{int(row['id'])} — "
-                f"{safe_text(row['student_name'])} — "
-                f"{safe_text(row['title'])} — "
-                f"{safe_text(row['status'])}"
-            )
-            homework_options[label] = int(row["id"])
-
-        selected_label = st.selectbox("Select Homework to Review", list(homework_options.keys()), key="review_homework_select")
-        selected_id = homework_options[selected_label]
-        selected_rows = submissions[submissions["id"] == selected_id]
-        if selected_rows.empty:
-            st.error("Unable to find the selected homework.")
-            return
-
-        selected = selected_rows.iloc[0]
-
-        # ====================================================
-        # HOMEWORK INFORMATION
-        # ====================================================
-        st.subheader(f"📚 {safe_text(selected['title'])}")
-        info1, info2, info3 = st.columns(3)
-        with info1:
-            st.write("**Student:**", safe_text(selected["student_name"]))
-        with info2:
-            st.write("**Due Date:**", safe_text(selected["due_date"]))
-        with info3:
-            st.write("**Status:**", safe_text(selected["status"]))
-
-        if safe_text(selected["curriculum_topic"]):
-            st.write("**Curriculum Topic:**", safe_text(selected["curriculum_topic"]))
-        if safe_text(selected["comment"]):
-            st.info("Instructions: " + safe_text(selected["comment"]))
-
-        # ====================================================
-        # ORIGINAL ASSIGNMENT
-        # ====================================================
-        st.divider()
-        st.subheader("📄 Original Assignment")
-        
-        assignment_file = selected["assignment_file"]
-        assignment_link = selected["file_link"]
-        assignment_deleted = selected["deleted_assignment_file"]
-        
-        if pd.notna(assignment_deleted) and int(assignment_deleted or 0) == 1:
-        
-            st.warning(
-                "The original assignment file has been deleted."
-            )
-        
-        elif pd.notna(assignment_file) and str(assignment_file).strip():
-        
-            storage_path = str(assignment_file).strip()
-            st.warning(f"Original assignment path: `{storage_path}`")         
-            assignment_url = get_homework_file_url(
-                storage_path
-            )
-        
-            if assignment_url:
-        
-                st.link_button(
-                    "📥 Open / Download Assignment",
-                    assignment_url
-                )
-        
-                st.caption(
-                    "The original assignment is stored securely in Supabase Storage."
-                )
-        
-            else:
-        
-                st.error(
-                    "Unable to create the Supabase Storage link."
-                )
-        
-        elif pd.notna(assignment_link) and str(assignment_link).strip():
-        
-            st.link_button(
-                "🔗 Open Google Drive Assignment",
-                str(assignment_link).strip()
-            )
-        
-        else:
-        
-            st.info(
-                "No original assignment file or link is available."
-            )
-
-        # ====================================================
-        # DELETE ORIGINAL ASSIGNMENT
-        # ====================================================
-        if pd.notna(assignment_file) and str(assignment_file).strip() and int(selected["deleted_assignment_file"] or 0) == 0:
-            if st.button("🗑 Delete Assignment File", key=f"delete_assignment_{int(selected_id)}"):
-                assignment_path = str(assignment_file).strip()
-                if os.path.exists(assignment_path):
-                    try:
-                        os.remove(assignment_path)
-                    except Exception as e:
-                        st.warning(f"Could not delete physical file: {e}")
-                execute(
-                    """
-                    UPDATE homework
-                    SET
-                        assignment_file=NULL,
-                        deleted_assignment_file=1
-                    WHERE id=%s
-                    """,
-                    (int(selected_id),)
-                )
-                st.success("Assignment file deleted.")
-                st.cache_data.clear()
-                st.rerun()
-
-        # ====================================================
-        # STUDENT SUBMISSION
-        # ====================================================
-        st.divider()
-        st.subheader("📝 Student Submission")
-        student_file = selected["student_file"]
-        student_deleted = selected["deleted_student_file"]
-
-        if pd.notna(student_deleted) and int(student_deleted) == 1:
-            st.warning("The student's submitted file has been deleted.")
-        elif pd.notna(student_file) and str(student_file).strip():
-            student_file = str(student_file).strip()
-            if os.path.exists(student_file):
-                with open(student_file, "rb") as f:
-                    student_data = f.read()
-                st.download_button(
-                    "📥 Open / Download Student Work",
-                    data=student_data,
-                    file_name=os.path.basename(student_file),
-                    mime="application/pdf",
-                    key=f"student_download_{int(selected_id)}"
-                )
-                st.caption("Download/open the student's completed homework to review.")
-            else:
-                st.warning("The student's submitted file is no longer available on the server.")
-        else:
-            st.info("No student submission is available.")
-
-        # ====================================================
-        # DELETE STUDENT SUBMISSION
-        # ====================================================
-        if pd.notna(student_file) and str(student_file).strip() and int(selected["deleted_student_file"] or 0) == 0:
-            if st.button("🗑 Delete Student Submission", key=f"delete_student_file_{int(selected_id)}"):
-                student_path = str(student_file).strip()
-                if os.path.exists(student_path):
-                    try:
-                        os.remove(student_path)
-                    except Exception as e:
-                        st.warning(f"Could not delete physical file: {e}")
-                execute(
-                    """
-                    UPDATE homework
-                    SET
-                        student_file=NULL,
-                        deleted_student_file=1
-                    WHERE id=%s
-                    """,
-                    (int(selected_id),)
-                )
-                st.success("Student submission deleted.")
-                st.cache_data.clear()
-                st.rerun()
-
-        # ====================================================
-        # GRADE & FEEDBACK
-        # ====================================================
-        st.divider()
-        st.subheader("📝 Grade & Teacher Feedback")
-        grade_options = ["", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F"]
-        current_grade = safe_text(selected["grade"])
-        if current_grade not in grade_options:
-            current_grade = ""
-
-        grade = st.selectbox("Letter Grade", grade_options, index=grade_options.index(current_grade), key=f"grade_select_{int(selected_id)}")
-        current_feedback = safe_text(selected["teacher_feedback"])
-        feedback = st.text_area("Teacher Feedback", value=current_feedback, key=f"feedback_{int(selected_id)}")
-
-        if st.button("💾 Save Grade & Feedback", key=f"save_grade_{int(selected_id)}"):
-            execute(
-                """
-                UPDATE homework
-                SET
-                    teacher_feedback=%s,
-                    grade=%s,
-                    status='Reviewed',
-                    reviewed_at=CURRENT_TIMESTAMP
-                WHERE id=%s
-                """,
-                (feedback.strip(), grade, int(selected_id))
-            )
-            st.success("✅ Grade and feedback saved.")
-            st.cache_data.clear()
-            st.rerun()
-
-# ==========================================
-# STUDENT HOMEWORK PORTAL
-# ==========================================
-
-def student_homework():
-
-    student_id = st.session_state.user["student_id"]
-
-    st.header("📚 My Homework")
-
-    # --------------------------------------
-    # Get student's homework
-    # --------------------------------------
-
-    homework = query_dataframe(
-        """
-        SELECT
-            id,
-            title,
-            description,
-            curriculum_topic,
-            assigned_date,
-            due_date,
-            priority,
-            assignment_file,
-            file_link,
-            student_file,
-            comment,
-            teacher_feedback,
-            grade,
-            status,
-            created_at,
-            submitted_at,
-            reviewed_at,
-            deleted_assignment_file,
-            deleted_student_file
-        FROM homework
-        WHERE student_id=%s
-        AND archived=0
-        ORDER BY
-            CASE
-                WHEN status='Assigned' THEN 0
-                WHEN status='Submitted' THEN 1
-                WHEN status='Reviewed' THEN 2
-                ELSE 3
-            END,
-            due_date ASC NULLS LAST,
-            created_at DESC
-        """,
-        (student_id,)
+    st.warning(
+        "No active students available."
     )
 
-    # --------------------------------------
-    # No homework
-    # --------------------------------------
+    return
 
-    if homework.empty:
+selected_student_id = (
+    st.session_state.get(
+        "selected_student"
+    )
+)
 
-        st.info(
-            "🎉 You currently have no homework assignments."
+student_names = (
+    students["name"].tolist()
+)
+
+default_index = 0
+
+if selected_student_id is not None:
+
+    match = students[
+        students["id"] == selected_student_id
+    ]
+
+    if not match.empty:
+
+        default_index = (
+            match.index[0]
         )
 
-        return
+# ========================================================
+# TAB 1 — ASSIGN HOMEWORK
+# ========================================================
 
-    # --------------------------------------
-    # Homework selector
-    # --------------------------------------
+with tab1:
 
-    st.subheader("Select Homework")
-
-    homework_options = []
-
-    for _, row in homework.iterrows():
-
-        title = (
-            str(row["title"])
-            if pd.notna(row["title"])
-            and str(row["title"]).strip()
-            else f"Homework #{row['id']}"
-        )
-
-        status = (
-            str(row["status"])
-            if pd.notna(row["status"])
-            else "Assigned"
-        )
-
-        due = (
-            str(row["due_date"])
-            if pd.notna(row["due_date"])
-            else "No due date"
-        )
-
-        homework_options.append(
-            f"{title}  |  Due: {due}  |  {status}"
-        )
-
-    selected_option = st.selectbox(
-        "Homework Assignment",
-        homework_options,
-        key="student_homework_selector"
+    st.subheader(
+        "Assign New Homework"
     )
 
-    selected_index = homework_options.index(
-        selected_option
+    student_name = st.selectbox(
+        "Student",
+        student_names,
+        index=default_index,
+        key="assign_student"
     )
 
-    selected = homework.iloc[selected_index]
+    student_id = int(
+        students[
+            students["name"] == student_name
+        ]["id"].iloc[0]
+    )
 
-    selected_id = int(selected["id"])
+    st.session_state.selected_student = (
+        student_id
+    )
+
+    title = st.text_input(
+        "Homework Title",
+        key="homework_title"
+    )
+
+    curriculum = st.text_input(
+        "Curriculum Topic",
+        key="homework_curriculum"
+    )
+
+    assigned_date = st.date_input(
+        "Assigned Date",
+        value=date.today(),
+        key="homework_assigned_date"
+    )
+
+    due_date = st.date_input(
+        "Due Date",
+        key="homework_due_date"
+    )
+
+    priority = st.selectbox(
+        "Priority",
+        [
+            "Normal",
+            "Important"
+        ],
+        key="homework_priority"
+    )
+
+    uploaded_file = st.file_uploader(
+        "Upload Assignment",
+        type=[
+            "pdf",
+            "jpg",
+            "jpeg",
+            "png"
+        ],
+        key="teacher_upload"
+    )
+
+    drive_link = st.text_input(
+        "Google Drive Link",
+        key="homework_drive_link"
+    )
+
+    comment = st.text_area(
+        "Instructions / Comments",
+        key="homework_comment"
+    )
 
     st.divider()
 
-    # ======================================
-    # SELECTED HOMEWORK DETAILS
-    # ======================================
+    if st.button(
+        "➕ Assign Homework",
+        key="assign_homework_button"
+    ):
 
-    title = (
-        str(selected["title"])
-        if pd.notna(selected["title"])
-        and str(selected["title"]).strip()
-        else f"Homework #{selected_id}"
-    )
+        if not title.strip():
 
-    st.title(f"📘 {title}")
+            st.error(
+                "Please enter a Homework Title."
+            )
 
-    # --------------------------------------
-    # Status / Grade
-    # --------------------------------------
-
-    status = (
-        str(selected["status"])
-        if pd.notna(selected["status"])
-        else "Assigned"
-    )
-
-    grade = selected["grade"]
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-
-        st.metric(
-            "Status",
-            status
-        )
-
-    with c2:
-
-        due_display = (
-            str(selected["due_date"])
-            if pd.notna(selected["due_date"])
-            else "No due date"
-        )
-
-        st.metric(
-            "Due Date",
-            due_display
-        )
-
-    with c3:
+            return
 
         if (
-            pd.notna(grade)
-            and str(grade).strip()
+            not uploaded_file
+            and not drive_link.strip()
         ):
 
-            st.metric(
-                "Grade",
-                str(grade)
+            st.error(
+                "Please upload an assignment "
+                "PDF/image or provide a Google Drive link."
             )
 
-        else:
+            return
 
-            st.metric(
-                "Grade",
-                "Not graded"
+        file_path = None
+
+        # ==================================================
+        # SAVE ASSIGNMENT TO SUPABASE STORAGE
+        # ==================================================
+
+        if uploaded_file:
+
+            supabase = get_supabase()
+
+            bucket_name = (
+                "homework-files"
             )
 
-    # ======================================
-    # ASSIGNMENT INFORMATION
-    # ======================================
+            safe_filename = os.path.basename(
+                uploaded_file.name
+            )
+
+            storage_path = (
+                f"assignments/"
+                f"student_{student_id}/"
+                f"{date.today()}_"
+                f"{safe_filename}"
+            )
+
+            file_bytes = (
+                uploaded_file.getvalue()
+            )
+
+            try:
+
+                supabase.storage.from_(
+                    bucket_name
+                ).upload(
+
+                    path=storage_path,
+
+                    file=file_bytes,
+
+                    file_options={
+                        "content-type":
+                            (
+                                uploaded_file.type
+                                or
+                                "application/octet-stream"
+                            ),
+
+                        "upsert": "true"
+                    }
+                )
+
+                file_path = (
+                    storage_path
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "❌ The assignment could not "
+                    "be uploaded to Supabase Storage."
+                )
+
+                st.exception(e)
+
+                return
+
+        # ==================================================
+        # INSERT HOMEWORK RECORD
+        # ==================================================
+
+        execute(
+            """
+            INSERT INTO homework
+            (
+                student_id,
+                uploaded_by,
+                title,
+                curriculum_topic,
+                assigned_date,
+                due_date,
+                priority,
+                assignment_file,
+                file_link,
+                comment,
+                status,
+                archived,
+                deleted_assignment_file,
+                deleted_student_file
+            )
+            VALUES
+            (
+                %s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s
+            )
+            """,
+            (
+                student_id,
+                "admin",
+                title.strip(),
+                curriculum.strip(),
+                str(assigned_date),
+                str(due_date),
+                priority,
+                file_path,
+                drive_link.strip() or None,
+                comment.strip(),
+                "Assigned",
+                0,
+                0,
+                0
+            )
+        )
+
+        st.cache_data.clear()
+
+        st.success(
+            "✅ Homework assigned successfully."
+        )
+
+        st.rerun()
+
+# ========================================================
+# TAB 2 — REVIEW & GRADE
+# ========================================================
+
+with tab2:
+
+    st.subheader(
+        "Review & Grade Submissions"
+    )
+
+    submissions = query_dataframe(
+        """
+        SELECT
+            h.id,
+            h.student_id,
+            s.first_name || ' ' || s.last_name
+                AS student_name,
+            h.title,
+            h.curriculum_topic,
+            h.assigned_date,
+            h.due_date,
+            h.priority,
+            h.assignment_file,
+            h.student_file,
+            h.file_link,
+            h.status,
+            h.comment,
+            h.teacher_feedback,
+            h.grade,
+            h.deleted_assignment_file,
+            h.deleted_student_file,
+            h.submitted_at,
+            h.reviewed_at,
+            h.created_at
+        FROM homework h
+        JOIN students s
+            ON h.student_id = s.id
+        ORDER BY h.created_at DESC
+        """
+    )
+
+    if submissions.empty:
+
+        st.info(
+            "No homework submissions found."
+        )
+
+        return
+
+    # ====================================================
+    # SUBMISSION TABLE
+    # ====================================================
+
+    display_columns = [
+        "id",
+        "student_name",
+        "title",
+        "status",
+        "grade",
+        "due_date",
+        "submitted_at"
+    ]
+
+    st.dataframe(
+
+        submissions[
+            display_columns
+        ].rename(
+            columns={
+                "id": "Homework ID",
+                "student_name": "Student",
+                "title": "Homework",
+                "status": "Status",
+                "grade": "Grade",
+                "due_date": "Due Date",
+                "submitted_at": "Submitted"
+            }
+        ),
+
+        use_container_width=True,
+
+        hide_index=True
+    )
 
     st.divider()
 
-    st.subheader("📋 Assignment Information")
+    # ====================================================
+    # SELECT HOMEWORK
+    # ====================================================
 
-    col1, col2 = st.columns(2)
+    homework_options = {}
 
-    with col1:
+    for _, row in submissions.iterrows():
 
-        topic = selected["curriculum_topic"]
-
-        st.write(
-            "**📚 Curriculum Topic:**",
-            topic
-            if pd.notna(topic) and str(topic).strip()
-            else "Not specified"
+        label = (
+            f"#{int(row['id'])} — "
+            f"{safe_text(row['student_name'])} — "
+            f"{safe_text(row['title'])} — "
+            f"{safe_text(row['status'])}"
         )
 
-        assigned_date = selected["assigned_date"]
+        homework_options[
+            label
+        ] = int(row["id"])
 
-        st.write(
-            "**📅 Assigned:**",
-            assigned_date
-            if pd.notna(assigned_date)
-            else "Not specified"
+    selected_label = st.selectbox(
+        "Select Homework to Review",
+        list(homework_options.keys()),
+        key="review_homework_select"
+    )
+
+    selected_id = (
+        homework_options[
+            selected_label
+        ]
+    )
+
+    selected_rows = submissions[
+        submissions["id"] == selected_id
+    ]
+
+    if selected_rows.empty:
+
+        st.error(
+            "Unable to find the selected homework."
         )
 
-    with col2:
+        return
 
-        priority = selected["priority"]
+    selected = (
+        selected_rows.iloc[0]
+    )
+
+    # ====================================================
+    # HOMEWORK INFORMATION
+    # ====================================================
+
+    st.subheader(
+        f"📚 {safe_text(selected['title'])}"
+    )
+
+    info1, info2, info3 = st.columns(3)
+
+    with info1:
 
         st.write(
-            "**⚡ Priority:**",
-            priority
-            if pd.notna(priority) and str(priority).strip()
-            else "Normal"
+            "**Student:**",
+            safe_text(
+                selected["student_name"]
+            )
         )
 
-        due_date = selected["due_date"]
+    with info2:
 
         st.write(
-            "**⏰ Due:**",
-            due_date
-            if pd.notna(due_date)
-            else "No due date"
+            "**Due Date:**",
+            safe_text(
+                selected["due_date"]
+            )
         )
 
-    # ======================================
-    # INSTRUCTIONS
-    # ======================================
+    with info3:
 
-    instructions = selected["comment"]
+        st.write(
+            "**Status:**",
+            safe_text(
+                selected["status"]
+            )
+        )
 
-    description = selected["description"]
-
-    if (
-        pd.notna(instructions)
-        and str(instructions).strip()
+    if safe_text(
+        selected["curriculum_topic"]
     ):
 
-        st.subheader("📝 Instructions")
-
-        st.info(
-            str(instructions)
+        st.write(
+            "**Curriculum Topic:**",
+            safe_text(
+                selected["curriculum_topic"]
+            )
         )
 
-    elif (
-        pd.notna(description)
-        and str(description).strip()
+    if safe_text(
+        selected["comment"]
     ):
 
-        st.subheader("📝 Instructions")
-
         st.info(
-            str(description)
+            "Instructions: "
+            + safe_text(
+                selected["comment"]
+            )
         )
 
-    # ======================================
+    # ====================================================
     # ORIGINAL ASSIGNMENT
-    # ======================================
-    
+    # ====================================================
+
     st.divider()
-    
+
     st.subheader(
         "📄 Original Assignment"
     )
-    
-    assignment_file = selected["assignment_file"]
-    assignment_link = selected["file_link"]
-    assignment_deleted = selected["deleted_assignment_file"]
-    
-    if (
-        pd.notna(assignment_deleted)
-        and int(assignment_deleted or 0) == 1
-    ):
-    
-        st.warning(
-            "The original assignment file has been deleted."
-        )
-    
-    elif (
-        pd.notna(assignment_file)
-        and str(assignment_file).strip()
-    ):
-    
-        storage_path = str(assignment_file).strip()
 
-        st.warning(f"Original assignment path: `{storage_path}`")
-        st.warning(f"Homework ID: `{selected_id}`")
-        
-        assignment_url = get_homework_file_url(
-            storage_path
+    assignment_file = (
+        selected["assignment_file"]
+    )
+
+    assignment_link = (
+        selected["file_link"]
+    )
+
+    assignment_deleted = (
+        selected["deleted_assignment_file"]
+    )
+
+    deleted_assignment = (
+        int(assignment_deleted or 0)
+        if pd.notna(assignment_deleted)
+        else 0
+    )
+
+    if deleted_assignment == 1:
+
+        st.warning(
+            "The original assignment file "
+            "has been deleted."
         )
-    
+
+    elif safe_text(assignment_file):
+
+        assignment_url = (
+            get_homework_file_url(
+                assignment_file
+            )
+        )
+
         if assignment_url:
-    
+
             st.link_button(
                 "📥 Open / Download Assignment",
                 assignment_url
             )
-    
+
             st.caption(
-                "The original assignment is stored in Supabase Storage."
+                "The original assignment is "
+                "stored securely in Supabase Storage."
             )
-    
+
         else:
-    
+
             st.error(
-                "Unable to create the Supabase Storage link."
+                "Unable to create the Supabase "
+                "Storage link for this assignment."
             )
-    
-    elif (
-        pd.notna(assignment_link)
-        and str(assignment_link).strip()
-    ):
-    
+
+    elif safe_text(assignment_link):
+
         st.link_button(
             "🔗 Open Google Drive Assignment",
-            str(assignment_link).strip()
+            safe_text(
+                assignment_link
+            )
         )
-    
+
     else:
-    
+
         st.info(
-            "No original assignment file or link is available."
+            "No original assignment file "
+            "or link is available."
         )
 
-    # ======================================
-    # STUDENT SUBMISSION
-    # ======================================
-
-    st.divider()
-
-    st.subheader(
-        "📤 My Submission"
-    )
-
-    student_file = selected["student_file"]
-
-    student_file_deleted = selected[
-        "deleted_student_file"
-    ]
+    # ====================================================
+    # DELETE ORIGINAL ASSIGNMENT
+    # ====================================================
 
     if (
-        pd.notna(student_file)
-        and str(student_file).strip()
-        and not student_file_deleted
+        safe_text(assignment_file)
+        and deleted_assignment == 0
     ):
 
-        student_file = str(
-            student_file
-        ).strip()
-
-        if os.path.exists(
-            student_file
-        ):
-
-            st.success(
-                "Your completed homework has been submitted."
-            )
-
-            with open(
-                student_file,
-                "rb"
-            ) as f:
-
-                student_data = f.read()
-
-            st.download_button(
-                "📥 View / Download My Submission",
-                data=student_data,
-                file_name=os.path.basename(
-                    student_file
-                ),
-                mime="application/pdf",
-                key=f"student_submission_{selected_id}"
-            )
-
-        else:
-
-            st.warning(
-                "Your submission record exists, "
-                "but the file is no longer available."
-            )
-
-    elif status == "Reviewed":
-
-        st.info(
-            "Your homework has been reviewed."
-        )
-
-    else:
-
-        st.info(
-            "You have not submitted this homework yet."
-        )
-
-    # ======================================
-    # UPLOAD COMPLETED HOMEWORK
-    # ======================================
-
-    if status != "Reviewed":
-
-        st.divider()
-
-        st.subheader(
-            "📤 Submit Completed Homework"
-        )
-
-        upload = st.file_uploader(
-            "Upload Your Solution",
-            type=[
-                "pdf",
-                "jpg",
-                "jpeg",
-                "png"
-            ],
-            key=f"student_upload_{selected_id}"
-        )
-
         if st.button(
-            "Submit Homework",
-            key=f"submit_homework_{selected_id}"
+            "🗑 Delete Assignment File",
+            key=f"delete_assignment_{selected_id}"
         ):
 
-            if upload is None:
-
-                st.warning(
-                    "Please select a file before submitting."
-                )
-
-            else:
-
-                # ==========================================
-                # SAVE STUDENT SUBMISSION TO SUPABASE
-                # ==========================================
-                
-                supabase = get_supabase()
-                
-                bucket_name = "homework-files"
-                
-                safe_filename = os.path.basename(upload.name)
-                
-                storage_path = (
-                    f"submissions/"
-                    f"student_{student_id}/"
-                    f"homework_{selected_id}_"
-                    f"{safe_filename}"
-                )
-                
-                file_bytes = upload.getvalue()
-                
-                try:
-                
-                    supabase.storage.from_(
-                        bucket_name
-                    ).upload(
-                        path=storage_path,
-                        file=file_bytes,
-                        file_options={
-                            "content-type": (
-                                upload.type
-                                or "application/octet-stream"
-                            ),
-                            "upsert": "true"
-                        }
-                    )
-                
-                except Exception as e:
-                
-                    st.error(
-                        "❌ Your homework could not be uploaded."
-                    )
-                
-                    st.exception(e)
-                
-                    return
-                
-                # Store the Supabase Storage path
-                path = storage_path
+            if delete_homework_file(
+                assignment_file
+            ):
 
                 execute(
                     """
                     UPDATE homework
                     SET
-                        student_file=%s,
-                        status='Submitted',
-                        submitted_at=CURRENT_TIMESTAMP,
-                        deleted_student_file=0
-                    WHERE id=%s
-                    AND student_id=%s
+                        assignment_file = NULL,
+                        deleted_assignment_file = 1
+                    WHERE id = %s
                     """,
                     (
-                        path,
-                        selected_id,
-                        student_id
+                        int(selected_id),
                     )
                 )
 
                 st.cache_data.clear()
 
                 st.success(
-                    "✅ Homework submitted successfully!"
+                    "Assignment file deleted "
+                    "from Supabase Storage."
                 )
 
                 st.rerun()
 
-    # ======================================
-    # TEACHER FEEDBACK
-    # ======================================
+    # ====================================================
+    # STUDENT SUBMISSION
+    # ====================================================
+
+    st.divider()
+
+    st.subheader(
+        "📝 Student Submission"
+    )
+
+    student_file = (
+        selected["student_file"]
+    )
+
+    student_deleted = (
+        selected["deleted_student_file"]
+    )
+
+    deleted_student = (
+        int(student_deleted or 0)
+        if pd.notna(student_deleted)
+        else 0
+    )
+
+    if deleted_student == 1:
+
+        st.warning(
+            "The student's submitted file "
+            "has been deleted."
+        )
+
+    elif safe_text(student_file):
+
+        student_url = (
+            get_homework_file_url(
+                student_file
+            )
+        )
+
+        if student_url:
+
+            st.success(
+                "Student submission is available."
+            )
+
+            st.link_button(
+                "📥 Open / Download Student Work",
+                student_url
+            )
+
+            st.caption(
+                "Open the student's completed homework "
+                "to review it before grading."
+            )
+
+        else:
+
+            st.error(
+                "Unable to create the Supabase "
+                "Storage link for the student submission."
+            )
+
+    else:
+
+        st.info(
+            "No student submission is available."
+        )
+
+    # ====================================================
+    # DELETE STUDENT SUBMISSION
+    # ====================================================
 
     if (
-        pd.notna(selected["teacher_feedback"])
-        and str(selected["teacher_feedback"]).strip()
+        safe_text(student_file)
+        and deleted_student == 0
     ):
 
-        st.divider()
+        if st.button(
+            "🗑 Delete Student Submission",
+            key=f"delete_student_file_{selected_id}"
+        ):
 
-        st.subheader(
-            "👩‍🏫 Teacher Feedback"
+            if delete_homework_file(
+                student_file
+            ):
+
+                execute(
+                    """
+                    UPDATE homework
+                    SET
+                        student_file = NULL,
+                        deleted_student_file = 1
+                    WHERE id = %s
+                    """,
+                    (
+                        int(selected_id),
+                    )
+                )
+
+                st.cache_data.clear()
+
+                st.success(
+                    "Student submission deleted "
+                    "from Supabase Storage."
+                )
+
+                st.rerun()
+
+    # ====================================================
+    # GRADE & FEEDBACK
+    # ====================================================
+
+    st.divider()
+
+    st.subheader(
+        "📝 Grade & Teacher Feedback"
+    )
+
+    grade_options = [
+        "",
+        "A+",
+        "A",
+        "A-",
+        "B+",
+        "B",
+        "B-",
+        "C+",
+        "C",
+        "C-",
+        "D",
+        "F"
+    ]
+
+    current_grade = safe_text(
+        selected["grade"]
+    )
+
+    if current_grade not in grade_options:
+
+        current_grade = ""
+
+    grade = st.selectbox(
+        "Letter Grade",
+        grade_options,
+        index=grade_options.index(
+            current_grade
+        ),
+        key=f"grade_select_{selected_id}"
+    )
+
+    current_feedback = safe_text(
+        selected["teacher_feedback"]
+    )
+
+    feedback = st.text_area(
+        "Teacher Feedback",
+        value=current_feedback,
+        key=f"feedback_{selected_id}"
+    )
+
+    if st.button(
+        "💾 Save Grade & Feedback",
+        key=f"save_grade_{selected_id}"
+    ):
+
+        execute(
+            """
+            UPDATE homework
+            SET
+                teacher_feedback = %s,
+                grade = %s,
+                status = 'Reviewed',
+                reviewed_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (
+                feedback.strip(),
+                grade,
+                int(selected_id)
+            )
         )
+
+        st.cache_data.clear()
 
         st.success(
-            str(selected["teacher_feedback"])
+            "✅ Grade and feedback saved."
         )
 
-    # ======================================
-    # GRADE
-    # ======================================
+        st.rerun()
+```
+
+# ============================================================
+
+# STUDENT HOMEWORK PORTAL
+
+# ============================================================
+
+def student_homework():
+
+```
+user = st.session_state.get(
+    "user",
+    {}
+)
+
+student_id = user.get(
+    "student_id"
+)
+
+if student_id:
+
+    student_id = int(
+        student_id
+    )
+
+if not student_id:
+
+    st.error(
+        "Student profile missing from session. "
+        "Please log in again."
+    )
+
+    return
+
+st.header(
+    "📚 My Homework"
+)
+
+# ========================================================
+# GET STUDENT HOMEWORK
+# ========================================================
+
+homework = query_dataframe(
+    """
+    SELECT
+        id,
+        title,
+        description,
+        curriculum_topic,
+        assigned_date,
+        due_date,
+        priority,
+        assignment_file,
+        file_link,
+        student_file,
+        comment,
+        teacher_feedback,
+        grade,
+        status,
+        created_at,
+        submitted_at,
+        reviewed_at,
+        deleted_assignment_file,
+        deleted_student_file
+    FROM homework
+    WHERE student_id = %s
+    AND archived = 0
+    ORDER BY
+        CASE
+            WHEN status = 'Assigned' THEN 0
+            WHEN status = 'Submitted' THEN 1
+            WHEN status = 'Reviewed' THEN 2
+            ELSE 3
+        END,
+        due_date ASC NULLS LAST,
+        created_at DESC
+    """,
+    (
+        student_id,
+    )
+)
+
+# ========================================================
+# NO HOMEWORK
+# ========================================================
+
+if homework.empty:
+
+    st.info(
+        "🎉 You currently have no homework assignments."
+    )
+
+    return
+
+# ========================================================
+# HOMEWORK SELECTOR
+# ========================================================
+
+st.subheader(
+    "Select Homework"
+)
+
+homework_options = []
+
+for _, row in homework.iterrows():
+
+    title = (
+        str(row["title"])
+        if pd.notna(row["title"])
+        and str(row["title"]).strip()
+        else f"Homework #{row['id']}"
+    )
+
+    status = (
+        str(row["status"])
+        if pd.notna(row["status"])
+        else "Assigned"
+    )
+
+    due = (
+        str(row["due_date"])
+        if pd.notna(row["due_date"])
+        else "No due date"
+    )
+
+    homework_options.append(
+        f"{title} | Due: {due} | {status}"
+    )
+
+selected_option = st.selectbox(
+    "Homework Assignment",
+    homework_options,
+    key="student_homework_selector"
+)
+
+selected_index = (
+    homework_options.index(
+        selected_option
+    )
+)
+
+selected = (
+    homework.iloc[selected_index]
+)
+
+selected_id = int(
+    selected["id"]
+)
+
+st.divider()
+
+# ========================================================
+# SELECTED HOMEWORK DETAILS
+# ========================================================
+
+title = (
+    str(selected["title"])
+    if pd.notna(selected["title"])
+    and str(selected["title"]).strip()
+    else f"Homework #{selected_id}"
+)
+
+st.title(
+    f"📘 {title}"
+)
+
+# ========================================================
+# STATUS / GRADE
+# ========================================================
+
+status = (
+    str(selected["status"])
+    if pd.notna(selected["status"])
+    else "Assigned"
+)
+
+grade = selected["grade"]
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+
+    st.metric(
+        "Status",
+        status
+    )
+
+with c2:
+
+    due_display = (
+        str(selected["due_date"])
+        if pd.notna(selected["due_date"])
+        else "No due date"
+    )
+
+    st.metric(
+        "Due Date",
+        due_display
+    )
+
+with c3:
 
     if (
         pd.notna(grade)
         and str(grade).strip()
     ):
 
-        st.divider()
-
-        st.subheader(
-            "🏆 Your Grade"
+        st.metric(
+            "Grade",
+            str(grade)
         )
+
+    else:
+
+        st.metric(
+            "Grade",
+            "Not graded"
+        )
+
+# ========================================================
+# ASSIGNMENT INFORMATION
+# ========================================================
+
+st.divider()
+
+st.subheader(
+    "📋 Assignment Information"
+)
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    topic = selected[
+        "curriculum_topic"
+    ]
+
+    st.write(
+        "**📚 Curriculum Topic:**",
+        topic
+        if pd.notna(topic)
+        and str(topic).strip()
+        else "Not specified"
+    )
+
+    assigned_date = selected[
+        "assigned_date"
+    ]
+
+    st.write(
+        "**📅 Assigned:**",
+        assigned_date
+        if pd.notna(assigned_date)
+        else "Not specified"
+    )
+
+with col2:
+
+    priority = selected[
+        "priority"
+    ]
+
+    st.write(
+        "**⚡ Priority:**",
+        priority
+        if pd.notna(priority)
+        and str(priority).strip()
+        else "Normal"
+    )
+
+    due_date = selected[
+        "due_date"
+    ]
+
+    st.write(
+        "**⏰ Due:**",
+        due_date
+        if pd.notna(due_date)
+        else "No due date"
+    )
+
+# ========================================================
+# INSTRUCTIONS
+# ========================================================
+
+instructions = selected[
+    "comment"
+]
+
+description = selected[
+    "description"
+]
+
+if (
+    pd.notna(instructions)
+    and str(instructions).strip()
+):
+
+    st.subheader(
+        "📝 Instructions"
+    )
+
+    st.info(
+        str(instructions)
+    )
+
+elif (
+    pd.notna(description)
+    and str(description).strip()
+):
+
+    st.subheader(
+        "📝 Instructions"
+    )
+
+    st.info(
+        str(description)
+    )
+
+# ========================================================
+# ORIGINAL ASSIGNMENT
+# ========================================================
+
+st.divider()
+
+st.subheader(
+    "📄 Original Assignment"
+)
+
+assignment_file = (
+    selected["assignment_file"]
+)
+
+assignment_link = (
+    selected["file_link"]
+)
+
+assignment_deleted = (
+    selected["deleted_assignment_file"]
+)
+
+deleted_assignment = (
+    int(assignment_deleted or 0)
+    if pd.notna(assignment_deleted)
+    else 0
+)
+
+if deleted_assignment == 1:
+
+    st.warning(
+        "The original assignment file "
+        "has been deleted."
+    )
+
+elif safe_text(assignment_file):
+
+    assignment_url = (
+        get_homework_file_url(
+            assignment_file
+        )
+    )
+
+    if assignment_url:
+
+        st.link_button(
+            "📥 Open / Download Assignment",
+            assignment_url
+        )
+
+        st.caption(
+            "The assignment is stored securely "
+            "in Supabase Storage."
+        )
+
+    else:
+
+        st.error(
+            "Unable to create the Supabase "
+            "Storage link."
+        )
+
+elif safe_text(assignment_link):
+
+    st.link_button(
+        "🔗 Open Google Drive Assignment",
+        safe_text(
+            assignment_link
+        )
+    )
+
+else:
+
+    st.info(
+        "No original assignment file "
+        "or link is available."
+    )
+
+# ========================================================
+# STUDENT SUBMISSION
+# ========================================================
+
+st.divider()
+
+st.subheader(
+    "📤 My Submission"
+)
+
+student_file = (
+    selected["student_file"]
+)
+
+student_file_deleted = (
+    selected["deleted_student_file"]
+)
+
+deleted_student = (
+    int(student_file_deleted or 0)
+    if pd.notna(student_file_deleted)
+    else 0
+)
+
+if deleted_student == 1:
+
+    st.warning(
+        "Your submitted file has been deleted."
+    )
+
+elif safe_text(student_file):
+
+    student_url = (
+        get_homework_file_url(
+            student_file
+        )
+    )
+
+    if student_url:
 
         st.success(
-            f"Grade: **{grade}**"
+            "Your completed homework has been submitted."
         )
+
+        st.link_button(
+            "📥 View / Open My Submission",
+            student_url
+        )
+
+        st.caption(
+            "Your submitted homework is stored "
+            "securely in Supabase Storage."
+        )
+
+    else:
+
+        st.warning(
+            "Your submission record exists, "
+            "but the file could not be opened."
+        )
+
+else:
+
+    st.info(
+        "You have not submitted this homework yet."
+    )
+
+# ========================================================
+# UPLOAD COMPLETED HOMEWORK
+# ========================================================
+
+if status != "Reviewed":
+
+    st.divider()
+
+    st.subheader(
+        "📤 Submit Completed Homework"
+    )
+
+    upload = st.file_uploader(
+        "Upload Your Solution",
+        type=[
+            "pdf",
+            "jpg",
+            "jpeg",
+            "png"
+        ],
+        key=f"student_upload_{selected_id}"
+    )
+
+    if st.button(
+        "Submit Homework",
+        key=f"submit_homework_{selected_id}"
+    ):
+
+        if upload is None:
+
+            st.warning(
+                "Please select a file before submitting."
+            )
+
+        else:
+
+            # ==================================================
+            # SAVE STUDENT SUBMISSION TO SUPABASE
+            # ==================================================
+
+            supabase = get_supabase()
+
+            bucket_name = (
+                "homework-files"
+            )
+
+            safe_filename = os.path.basename(
+                upload.name
+            )
+
+            storage_path = (
+                f"submissions/"
+                f"student_{student_id}/"
+                f"homework_{selected_id}_"
+                f"{safe_filename}"
+            )
+
+            file_bytes = (
+                upload.getvalue()
+            )
+
+            try:
+
+                supabase.storage.from_(
+                    bucket_name
+                ).upload(
+
+                    path=storage_path,
+
+                    file=file_bytes,
+
+                    file_options={
+                        "content-type":
+                            (
+                                upload.type
+                                or
+                                "application/octet-stream"
+                            ),
+
+                        "upsert": "true"
+                    }
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "❌ Your homework could not "
+                    "be uploaded."
+                )
+
+                st.exception(e)
+
+                return
+
+            # ==================================================
+            # SAVE STORAGE PATH TO DATABASE
+            # ==================================================
+
+            execute(
+                """
+                UPDATE homework
+                SET
+                    student_file = %s,
+                    status = 'Submitted',
+                    submitted_at = CURRENT_TIMESTAMP,
+                    deleted_student_file = 0
+                WHERE id = %s
+                AND student_id = %s
+                """,
+                (
+                    storage_path,
+                    selected_id,
+                    student_id
+                )
+            )
+
+            st.cache_data.clear()
+
+            st.success(
+                "✅ Homework submitted successfully!"
+            )
+
+            st.rerun()
+
+# ========================================================
+# TEACHER FEEDBACK
+# ========================================================
+
+if (
+    pd.notna(
+        selected["teacher_feedback"]
+    )
+    and str(
+        selected["teacher_feedback"]
+    ).strip()
+):
+
+    st.divider()
+
+    st.subheader(
+        "👩‍🏫 Teacher Feedback"
+    )
+
+    st.success(
+        str(
+            selected["teacher_feedback"]
+        )
+    )
+
+# ========================================================
+# GRADE
+# ========================================================
+
+if (
+    pd.notna(grade)
+    and str(grade).strip()
+):
+
+    st.divider()
+
+    st.subheader(
+        "🏆 Your Grade"
+    )
+
+    st.success(
+        f"Grade: **{grade}**"
+    )

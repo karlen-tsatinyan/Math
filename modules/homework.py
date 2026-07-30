@@ -85,9 +85,7 @@ def homework_management():
             
                 bucket_name = "homework-files"
             
-                safe_filename = os.path.basename(
-                    uploaded_file.name
-                )
+                safe_filename = os.path.basename(uploaded_file.name)
             
                 storage_path = (
                     f"assignments/"
@@ -98,20 +96,37 @@ def homework_management():
             
                 file_bytes = uploaded_file.getvalue()
             
-                supabase.storage.from_(
-                    bucket_name
-                ).upload(
-                    storage_path,
-                    file_bytes,
-                    {
-                        "content-type": (
-                            uploaded_file.type
-                            or "application/octet-stream"
-                        }
-                    }
-                )
+                try:
             
-                file_path = storage_path
+                    result = supabase.storage.from_(
+                        bucket_name
+                    ).upload(
+                        path=storage_path,
+                        file=file_bytes,
+                        file_options={
+                            "content-type": (
+                                uploaded_file.type
+                                or "application/octet-stream"
+                            },
+                            "upsert": "true"
+                        }
+                    )
+            
+                    file_path = storage_path
+            
+                    st.success(
+                        f"📁 Assignment uploaded to Supabase: {storage_path}"
+                    )
+            
+                except Exception as e:
+            
+                    st.error(
+                        "❌ The assignment could not be uploaded to Supabase Storage."
+                    )
+            
+                    st.exception(e)
+            
+                    return
 
             # ------------------------------------------------
             # INSERT HOMEWORK

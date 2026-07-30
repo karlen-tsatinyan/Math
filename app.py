@@ -4,6 +4,30 @@ from authentication import login
 from pages.admin import admin_page
 from pages.student import student_page
 
+from supabase_client import get_supabase
+
+st.title("Supabase Project Test")
+
+try:
+    supabase = get_supabase()
+
+    st.success("✅ Supabase client connected")
+
+    buckets = supabase.storage.list_buckets()
+
+    st.write("Buckets visible to this application:")
+
+    for bucket in buckets:
+        st.write("📦", bucket.name)
+
+    if any(bucket.name == "homework-files" for bucket in buckets):
+        st.success("✅ homework-files FOUND")
+    else:
+        st.error("❌ homework-files NOT FOUND")
+
+except Exception as e:
+    st.error("❌ Supabase test failed")
+    st.exception(e)
 
 # ==========================================
 # PAGE CONFIG

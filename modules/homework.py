@@ -340,6 +340,7 @@ def homework_management():
         elif pd.notna(assignment_file) and str(assignment_file).strip():
         
             storage_path = str(assignment_file).strip()
+            st.info(f"DEBUG — Supabase storage path: `{storage_path}`")
         
             assignment_url = get_homework_file_url(
                 storage_path

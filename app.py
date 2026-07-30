@@ -3,7 +3,7 @@ import streamlit as st
 from authentication import login
 from pages.admin import admin_page
 from pages.student import student_page
-
+from supabase_client import get_supabase
 
 # ==========================================
 # PAGE CONFIG

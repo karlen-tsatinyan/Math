@@ -16,23 +16,24 @@ def safe_text(value):
         return ""
     return str(value).strip()
 
-
 def get_homework_file_url(storage_path):
-    """Build the public Supabase Storage URL for an assignment."""
+    """Get the public Supabase Storage URL for an assignment."""
+
     if not storage_path:
         return None
 
     try:
-        supabase_url = st.secrets["supabase"]["url"].rstrip("/")
+        supabase = get_supabase()
 
-        return (
-            f"{supabase_url}/storage/v1/object/public/"
-            f"homework-files/{storage_path.lstrip('/')}"
+        return supabase.storage.from_(
+            "homework-files"
+        ).get_public_url(
+            str(storage_path).strip().lstrip("/")
         )
 
-    except Exception:
+    except Exception as e:
+        st.error(f"Unable to create Supabase file URL: {e}")
         return None
-
 # ============================================================
 # ADMIN HOMEWORK MANAGEMENT
 # ============================================================

@@ -27,6 +27,8 @@ def get_homework_file_url(storage_path):
 
         path = str(storage_path).strip()
 
+        st.warning(f"🔎 Original Assignment path being requested: `{path}`")
+
         if not path:
             return None
 

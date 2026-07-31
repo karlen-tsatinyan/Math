@@ -385,7 +385,7 @@ def student_page():
 
         sessions_count = dashboard["sessions_count"]
 
-        payments_summary = dashboard["payments_summary"]
+        # payments_summary = dashboard["payments_summary"]
 
 
         hw_total = (
@@ -401,15 +401,15 @@ def student_page():
             else 0
         )
 
-
+        '''
         pay_total = (
             float(payments_summary.iloc[0]["total"])
             if not payments_summary.empty
             else 0.0
         )
+        '''
 
-
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
 
 
         c1.metric(
@@ -423,12 +423,12 @@ def student_page():
             sess_total
         )
 
-
+        '''
         c3.metric(
             "💰 Payments Made",
             f"${pay_total:,.2f}"
         )
-
+        '''
 
         st.divider()
 

@@ -99,7 +99,6 @@ if path.startswith("http"):
         )[1]
 
 return path.strip("/")
-```
 
 # ============================================================
 
@@ -112,7 +111,6 @@ def get_homework_file_url(storage_path):
 Create a temporary signed URL for a private Supabase
 Storage object.
 
-```
 Bucket:
     homework-files
 
@@ -181,7 +179,6 @@ def delete_homework_file(storage_path):
 """
 Delete a homework file from Supabase Storage.
 
-```
 Returns:
     True  = successful
     False = failed

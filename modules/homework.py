@@ -19,7 +19,6 @@ Safely convert database values to clean strings.
 if value is None:
 return ""
 
-```
 try:
     if pd.isna(value):
         return ""
@@ -27,7 +26,6 @@ except Exception:
     pass
 
 return str(value).strip()
-```
 
 # ============================================================
 
@@ -40,7 +38,6 @@ def normalize_storage_path(storage_path):
 Convert different possible stored formats into the
 path expected by Supabase Storage.
 
-```
 Expected final format:
 
     assignments/student_1/file.pdf
@@ -173,7 +170,6 @@ except Exception as e:
     )
 
     return None
-```
 
 # ============================================================
 
@@ -220,7 +216,6 @@ except Exception as e:
     )
 
     return False
-```
 
 # ============================================================
 
@@ -230,7 +225,6 @@ except Exception as e:
 
 def homework_management():
 
-```
 st.header(
     "Teacher Homework Management"
 )
@@ -828,110 +822,140 @@ with tab2:
     # ====================================================
     # STUDENT SUBMISSION
     # ====================================================
-
+    
     st.divider()
-
-    st.subheader(
-        "📝 Student Submission"
-    )
-
-    student_file = (
-        selected["student_file"]
-    )
-
-    student_deleted = (
-        selected["deleted_student_file"]
-    )
-
-    deleted_student = (
-        int(student_deleted or 0)
-        if pd.notna(student_deleted)
-        else 0
-    )
-
-    if deleted_student == 1:
-
+    
+    st.subheader("📝 Student Submission")
+    
+    student_file = selected["student_file"]
+    student_deleted = selected["deleted_student_file"]
+    
+    
+    # ----------------------------------------------------
+    # STUDENT SUBMISSION — OPEN / DOWNLOAD
+    # ----------------------------------------------------
+    
+    if (
+        pd.notna(student_deleted)
+        and int(student_deleted or 0) == 1
+    ):
+    
         st.warning(
-            "The student's submitted file "
-            "has been deleted."
+            "The student's submitted file has been deleted."
         )
-
-    elif safe_text(student_file):
-
-        student_url = (
-            get_homework_file_url(
-                student_file
-            )
+    
+    
+    elif (
+        pd.notna(student_file)
+        and str(student_file).strip()
+    ):
+    
+        student_path = str(
+            student_file
+        ).strip()
+    
+        # Create Supabase signed URL
+        student_url = get_homework_file_url(
+            student_path
         )
-
+    
         if student_url:
-
+    
             st.success(
-                "Student submission is available."
+                "✅ Student submission is available."
             )
-
+    
             st.link_button(
                 "📥 Open / Download Student Work",
                 student_url
             )
-
+    
             st.caption(
-                "Open the student's completed homework "
-                "to review it before grading."
+                "The student's completed homework is stored securely "
+                "in Supabase Storage."
             )
-
+    
         else:
-
+    
             st.error(
-                "Unable to create the Supabase "
-                "Storage link for the student submission."
+                "Unable to create a Supabase Storage link "
+                "for the student's submission."
             )
-
+    
+    
     else:
-
+    
         st.info(
             "No student submission is available."
         )
-
+    
+    
     # ====================================================
     # DELETE STUDENT SUBMISSION
     # ====================================================
-
+    
     if (
-        safe_text(student_file)
-        and deleted_student == 0
+        pd.notna(student_file)
+        and str(student_file).strip()
+        and int(student_deleted or 0) == 0
     ):
-
+    
         if st.button(
             "🗑 Delete Student Submission",
-            key=f"delete_student_file_{selected_id}"
+            key=f"delete_student_file_{int(selected_id)}"
         ):
-
-            if delete_homework_file(
+    
+            student_path = str(
                 student_file
-            ):
-
+            ).strip()
+    
+            try:
+    
+                # -----------------------------------------
+                # DELETE FROM SUPABASE STORAGE
+                # -----------------------------------------
+    
+                supabase = get_supabase()
+    
+                supabase.storage.from_(
+                    "homework-files"
+                ).remove(
+                    [student_path]
+                )
+    
+    
+                # -----------------------------------------
+                # UPDATE DATABASE
+                # -----------------------------------------
+    
                 execute(
                     """
                     UPDATE homework
                     SET
-                        student_file = NULL,
-                        deleted_student_file = 1
-                    WHERE id = %s
+                        student_file=NULL,
+                        deleted_student_file=1
+                    WHERE id=%s
                     """,
                     (
                         int(selected_id),
                     )
                 )
-
-                st.cache_data.clear()
-
+    
+    
                 st.success(
-                    "Student submission deleted "
-                    "from Supabase Storage."
+                    "Student submission deleted successfully."
                 )
-
+    
+                st.cache_data.clear()
+    
                 st.rerun()
+    
+    
+            except Exception as e:
+    
+                st.error(
+                    f"Unable to delete student submission: {e}"
+                )
 
     # ====================================================
     # GRADE & FEEDBACK
@@ -1014,7 +1038,6 @@ with tab2:
         )
 
         st.rerun()
-```
 
 # ============================================================
 
@@ -1024,7 +1047,6 @@ with tab2:
 
 def student_homework():
 
-```
 user = st.session_state.get(
     "user",
     {}
@@ -1412,9 +1434,9 @@ else:
         "or link is available."
     )
 
-# ========================================================
+# ======================================
 # STUDENT SUBMISSION
-# ========================================================
+# ======================================
 
 st.divider()
 
@@ -1422,56 +1444,65 @@ st.subheader(
     "📤 My Submission"
 )
 
-student_file = (
-    selected["student_file"]
-)
+student_file = selected["student_file"]
 
-student_file_deleted = (
-    selected["deleted_student_file"]
-)
+student_file_deleted = selected[
+    "deleted_student_file"
+]
 
-deleted_student = (
-    int(student_file_deleted or 0)
-    if pd.notna(student_file_deleted)
-    else 0
-)
 
-if deleted_student == 1:
+if (
+    pd.notna(student_file_deleted)
+    and int(student_file_deleted or 0) == 1
+):
 
     st.warning(
-        "Your submitted file has been deleted."
+        "Your submitted homework file has been deleted."
     )
 
-elif safe_text(student_file):
 
-    student_url = (
-        get_homework_file_url(
-            student_file
-        )
+elif (
+    pd.notna(student_file)
+    and str(student_file).strip()
+):
+
+    student_path = str(
+        student_file
+    ).strip()
+
+
+    # --------------------------------------
+    # CREATE SUPABASE SIGNED URL
+    # --------------------------------------
+
+    student_url = get_homework_file_url(
+        student_path
     )
+
 
     if student_url:
 
         st.success(
-            "Your completed homework has been submitted."
+            "✅ Your completed homework has been submitted."
         )
 
         st.link_button(
-            "📥 View / Open My Submission",
+            "📥 View / Download My Submission",
             student_url
         )
 
         st.caption(
-            "Your submitted homework is stored "
-            "securely in Supabase Storage."
+            "Your submitted file is securely stored in Supabase Storage."
         )
+
 
     else:
 
-        st.warning(
-            "Your submission record exists, "
-            "but the file could not be opened."
+        st.error(
+            "Unable to create a Supabase Storage link "
+            "for your submission."
         )
+
 
 else:
 

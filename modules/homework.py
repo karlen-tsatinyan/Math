@@ -825,15 +825,16 @@ with tab2:
     
     st.divider()
     
-    st.subheader("📝 Student Submission")
+    st.subheader(
+        "📝 Student Submission"
+    )
     
     student_file = selected["student_file"]
-    student_deleted = selected["deleted_student_file"]
     
+    student_deleted = selected[
+        "deleted_student_file"
+    ]
     
-    # ----------------------------------------------------
-    # STUDENT SUBMISSION — OPEN / DOWNLOAD
-    # ----------------------------------------------------
     
     if (
         pd.notna(student_deleted)
@@ -854,7 +855,10 @@ with tab2:
             student_file
         ).strip()
     
-        # Create Supabase signed URL
+        # ------------------------------------------
+        # CREATE SUPABASE SIGNED URL
+        # ------------------------------------------
+    
         student_url = get_homework_file_url(
             student_path
         )
@@ -871,15 +875,16 @@ with tab2:
             )
     
             st.caption(
-                "The student's completed homework is stored securely "
-                "in Supabase Storage."
+                "Open the student's completed homework "
+                "to review and grade it."
             )
     
         else:
     
             st.error(
-                "Unable to create a Supabase Storage link "
-                "for the student's submission."
+                "The student's submission is recorded, "
+                "but the file could not be opened from "
+                "Supabase Storage."
             )
     
     
@@ -911,9 +916,9 @@ with tab2:
     
             try:
     
-                # -----------------------------------------
+                # --------------------------------------
                 # DELETE FROM SUPABASE STORAGE
-                # -----------------------------------------
+                # --------------------------------------
     
                 supabase = get_supabase()
     
@@ -924,9 +929,9 @@ with tab2:
                 )
     
     
-                # -----------------------------------------
+                # --------------------------------------
                 # UPDATE DATABASE
-                # -----------------------------------------
+                # --------------------------------------
     
                 execute(
                     """
@@ -941,12 +946,11 @@ with tab2:
                     )
                 )
     
+                st.cache_data.clear()
     
                 st.success(
                     "Student submission deleted successfully."
                 )
-    
-                st.cache_data.clear()
     
                 st.rerun()
     
@@ -1043,37 +1047,86 @@ with tab2:
 
 # STUDENT HOMEWORK PORTAL
 
-# ============================================================
+# ======================================
+# STUDENT SUBMISSION
+# ======================================
 
-def student_homework():
+st.divider()
 
-user = st.session_state.get(
-    "user",
-    {}
+st.subheader(
+    "📤 My Submission"
 )
 
-student_id = user.get(
-    "student_id"
-)
+student_file = selected["student_file"]
 
-if student_id:
+student_file_deleted = selected[
+    "deleted_student_file"
+]
 
-    student_id = int(
-        student_id
+
+if (
+    pd.notna(student_file)
+    and str(student_file).strip()
+    and not int(student_file_deleted or 0) == 1
+):
+
+    student_file = str(
+        student_file
+    ).strip()
+
+    # --------------------------------------
+    # SUPABASE STORAGE LINK
+    # --------------------------------------
+
+    student_url = get_homework_file_url(
+        student_file
     )
 
-if not student_id:
+    if student_url:
 
-    st.error(
-        "Student profile missing from session. "
-        "Please log in again."
+        st.success(
+            "✅ Your completed homework has been submitted successfully."
+        )
+
+        st.link_button(
+            "📥 View / Download My Submission",
+            student_url
+        )
+
+        st.caption(
+            "Your submitted homework is securely stored in Supabase."
+        )
+
+    else:
+
+        st.error(
+            "The submission is recorded, but the file could not "
+            "be opened from Supabase Storage."
+        )
+
+
+elif (
+    pd.notna(student_file_deleted)
+    and int(student_file_deleted or 0) == 1
+):
+
+    st.warning(
+        "Your submitted homework file has been deleted."
     )
 
-    return
 
-st.header(
-    "📚 My Homework"
-)
+elif status == "Reviewed":
+
+    st.info(
+        "Your homework has been reviewed."
+    )
+
+
+else:
+
+    st.info(
+        "You have not submitted this homework yet."
+    )
 
 # ========================================================
 # GET STUDENT HOMEWORK
@@ -1187,6 +1240,24 @@ selected_id = int(
 )
 
 st.divider()
+
+# ======================================
+# SUBMISSION SUCCESS MESSAGE
+# ======================================
+
+if (
+    st.session_state.get(
+        "homework_submission_success"
+    ) == selected_id
+):
+
+    st.success(
+        "✅ Homework submitted successfully!"
+    )
+
+    del st.session_state[
+        "homework_submission_success"
+    ]
 
 # ========================================================
 # SELECTED HOMEWORK DETAILS
@@ -1627,11 +1698,11 @@ if status != "Reviewed":
             )
 
             st.cache_data.clear()
-
-            st.success(
-                "✅ Homework submitted successfully!"
-            )
-
+            
+            st.session_state[
+                "homework_submission_success"
+            ] = int(selected_id)
+            
             st.rerun()
 
 # ========================================================

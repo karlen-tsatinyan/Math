@@ -922,8 +922,16 @@ def homework_management():
                     st.rerun()
 
         # ====================================================
-        # GRADE & FEEDBACK
+        # GRADE & FEEDBACK SAVE CONFIRMATION
         # ====================================================
+        
+        if st.session_state.get("grade_feedback_saved") == int(selected_id):
+        
+            st.success(
+                "✅ Grade and teacher feedback saved successfully."
+            )
+        
+            del st.session_state["grade_feedback_saved"]
 
         st.divider()
 
@@ -977,7 +985,7 @@ def homework_management():
             "💾 Save Grade & Feedback",
             key=f"save_grade_{selected_id}"
         ):
-
+        
             execute(
                 """
                 UPDATE homework
@@ -994,13 +1002,14 @@ def homework_management():
                     int(selected_id)
                 )
             )
-
+        
+            # Clear cached database results
             st.cache_data.clear()
-
-            st.success(
-                "✅ Grade and feedback saved."
-            )
-
+        
+            # Remember which homework was successfully saved
+            st.session_state["grade_feedback_saved"] = int(selected_id)
+        
+            # Reload the page so the updated grade/status appears
             st.rerun()
 
 

@@ -367,10 +367,10 @@ def student_page():
 
 
         st.success(
-            f"Welcome {student['first_name']} "
-            f"{student['last_name']} | "
-            f"Grade: {student['grade']} | "
-            f"Subject: {student['subject']}"
+            f"Welcome {student['first_name']} \t|\t"
+            f"{student['last_name']}\t|\t"
+            f"Grade: {student['grade']}\t|\t"
+            f"Subject: {student['subject']}\t|\t"
         )
 
 

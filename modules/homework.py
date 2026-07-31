@@ -742,11 +742,6 @@ def homework_management():
                     assignment_url
                 )
 
-                st.caption(
-                    "The original assignment is "
-                    "stored securely in Supabase Storage."
-                )
-
             else:
 
                 st.error(

@@ -1454,11 +1454,6 @@ def student_homework():
                 student_url
             )
 
-            st.caption(
-                "Your submitted file is securely "
-                "stored in Supabase Storage."
-            )
-
         else:
 
             st.error(

@@ -500,13 +500,13 @@ def student_page():
 
 
     # ========================================================
-    # PERFORMANCE & ACCOUNT
+    # PERFORMANCE
     # ========================================================
 
     elif option == "Performance":
 
         st.title(
-            "📊 Performance & Account"
+            "📊 Performance"
         )
 
 

@@ -311,7 +311,8 @@ def student_page():
         [
             "Dashboard",
             "Homework",
-            "Performance & Account",
+            "Performance",
+            "Financial Statements",
             "Schedule"
         ],
         key="student_portal_menu"
@@ -502,18 +503,17 @@ def student_page():
     # PERFORMANCE & ACCOUNT
     # ========================================================
 
-    elif option == "Performance & Account":
+    elif option == "Performance":
 
         st.title(
             "📊 Performance & Account"
         )
 
 
-        tab_grades, tab_sessions, tab_financial = st.tabs(
+        tab_grades, tab_sessions = st.tabs(
             [
                 "📚 Homework Grades",
-                "📅 Session History",
-                "🔒 Financial Statement"
+                "📅 Session History"
             ]
         )
 
@@ -589,186 +589,17 @@ def student_page():
                     use_container_width=True,
                     hide_index=True
                 )
-
-
-        # ----------------------------------------------------
-        # FINANCIAL STATEMENT
-        # ----------------------------------------------------
-
-        with tab_financial:
-
-            st.subheader(
-                "🔒 Financial Statement"
-            )
-
-
-            auth_key = (
-                f"parent_authenticated_{student_id}"
-            )
-
-
-            if auth_key not in st.session_state:
-
-                st.session_state[auth_key] = False
-
-
-            # ================================================
-            # AUTHENTICATED
-            # ================================================
-
-            if st.session_state[auth_key]:
-
-                col1, col2 = st.columns(
-                    [4, 1]
-                )
-
-
-                with col1:
-
-                    st.success(
-                        "🔓 Parent Access Authenticated"
-                    )
-
-
-                with col2:
-
-                    if st.button(
-                        "🔒 Lock",
-                        key=f"lock_financial_{student_id}"
-                    ):
-
-                        st.session_state[
-                            auth_key
-                        ] = False
-
-                        st.rerun()
-
-
-                # Only load payments after authentication
-                payments = get_payment_history(
-                    student_id
-                )
-
-
-                if payments.empty:
-
-                    st.info(
-                        "No payment statements available."
-                    )
-
-                else:
-
-                    formatted_payments = payments.rename(
-                        columns={
-                            "payment_date": "Payment Date",
-                            "amount": "Amount Paid",
-                            "period": "Period"
-                        }
-                    )
-
-
-                    st.dataframe(
-                        formatted_payments,
-                        use_container_width=True,
-                        hide_index=True
-                    )
-
-
-                    total_paid = (
-                        formatted_payments[
-                            "Amount Paid"
-                        ]
-                        .fillna(0)
-                        .sum()
-                    )
-
-
-                    st.metric(
-                        "Total Paid",
-                        f"${float(total_paid):,.2f}"
-                    )
-
-
-            # ================================================
-            # NOT AUTHENTICATED
-            # ================================================
-
-            else:
-
-                st.warning(
-                    "🔒 Financial information is confidential "
-                    "and requires Parent Authorization."
-                )
-
-
-                with st.container(
-                    border=True
-                ):
-
-                    st.markdown(
-                        "### 🔑 Parent Authentication Gateway"
-                    )
-
-
-                    st.write(
-                        "Please enter the Parent Access PIN "
-                        "provided by the parent/guardian."
-                    )
-
-
-                    pin_input = st.text_input(
-                        "Parent Access PIN",
-                        type="password",
-                        key=f"parent_pin_input_{student_id}"
-                    )
-
-
-                    if st.button(
-                        "Verify Identity & Unlock Financial Statement",
-                        type="primary",
-                        key=f"verify_parent_{student_id}"
-                    ):
-
-                        stored_pin_result = get_parent_pin(
-                            student_id
-                        )
-
-
-                        if stored_pin_result.empty:
-
-                            st.error(
-                                "No Parent Access PIN has been "
-                                "configured for this student."
-                            )
-
-                        else:
-
-                            stored_pin = (
-                                stored_pin_result.iloc[0][
-                                    "parent_pin"
-                                ]
-                            )
-
-
-                            if (
-                                stored_pin is not None
-                                and pin_input.strip()
-                                == str(stored_pin).strip()
-                            ):
-
-                                st.session_state[
-                                    auth_key
-                                ] = True
-
-                                st.rerun()
-
-                            else:
-
-                                st.error(
-                                    "Invalid Parent Access PIN."
-                                )
-
-
+    # ========================================================
+    # FINANCIAL STATEMENTS
+    # ========================================================
+    
+    elif option == "Financial Statements":
+    
+        from modules.student_financials import (
+            student_financials
+        )
+    
+        student_financials()
     # ========================================================
     # SCHEDULE
     # ========================================================

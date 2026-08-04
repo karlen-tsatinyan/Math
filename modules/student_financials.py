@@ -6,17 +6,69 @@ from database import query_dataframe
 
 
 # ============================================================
-# STUDENT FINANCIAL STATEMENTS
+# GET STUDENT PARENT PIN
 # ============================================================
 
+def get_parent_pin(student_id):
+
+    result = query_dataframe(
+        """
+        SELECT
+            parent_pin
+        FROM students
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (
+            student_id,
+        )
+    )
+
+    if result.empty:
+        return None
+
+    return result.iloc[0]["parent_pin"]
+
+
+
+# ============================================================
+# GET PAYMENTS
+# ============================================================
+
+def get_payment_history(student_id):
+
+    return query_dataframe(
+        """
+        SELECT
+            payment_date,
+            amount,
+            period,
+            status
+        FROM payments
+        WHERE student_id = %s
+        ORDER BY payment_date DESC
+        """,
+        (
+            student_id,
+        )
+    )
+
+
+
+# ============================================================
+# FINANCIAL STATEMENTS PAGE
+# ============================================================
 
 def student_financials():
 
-    st.title("💰 Financial Statements")
+
+    st.title(
+        "💰 Financial Statements"
+    )
 
 
     # --------------------------------------------------------
-    # Get student ID from logged-in user
+    # Student ID
     # --------------------------------------------------------
 
     user = st.session_state.get(
@@ -33,67 +85,125 @@ def student_financials():
     if not student_id:
 
         st.error(
-            "Student account information is missing."
+            "Student account not found."
         )
 
         return
 
 
-    try:
-
-        student_id = int(
-            student_id
-        )
-
-    except Exception:
-
-        st.error(
-            "Invalid student account."
-        )
-
-        return
+    student_id = int(student_id)
 
 
 
     # --------------------------------------------------------
-    # Get payment history
+    # Parent PIN Authentication
     # --------------------------------------------------------
 
-    payments = query_dataframe(
-        """
-        SELECT
-            id,
-            payment_date,
-            amount,
-            period,
-            status
-        FROM payments
-        WHERE student_id = %s
-        ORDER BY payment_date DESC
-        """,
-        (
-            student_id,
-        )
+    auth_key = (
+        f"financial_unlocked_{student_id}"
     )
 
 
+    if not st.session_state.get(
+        auth_key,
+        False
+    ):
+
+
+        st.info(
+            "🔒 Financial statements are protected. "
+            "Please enter the Parent PIN to continue."
+        )
+
+
+        pin_input = st.text_input(
+            "Parent PIN",
+            type="password",
+            key=f"parent_pin_{student_id}"
+        )
+
+
+        if st.button(
+            "🔓 Unlock Financial Statements",
+            key=f"unlock_financial_{student_id}"
+        ):
+
+
+            correct_pin = get_parent_pin(
+                student_id
+            )
+
+
+            if (
+                correct_pin
+                and str(pin_input).strip()
+                ==
+                str(correct_pin).strip()
+            ):
+
+                st.session_state[
+                    auth_key
+                ] = True
+
+
+                st.success(
+                    "✅ Financial statements unlocked."
+                )
+
+
+                st.rerun()
+
+
+            else:
+
+                st.error(
+                    "❌ Incorrect Parent PIN."
+                )
+
+
+        return
+
+
+
     # --------------------------------------------------------
-    # No records
+    # Locked State Button
     # --------------------------------------------------------
+
+    if st.button(
+        "🔒 Lock Financial Statements",
+        key=f"lock_financial_{student_id}"
+    ):
+
+        st.session_state[
+            auth_key
+        ] = False
+
+        st.rerun()
+
+
+
+    st.divider()
+
+
+
+    # --------------------------------------------------------
+    # Load Payments
+    # --------------------------------------------------------
+
+    payments = get_payment_history(
+        student_id
+    )
+
 
     if payments.empty:
 
         st.info(
-            "No financial statements are available yet."
+            "No payment records found."
         )
 
         return
 
 
-
-    # --------------------------------------------------------
-    # Clean data
-    # --------------------------------------------------------
 
     payments["amount"] = pd.to_numeric(
         payments["amount"],
@@ -102,26 +212,9 @@ def student_financials():
 
 
 
-    payments["payment_date"] = (
-        payments["payment_date"]
-        .astype(str)
-    )
-
-
-
-    payments["period"] = (
-        payments["period"]
-        .fillna("")
-        .astype(str)
-    )
-
-
-
-    payments["status"] = (
-        payments["status"]
-        .fillna("")
-        .astype(str)
-    )
+    total_paid = payments[
+        "amount"
+    ].sum()
 
 
 
@@ -129,18 +222,10 @@ def student_financials():
     # Summary
     # --------------------------------------------------------
 
-    total_paid = payments["amount"].sum()
+    c1, c2 = st.columns(2)
 
 
-    payment_count = len(
-        payments
-    )
-
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
+    with c1:
 
         st.metric(
             "💵 Total Paid",
@@ -148,11 +233,11 @@ def student_financials():
         )
 
 
-    with col2:
+    with c2:
 
         st.metric(
-            "🧾 Payment Records",
-            payment_count
+            "🧾 Payments",
+            len(payments)
         )
 
 
@@ -162,7 +247,7 @@ def student_financials():
 
 
     # --------------------------------------------------------
-    # Statement Table
+    # Statement
     # --------------------------------------------------------
 
     st.subheader(
@@ -170,38 +255,35 @@ def student_financials():
     )
 
 
-    statement = payments[
-        [
-            "payment_date",
-            "period",
-            "amount",
-            "status"
-        ]
-    ].copy()
+    display = payments.copy()
 
 
-
-    statement = statement.rename(
+    display = display.rename(
         columns={
-            "payment_date": "Payment Date",
-            "period": "Period",
-            "amount": "Amount",
-            "status": "Status"
+            "payment_date":
+                "Payment Date",
+
+            "amount":
+                "Amount",
+
+            "period":
+                "Period",
+
+            "status":
+                "Status"
         }
     )
 
 
-
-    statement["Amount"] = statement[
+    display["Amount"] = display[
         "Amount"
     ].apply(
         lambda x: f"${x:,.2f}"
     )
 
 
-
     st.dataframe(
-        statement,
+        display,
         use_container_width=True,
         hide_index=True
     )
@@ -221,36 +303,27 @@ def student_financials():
     )
 
 
-
-    # -------------------------
-    # CSV
-    # -------------------------
-
-    csv_file = payments.to_csv(
+    csv = payments.to_csv(
         index=False
     )
 
 
     st.download_button(
-        label="📥 Download CSV",
-        data=csv_file,
+        "📥 Download CSV",
+        csv,
         file_name="financial_statement.csv",
         mime="text/csv"
     )
 
 
 
-    # -------------------------
-    # Excel
-    # -------------------------
-
     try:
 
-        excel_buffer = BytesIO()
+        buffer = BytesIO()
 
 
         with pd.ExcelWriter(
-            excel_buffer,
+            buffer,
             engine="openpyxl"
         ) as writer:
 
@@ -261,12 +334,12 @@ def student_financials():
             )
 
 
-        excel_buffer.seek(0)
+        buffer.seek(0)
 
 
         st.download_button(
-            label="📊 Download Excel",
-            data=excel_buffer,
+            "📊 Download Excel",
+            buffer,
             file_name="financial_statement.xlsx",
             mime=(
                 "application/vnd.openxmlformats-"
@@ -275,22 +348,12 @@ def student_financials():
         )
 
 
-    except Exception as e:
+    except Exception:
 
-        st.warning(
-            f"Excel export unavailable: {e}"
-        )
+        pass
 
 
-
-    st.divider()
-
-
-
-    # --------------------------------------------------------
-    # Privacy
-    # --------------------------------------------------------
 
     st.caption(
-        "🔒 This financial information is private to your account."
+        "🔒 Financial information is protected by Parent PIN authentication."
     )

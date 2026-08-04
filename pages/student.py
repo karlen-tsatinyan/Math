@@ -615,33 +615,20 @@ def student_page():
     # ========================================================
 
     elif option == "Schedule":
-
-        st.title(
-            "My Sessions"
-        )
-
-
-        # Only session history is loaded here
-        session_filter = st.selectbox(
-            "Show Sessions",
-            [
-                "Recent 5 + Upcoming 3",
-                "Last 10 Sessions",
-                "Last 30 Days",
-                "All History"
-            ],
-            key="student_session_filter"
-        )
         
-        
+        st.title("📅 My Sessions")
+    
         sessions = get_session_history(student_id)
-        
+    
+    
         if sessions.empty:
-        
-            st.info("No sessions found.")
-        
+    
+            st.info(
+                "No sessions found."
+            )
+    
         else:
-        
+    
             st.dataframe(
                 sessions,
                 use_container_width=True,

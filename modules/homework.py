@@ -1599,10 +1599,40 @@ def student_homework():
             key=f"student_upload_{selected_id}"
         )
 
+        existing_submission = safe_text(
+            selected["student_file"]
+        )
+        
+        
+        if existing_submission:
+        
+            st.warning(
+                "⚠️ You already submitted this homework. "
+                "Uploading again will replace your previous submission."
+            )
+        
+            confirm_replace = st.checkbox(
+                "I want to replace my previous submission.",
+                key=f"confirm_replace_{selected_id}"
+            )
+        
+        else:
+        
+            confirm_replace = True
+        
+        
+        
         if st.button(
             "Submit Homework",
             key=f"submit_homework_{selected_id}"
         ):
+            if existing_submission and not confirm_replace:
+        
+                st.error(
+                    "Please confirm replacement before uploading."
+                )
+        
+                st.stop()
 
             if not uploads:
             
@@ -1621,12 +1651,24 @@ def student_homework():
                         uploads
                     )
             
-            
+                    # ==================================================
+                    # REMOVE OLD SUBMISSION
+                    # ==================================================
+                    
+                    if existing_submission:
+                    
+                        delete_homework_file(
+                            existing_submission
+                        )
+                    
+                    
+                    # ==================================================
+                    # UPLOAD NEW PDF
+                    # ==================================================
+                    
                     supabase = get_supabase()
-            
-            
+                    
                     bucket_name = "homework-files"
-            
             
                     unique_id = uuid.uuid4().hex[:10]
                     

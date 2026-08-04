@@ -210,149 +210,36 @@ def get_grades(student_id):
         (student_id,)
     )
 
-
 @st.cache_data(ttl=CACHE_TTL)
-@st.cache_data(ttl=CACHE_TTL)
-def get_session_history(student_id, view="Recent 5 + Upcoming 3"):
+def get_session_history(student_id):
 
-    if view == "Recent 5 + Upcoming 3":
+    return query_dataframe(
+        """
+        SELECT
+            s.session_date AS "Date",
+            s.session_time AS "Time",
+            COALESCE(s.topic, 'N/A') AS "Topic",
 
-        recent = query_dataframe(
-            """
-            SELECT
-                s.session_date AS "Date",
-                s.session_time AS "Time",
-                s.topic AS "Topic",
-                COALESCE(a.status, 'Pending') AS "Attendance"
-            FROM sessions s
+            COALESCE(
+                a.status,
+                'Not Marked'
+            ) AS "Attendance"
 
-            LEFT JOIN attendance a
-                ON a.student_id = s.student_id
-                AND a.session_date = s.session_date
+        FROM sessions s
 
-            WHERE s.student_id = %s
-              AND s.session_date < CURRENT_DATE
+        LEFT JOIN attendance a
+            ON a.student_id = s.student_id
+            AND a.session_date = s.session_date
+            AND a.session_time = s.session_time
 
-            ORDER BY
-                s.session_date DESC,
-                s.session_time DESC
+        WHERE s.student_id = %s
 
-            LIMIT 5
-            """,
-            (student_id,)
-        )
-
-
-        upcoming = query_dataframe(
-            """
-            SELECT
-                s.session_date AS "Date",
-                s.session_time AS "Time",
-                s.topic AS "Topic",
-                'Upcoming' AS "Attendance"
-            FROM sessions s
-
-            WHERE s.student_id = %s
-              AND s.session_date >= CURRENT_DATE
-
-            ORDER BY
-                s.session_date ASC,
-                s.session_time ASC
-
-            LIMIT 3
-            """,
-            (student_id,)
-        )
-
-
-        return pd.concat(
-            [
-                upcoming,
-                recent
-            ],
-            ignore_index=True
-        )
-
-
-    elif view == "Last 10 Sessions":
-
-        return query_dataframe(
-            """
-            SELECT
-                s.session_date AS "Date",
-                s.session_time AS "Time",
-                s.topic AS "Topic",
-                COALESCE(a.status,'Pending') AS "Attendance"
-
-            FROM sessions s
-
-            LEFT JOIN attendance a
-                ON a.student_id = s.student_id
-                AND a.session_date = s.session_date
-
-            WHERE s.student_id = %s
-
-            ORDER BY
-                s.session_date DESC,
-                s.session_time DESC
-
-            LIMIT 10
-            """,
-            (student_id,)
-        )
-
-
-    elif view == "Last 30 Days":
-
-        return query_dataframe(
-            """
-            SELECT
-                s.session_date AS "Date",
-                s.session_time AS "Time",
-                s.topic AS "Topic",
-                COALESCE(a.status,'Pending') AS "Attendance"
-
-            FROM sessions s
-
-            LEFT JOIN attendance a
-                ON a.student_id = s.student_id
-                AND a.session_date = s.session_date
-
-            WHERE s.student_id = %s
-              AND s.session_date >= CURRENT_DATE - INTERVAL '30 days'
-
-            ORDER BY
-                s.session_date DESC,
-                s.session_time DESC
-            """,
-            (student_id,)
-        )
-
-
-    else:
-
-        return query_dataframe(
-            """
-            SELECT
-                s.session_date AS "Date",
-                s.session_time AS "Time",
-                s.topic AS "Topic",
-                COALESCE(a.status,'Pending') AS "Attendance"
-
-            FROM sessions s
-
-            LEFT JOIN attendance a
-                ON a.student_id = s.student_id
-                AND a.session_date = s.session_date
-
-            WHERE s.student_id = %s
-
-            ORDER BY
-                s.session_date DESC,
-                s.session_time DESC
-            """,
-            (student_id,)
-        )
+        ORDER BY
+            s.session_date DESC,
+            s.session_time DESC
+        """,
+        (student_id,)
+    )
         
 # ============================================================
 # FINANCIAL DATA
@@ -701,9 +588,8 @@ def student_page():
                     [
                         "Date",
                         "Time",
-                        "Duration",
                         "Topic",
-                        "Status"
+                        "Attendance"
                     ]
                 ]
 
@@ -748,65 +634,25 @@ def student_page():
         )
         
         
-        sessions = get_session_history(
-            student_id,
-            session_filter
-        )
-
-
+        sessions = get_session_history(student_id)
+        
         if sessions.empty:
-
-            st.info(
-                "No sessions found."
-            )
-
+        
+            st.info("No sessions found.")
+        
         else:
-
-            for _, row in sessions.iterrows():
-
-                with st.container():
-
-                    att_status = row.get(
-                        "attendance_status",
-                        "Pending"
-                    )
-
-
-                    if att_status == "Present":
-
-                        badge = "✅ **Present**"
-
-                    elif att_status == "Absent":
-
-                        badge = "❌ **Absent**"
-
-                    elif att_status == "Late":
-
-                        badge = "⚠️ **Late**"
-
-                    else:
-
-                        badge = (
-                            "⏳ **Pending / Not Marked**"
-                        )
-
-
-                    st.write(
-                        f"📅 **Date:** {row['Date']} "
-                        f"at {row['Time']} | "
-                        f"**Topic:** {row.get('Topic', 'N/A')} | "
-                        f"**Attendance:** {badge}"
-                    )
-
-
-                    if row.get("notes"):
-
-                        st.caption(
-                            f"📝 Notes: {row['notes']}"
-                        )
-
-
-                    st.divider()
+        
+            st.dataframe(
+                sessions,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Date": "📅 Date",
+                    "Time": "⏰ Time",
+                    "Topic": "📘 Topic",
+                    "Attendance": "✅ Attendance"
+                }
+            )
 
 
         # ----------------------------------------------------

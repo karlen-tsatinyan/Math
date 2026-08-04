@@ -188,19 +188,30 @@ def payment_management():
                         delete_sub = col2.form_submit_button("🗑️ Delete Payment")
                         
                         if update_sub:
+                        
                             execute(
-                                "UPDATE payments
+                                """
+                                UPDATE payments
                                 SET
                                     amount = %s,
                                     period = %s,
                                     status = 'Completed'
-                                WHERE id = %s",
-                                (new_amount, new_period, selected_id)
+                                WHERE id = %s
+                                """,
+                                (
+                                    new_amount,
+                                    new_period,
+                                    selected_id
+                                )
                             )
-                            
+                        
                             # Clear cache on update
                             st.cache_data.clear()
-                            st.success("Payment updated successfully!")
+                        
+                            st.success(
+                                "Payment updated successfully!"
+                            )
+                        
                             st.rerun()
                             
                         if delete_sub:

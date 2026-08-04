@@ -36,7 +36,6 @@ def payment_management():
                 """
                 SELECT 
                     p.id,
-                    p.student_id,
                     s.first_name || ' ' || s.last_name AS student_name,
                     COALESCE(p.amount, 0.00) AS amount,
                     COALESCE(p.payment_date, CURRENT_DATE) AS payment_date,

@@ -117,10 +117,28 @@ def payment_management():
                 try:
                     execute(
                         """
-                        INSERT INTO payments (student_id, amount, period, payment_date)
-                        VALUES (%s, %s, %s, CURRENT_DATE)
+                        INSERT INTO payments
+                        (
+                            student_id,
+                            amount,
+                            period,
+                            payment_date,
+                            status
+                        )
+                        VALUES
+                        (
+                            %s,
+                            %s,
+                            %s,
+                            CURRENT_DATE,
+                            'Completed'
+                        )
                         """,
-                        (student_id_input, amount_input, period_input)
+                        (
+                            student_id_input,
+                            amount_input,
+                            period_input
+                        )
                     )
                     
                     # Clear cache so newly recorded payments appear immediately
@@ -136,9 +154,25 @@ def payment_management():
     with tab3:
         st.subheader("Edit or Remove Payment Entries")
         try:
-            payments_list = query_dataframe("SELECT id, student_id, amount, period FROM payments ORDER BY id DESC")
+            payments_list = query_dataframe(
+                """
+                SELECT
+                    p.id,
+                    p.student_id,
+                    s.first_name || ' ' || s.last_name AS student_name,
+                    p.amount,
+                    p.period
+                FROM payments p
+                JOIN students s
+                    ON p.student_id = s.id
+                ORDER BY p.id DESC
+                """
+            )
             if not payments_list.empty:
-                payment_options = {f"ID {row['id']} - Student {row['student_id']} (${row['amount']})": row['id'] for _, row in payments_list.iterrows()}
+                payment_options = {
+                    f"{row['student_name']} - ${row['amount']} ({row['period']})": row['id']
+                    for _, row in payments_list.iterrows()
+                }
                 selected_label = st.selectbox("Select Payment to Edit", list(payment_options.keys()))
                 
                 if selected_label:
@@ -155,7 +189,12 @@ def payment_management():
                         
                         if update_sub:
                             execute(
-                                "UPDATE payments SET amount = %s, period = %s WHERE id = %s",
+                                "UPDATE payments
+                                SET
+                                    amount = %s,
+                                    period = %s,
+                                    status = 'Completed'
+                                WHERE id = %s",
                                 (new_amount, new_period, selected_id)
                             )
                             

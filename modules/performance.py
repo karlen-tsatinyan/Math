@@ -271,47 +271,22 @@ def performance_dashboard():
 # ============================================================
 
 def student_performance_view(student_id):
+
     ensure_performance_schema()
 
     st.subheader("📈 Advanced Progression Analytics")
 
-    # --------------------------------------------------------
-    # Get student name
-    # --------------------------------------------------------
-
-    student = query_dataframe(
-        """
-        SELECT
-            first_name || ' ' || last_name AS name
-        FROM students
-        WHERE id = %s
-        LIMIT 1
-        """,
-        (student_id,)
-    )
-
-    if not student.empty:
-        st.caption(
-            f"Performance analysis for {student.iloc[0]['name']}"
-        )
-
-
-    # --------------------------------------------------------
-    # Get grades
-    # Same logic as Admin Performance
-    # --------------------------------------------------------
 
     grades = query_dataframe(
         """
         SELECT
             COALESCE(lesson_date::text, created_at::text, '') AS lesson_date,
             COALESCE(topic, 'N/A') AS topic,
-            COALESCE(score, 0) AS score,
-            COALESCE(max_score, 100) AS max_score,
             COALESCE(percent, 0) AS percent,
-            COALESCE(grade_letter, '') AS grade_letter,
-            COALESCE(teacher_comment, '') AS teacher_comment
+            COALESCE(grade_letter, '') AS grade_letter
+
         FROM homework_grades
+
         WHERE student_id = %s
 
 
@@ -319,30 +294,18 @@ def student_performance_view(student_id):
 
 
         SELECT
-            COALESCE(reviewed_at::text, due_date::text, created_at::text, '') AS lesson_date,
+            COALESCE(
+                reviewed_at::text,
+                due_date::text,
+                created_at::text,
+                ''
+            ) AS lesson_date,
 
             COALESCE(
                 title,
                 curriculum_topic,
                 'Homework Assignment'
             ) AS topic,
-
-            CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A' THEN 95
-                WHEN grade = 'A-' THEN 90
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B' THEN 85
-                WHEN grade = 'B-' THEN 80
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C' THEN 75
-                WHEN grade = 'C-' THEN 70
-                WHEN grade = 'D' THEN 65
-                WHEN grade = 'F' THEN 50
-                ELSE 0
-            END AS score,
-
-            100 AS max_score,
 
 
             CASE
@@ -360,13 +323,7 @@ def student_performance_view(student_id):
                 ELSE 0
             END AS percent,
 
-
-            COALESCE(grade,'') AS grade_letter,
-
-            COALESCE(
-                teacher_feedback,
-                ''
-            ) AS teacher_comment
+            COALESCE(grade,'') AS grade_letter
 
 
         FROM homework
@@ -378,7 +335,6 @@ def student_performance_view(student_id):
 
 
         ORDER BY lesson_date ASC
-
         """,
         (
             student_id,
@@ -390,15 +346,11 @@ def student_performance_view(student_id):
     if grades.empty:
 
         st.info(
-            "No graded homework or performance records available yet."
+            "No performance data available yet."
         )
 
         return
 
-
-    # --------------------------------------------------------
-    # Data Cleaning
-    # --------------------------------------------------------
 
     grades["lesson_date"] = pd.to_datetime(
         grades["lesson_date"],
@@ -411,161 +363,99 @@ def student_performance_view(student_id):
     ).fillna(0)
 
 
-    # --------------------------------------------------------
-    # Metrics
-    # --------------------------------------------------------
-
-    average = grades["percent"].mean()
-
-    highest = grades["percent"].max()
-
-    lowest = grades["percent"].min()
-
-
-    if len(grades) > 1:
-
-        improvement = (
-            grades.iloc[-1]["percent"]
-            -
-            grades.iloc[0]["percent"]
-        )
-
-        trend = f"{improvement:+.1f}%"
-
-    else:
-
-        trend = "Baseline"
-
-
-    c1, c2, c3, c4 = st.columns(4)
-
-
-    c1.metric(
-        "Average Score",
-        f"{average:.1f}%"
-    )
-
-    c2.metric(
-        "Highest Score",
-        f"{highest:.1f}%"
-    )
-
-    c3.metric(
-        "Lowest Score",
-        f"{lowest:.1f}%"
-    )
-
-    c4.metric(
-        "Overall Trend",
-        trend
-    )
-
-
-    st.divider()
-
-
-    # --------------------------------------------------------
-    # Analytics Chart
-    # --------------------------------------------------------
 
     chart_data = grades.dropna(
         subset=["lesson_date"]
     ).copy()
 
 
-    if not chart_data.empty:
+    if chart_data.empty:
 
-        chart_data["formatted_date"] = (
-            chart_data["lesson_date"]
-            .dt.strftime("%Y-%m-%d")
+        st.info(
+            "No valid dates available for chart."
         )
 
-
-        try:
-
-            import altair as alt
+        return
 
 
-            chart = (
-                alt.Chart(chart_data)
-                .mark_line(
-                    point=True
-                )
-                .encode(
-                    x=alt.X(
+    chart_data["formatted_date"] = (
+        chart_data["lesson_date"]
+        .dt.strftime("%Y-%m-%d")
+    )
+
+
+    try:
+
+        import altair as alt
+
+
+        chart = (
+            alt.Chart(chart_data)
+            .mark_line(
+                point=True
+            )
+            .encode(
+
+                x=alt.X(
+                    "formatted_date:N",
+                    title="Lesson Date"
+                ),
+
+                y=alt.Y(
+                    "percent:Q",
+                    title="Score (%)",
+                    scale=alt.Scale(
+                        domain=[0,100]
+                    )
+                ),
+
+                tooltip=[
+                    alt.Tooltip(
                         "formatted_date:N",
-                        title="Lesson Date"
+                        title="Date"
                     ),
 
-                    y=alt.Y(
+                    alt.Tooltip(
+                        "topic:N",
+                        title="Topic"
+                    ),
+
+                    alt.Tooltip(
                         "percent:Q",
-                        title="Score (%)",
-                        scale=alt.Scale(
-                            domain=[0,100]
-                        )
+                        title="Score (%)"
                     ),
 
-                    tooltip=[
-                        "formatted_date",
-                        "topic",
-                        "percent",
-                        "grade_letter"
-                    ]
-                )
-                .interactive()
-                .properties(
-                    height=380
-                )
-            )
-
-
-            st.altair_chart(
-                chart,
-                use_container_width=True
-            )
-
-
-        except Exception:
-
-            fallback = chart_data[
-                [
-                    "lesson_date",
-                    "percent"
+                    alt.Tooltip(
+                        "grade_letter:N",
+                        title="Grade"
+                    )
                 ]
-            ].set_index(
-                "lesson_date"
+
             )
-
-
-            st.line_chart(
-                fallback
+            .interactive()
+            .properties(
+                height=380
             )
-
-
-    # --------------------------------------------------------
-    # Grade History
-    # --------------------------------------------------------
-
-    st.subheader(
-        "📋 Grade History"
-    )
-
-
-    display = grades.copy()
-
-
-    if pd.api.types.is_datetime64_any_dtype(
-        display["lesson_date"]
-    ):
-
-        display["lesson_date"] = (
-            display["lesson_date"]
-            .dt.strftime("%Y-%m-%d")
         )
 
 
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True
-    )
+        st.altair_chart(
+            chart,
+            use_container_width=True
+        )
+
+
+    except Exception:
+
+        fallback = chart_data[
+            [
+                "lesson_date",
+                "percent"
+            ]
+        ].set_index(
+            "lesson_date"
+        )
+
+        st.line_chart(
+            fallback
+        )

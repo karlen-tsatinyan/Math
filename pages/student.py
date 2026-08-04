@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-
+from datetime import timedelta
 from utils.datetime_utils import today_str
 from database import query_dataframe
 
@@ -615,22 +615,122 @@ def student_page():
     # ========================================================
 
     elif option == "Schedule":
-        
+
         st.title("📅 My Sessions")
     
         sessions = get_session_history(student_id)
     
-    
         if sessions.empty:
     
-            st.info(
-                "No sessions found."
-            )
+            st.info("No sessions found.")
     
         else:
-    
+        
+            sessions["Date"] = pd.to_datetime(
+                sessions["Date"]
+            )
+        
+            today = pd.to_datetime(
+                today_str()
+            )
+        
+            # -----------------------------
+            # SESSION FILTER
+            # -----------------------------
+        
+            filter_option = st.selectbox(
+                "Show Sessions",
+                [
+                    "Recent 5 + Upcoming 3 (Default)",
+                    "Last 10 Sessions",
+                    "Last 30 Days",
+                    "All Sessions"
+                ],
+                key="student_session_filter"
+            )
+        
+        
+            if filter_option == "Recent 5 + Upcoming 3 (Default)":
+        
+                # Completed / past sessions
+                recent = (
+                    sessions[
+                        sessions["Date"] <= today
+                    ]
+                    .sort_values(
+                        ["Date", "Time"],
+                        ascending=False
+                    )
+                    .head(5)
+                )
+        
+        
+                # Future sessions
+                upcoming = (
+                    sessions[
+                        sessions["Date"] > today
+                    ]
+                    .sort_values(
+                        ["Date", "Time"]
+                    )
+                    .head(3)
+                )
+        
+        
+                sessions_display = pd.concat(
+                    [
+                        upcoming,
+                        recent
+                    ]
+                )
+        
+        
+            elif filter_option == "Last 10 Sessions":
+        
+                sessions_display = (
+                    sessions
+                    .sort_values(
+                        ["Date", "Time"],
+                        ascending=False
+                    )
+                    .head(10)
+                )
+        
+        
+            elif filter_option == "Last 30 Days":
+        
+                start_date = today - pd.Timedelta(days=30)
+        
+                sessions_display = sessions[
+                    sessions["Date"] >= start_date
+                ]
+        
+        
+            else:
+        
+                sessions_display = (
+                    sessions
+                    .sort_values(
+                        ["Date", "Time"],
+                        ascending=False
+                    )
+                )
+        
+        
+            # Format date for display
+        
+            sessions_display["Date"] = (
+                sessions_display["Date"]
+                .dt.strftime("%b %d, %Y")
+            )
+        
+        
+            # -----------------------------
+            # DISPLAY
+            # -----------------------------
+        
             st.dataframe(
-                sessions,
+                sessions_display,
                 use_container_width=True,
                 hide_index=True,
                 column_config={

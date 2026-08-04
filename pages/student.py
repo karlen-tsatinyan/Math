@@ -218,11 +218,11 @@ def get_session_history(student_id):
         SELECT
             s.session_date AS "Date",
             s.session_time AS "Time",
-            COALESCE(s.topic, 'N/A') AS "Topic",
+            COALESCE(s.topic, '') AS "Topic",
 
             COALESCE(
                 a.status,
-                'Not Marked'
+                'Pending'
             ) AS "Attendance"
 
         FROM sessions s
@@ -729,8 +729,23 @@ def student_page():
             # DISPLAY
             # -----------------------------
         
+            display_sessions = sessions.copy()
+
+            display_sessions["Date"] = (
+                pd.to_datetime(display_sessions["Date"])
+                .dt.strftime("%Y-%m-%d")
+            )
+            
+            
             st.dataframe(
-                sessions_display,
+                display_sessions[
+                    [
+                        "Date",
+                        "Time",
+                        "Topic",
+                        "Attendance"
+                    ]
+                ],
                 use_container_width=True,
                 hide_index=True,
                 column_config={

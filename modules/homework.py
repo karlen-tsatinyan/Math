@@ -1,7 +1,16 @@
 import streamlit as st
 import os
+import io
 import pandas as pd
+
 from datetime import date
+
+from PIL import Image
+
+from pypdf import PdfReader, PdfWriter
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 from database import execute, query_dataframe
 from supabase_client import get_supabase
@@ -25,6 +34,101 @@ def safe_text(value):
         pass
 
     return str(value).strip()
+
+
+# ============================================================
+# CREATE SINGLE PDF FROM MULTIPLE FILES
+# ============================================================
+
+def merge_homework_files(uploaded_files):
+    """
+    Combine multiple uploaded images/PDFs
+    into one PDF file.
+
+    Returns:
+        bytes
+    """
+
+    pdf_writer = PdfWriter()
+
+
+    for uploaded_file in uploaded_files:
+
+        file_bytes = uploaded_file.getvalue()
+
+        filename = uploaded_file.name.lower()
+
+
+        # --------------------------------------------
+        # PDF FILE
+        # --------------------------------------------
+
+        if filename.endswith(".pdf"):
+
+            reader = PdfReader(
+                io.BytesIO(file_bytes)
+            )
+
+            for page in reader.pages:
+
+                pdf_writer.add_page(page)
+
+
+
+        # --------------------------------------------
+        # IMAGE FILE
+        # --------------------------------------------
+
+        elif filename.endswith(
+            (
+                ".jpg",
+                ".jpeg",
+                ".png"
+            )
+        ):
+
+            image = Image.open(
+                io.BytesIO(file_bytes)
+            ).convert(
+                "RGB"
+            )
+
+
+            img_buffer = io.BytesIO()
+
+
+            image.save(
+                img_buffer,
+                format="PDF"
+            )
+
+
+            img_buffer.seek(0)
+
+
+            reader = PdfReader(
+                img_buffer
+            )
+
+
+            for page in reader.pages:
+
+                pdf_writer.add_page(page)
+
+
+
+    output = io.BytesIO()
+
+
+    pdf_writer.write(
+        output
+    )
+
+
+    output.seek(0)
+
+
+    return output.getvalue()
 
 
 # ============================================================
@@ -1482,14 +1586,15 @@ def student_homework():
             "📤 Submit Completed Homework"
         )
 
-        upload = st.file_uploader(
-            "Upload Your Solution",
+        uploads = st.file_uploader(
+            "Select Homework Files",
             type=[
                 "pdf",
                 "jpg",
                 "jpeg",
                 "png"
             ],
+            accept_multiple_files=True,
             key=f"student_upload_{selected_id}"
         )
 
@@ -1498,95 +1603,104 @@ def student_homework():
             key=f"submit_homework_{selected_id}"
         ):
 
-            if upload is None:
-
+            if not uploads:
+            
                 st.warning(
-                    "Please select a file before submitting."
+                    "Please select at least one file."
                 )
-
+            
+            
             else:
-
-                # ==================================================
-                # SAVE STUDENT SUBMISSION TO SUPABASE
-                # ==================================================
-
-                supabase = get_supabase()
-
-                bucket_name = (
-                    "homework-files"
-                )
-
-                safe_filename = os.path.basename(
-                    upload.name
-                )
-
-                storage_path = (
-                    f"submissions/"
-                    f"student_{student_id}/"
-                    f"homework_{selected_id}_"
-                    f"{safe_filename}"
-                )
-
-                file_bytes = (
-                    upload.getvalue()
-                )
-
-                try:
-
-                    supabase.storage.from_(
-                        bucket_name
-                    ).upload(
-                        path=storage_path,
-                        file=file_bytes,
-                        file_options={
-                            "content-type": (
-                                upload.type
-                                or "application/octet-stream"
-                            ),
-                            "upsert": "true"
-                        }
+            
+                with st.spinner(
+                    "Combining files and uploading PDF..."
+                ):
+            
+                    merged_pdf = merge_homework_files(
+                        uploads
                     )
-
-                except Exception as e:
-
-                    st.error(
-                        "❌ Your homework could not "
-                        "be uploaded."
+            
+            
+                    supabase = get_supabase()
+            
+            
+                    bucket_name = "homework-files"
+            
+            
+                    storage_path = (
+                        f"submissions/"
+                        f"student_{student_id}/"
+                        f"homework_{selected_id}.pdf"
                     )
-
-                    st.exception(e)
-
-                    return
-
-                # ==================================================
-                # SAVE STORAGE PATH TO DATABASE
-                # ==================================================
-
-                execute(
-                    """
-                    UPDATE homework
-                    SET
-                        student_file = %s,
-                        status = 'Submitted',
-                        submitted_at = CURRENT_TIMESTAMP,
-                        deleted_student_file = 0
-                    WHERE id = %s
-                    AND student_id = %s
-                    """,
-                    (
-                        storage_path,
-                        selected_id,
-                        student_id
+            
+            
+                    try:
+            
+                        supabase.storage.from_(
+                            bucket_name
+                        ).upload(
+            
+                            path=storage_path,
+            
+                            file=merged_pdf,
+            
+                            file_options={
+                                "content-type":
+                                    "application/pdf",
+            
+                                "upsert":
+                                    "true"
+                            }
+                        )
+            
+            
+                    except Exception as e:
+            
+                        st.error(
+                            "❌ Upload failed."
+                        )
+            
+                        st.exception(e)
+            
+                        return
+            
+            
+            
+                    execute(
+                        """
+                        UPDATE homework
+                        SET
+                            student_file = %s,
+                            status = 'Submitted',
+                            submitted_at = CURRENT_TIMESTAMP,
+                            deleted_student_file = 0
+            
+                        WHERE id = %s
+                        AND student_id = %s
+                        """,
+            
+                        (
+                            storage_path,
+                            selected_id,
+                            student_id
+                        )
                     )
-                )
-
-                st.cache_data.clear()
-
-                st.session_state[
-                    "homework_submission_success"
-                ] = int(selected_id)
-
-                st.rerun()
+            
+            
+                    st.cache_data.clear()
+            
+            
+                    st.session_state[
+                        "homework_submission_success"
+                    ] = int(selected_id)
+            
+            
+                    st.success(
+                        "✅ Homework uploaded successfully."
+                    )
+            
+            
+                    st.rerun()
 
     # ========================================================
     # TEACHER FEEDBACK

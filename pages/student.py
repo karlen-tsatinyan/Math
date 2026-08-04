@@ -510,9 +510,10 @@ def student_page():
         )
 
 
-        tab_grades, tab_sessions = st.tabs(
+        tab_grades, tab_analytics, tab_sessions = st.tabs(
             [
                 "📚 Homework Grades",
+                "📈 Advanced Progression Analytics",
                 "📅 Session History"
             ]
         )
@@ -548,7 +549,18 @@ def student_page():
                     hide_index=True
                 )
 
+        # ----------------------------------------------------
+        # ADVANCED PROGRESSION ANALYTICS
+        # ----------------------------------------------------
+        with tab_analytics:
 
+            from modules.performance import student_performance_view
+        
+            student_performance_view(
+                student_id
+            )
+
+        
         # ----------------------------------------------------
         # SESSION HISTORY
         # ----------------------------------------------------

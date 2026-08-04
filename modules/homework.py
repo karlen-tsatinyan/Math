@@ -1629,13 +1629,12 @@ def student_homework():
             
             
                     unique_id = uuid.uuid4().hex[:10]
-
+                    
                     storage_path = (
                         f"submissions/"
                         f"student_{student_id}/"
                         f"homework_{selected_id}_"
-                        f"{unique_id}"
-                        f"{file_extension}"
+                        f"{unique_id}.pdf"
                     )
             
                     try:

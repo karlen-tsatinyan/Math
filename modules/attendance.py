@@ -75,10 +75,15 @@ def attendance_management():
             a.session_date::text AS session_date,
             a.session_time::text AS session_time,
             a.status AS status,
-            a.marked_at::text AS recorded_at
+            TO_CHAR(
+                a.marked_at,
+                'YYYY-MM-DD HH12:MI AM'
+            ) AS recorded_at
         FROM attendance a
-        JOIN students s ON a.student_id = s.id
+        JOIN students s 
+            ON a.student_id = s.id
         WHERE a.session_date BETWEEN %s AND %s
+        ORDER BY a.session_date DESC, a.session_time DESC
     """
     params = [start_date.isoformat(), end_date.isoformat()]
 

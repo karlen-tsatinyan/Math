@@ -271,6 +271,7 @@ def performance_dashboard():
 # ============================================================
 
 def student_performance_view(student_id):
+    ensure_performance_schema()
 
     st.subheader("📈 Advanced Progression Analytics")
 

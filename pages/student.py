@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 
 from utils.datetime_utils import today_str
 from database import query_dataframe
@@ -211,37 +212,148 @@ def get_grades(student_id):
 
 
 @st.cache_data(ttl=CACHE_TTL)
-def get_session_history(student_id):
+@st.cache_data(ttl=CACHE_TTL)
+def get_session_history(student_id, view="Recent 5 + Upcoming 3"):
 
-    return query_dataframe(
-        """
-        SELECT
-            s.session_date AS "Date",
-            s.session_time AS "Time",
-            s.duration AS "Duration",
-            s.topic AS "Topic",
-            s.status AS "Status",
-            COALESCE(
-                a.status,
-                'Pending'
-            ) AS attendance_status,
-            s.notes
-        FROM sessions s
+    if view == "Recent 5 + Upcoming 3":
 
-        LEFT JOIN attendance a
-            ON a.student_id = s.student_id
-            AND a.session_date = s.session_date
+        recent = query_dataframe(
+            """
+            SELECT
+                s.session_date AS "Date",
+                s.session_time AS "Time",
+                s.topic AS "Topic",
+                COALESCE(a.status, 'Pending') AS "Attendance"
+            FROM sessions s
 
-        WHERE s.student_id = %s
+            LEFT JOIN attendance a
+                ON a.student_id = s.student_id
+                AND a.session_date = s.session_date
 
-        ORDER BY
-            s.session_date DESC,
-            s.session_time DESC
-        """,
-        (student_id,)
-    )
+            WHERE s.student_id = %s
+              AND s.session_date < CURRENT_DATE
+
+            ORDER BY
+                s.session_date DESC,
+                s.session_time DESC
+
+            LIMIT 5
+            """,
+            (student_id,)
+        )
 
 
+        upcoming = query_dataframe(
+            """
+            SELECT
+                s.session_date AS "Date",
+                s.session_time AS "Time",
+                s.topic AS "Topic",
+                'Upcoming' AS "Attendance"
+            FROM sessions s
+
+            WHERE s.student_id = %s
+              AND s.session_date >= CURRENT_DATE
+
+            ORDER BY
+                s.session_date ASC,
+                s.session_time ASC
+
+            LIMIT 3
+            """,
+            (student_id,)
+        )
+
+
+        return pd.concat(
+            [
+                upcoming,
+                recent
+            ],
+            ignore_index=True
+        )
+
+
+    elif view == "Last 10 Sessions":
+
+        return query_dataframe(
+            """
+            SELECT
+                s.session_date AS "Date",
+                s.session_time AS "Time",
+                s.topic AS "Topic",
+                COALESCE(a.status,'Pending') AS "Attendance"
+
+            FROM sessions s
+
+            LEFT JOIN attendance a
+                ON a.student_id = s.student_id
+                AND a.session_date = s.session_date
+
+            WHERE s.student_id = %s
+
+            ORDER BY
+                s.session_date DESC,
+                s.session_time DESC
+
+            LIMIT 10
+            """,
+            (student_id,)
+        )
+
+
+    elif view == "Last 30 Days":
+
+        return query_dataframe(
+            """
+            SELECT
+                s.session_date AS "Date",
+                s.session_time AS "Time",
+                s.topic AS "Topic",
+                COALESCE(a.status,'Pending') AS "Attendance"
+
+            FROM sessions s
+
+            LEFT JOIN attendance a
+                ON a.student_id = s.student_id
+                AND a.session_date = s.session_date
+
+            WHERE s.student_id = %s
+              AND s.session_date >= CURRENT_DATE - INTERVAL '30 days'
+
+            ORDER BY
+                s.session_date DESC,
+                s.session_time DESC
+            """,
+            (student_id,)
+        )
+
+
+    else:
+
+        return query_dataframe(
+            """
+            SELECT
+                s.session_date AS "Date",
+                s.session_time AS "Time",
+                s.topic AS "Topic",
+                COALESCE(a.status,'Pending') AS "Attendance"
+
+            FROM sessions s
+
+            LEFT JOIN attendance a
+                ON a.student_id = s.student_id
+                AND a.session_date = s.session_date
+
+            WHERE s.student_id = %s
+
+            ORDER BY
+                s.session_date DESC,
+                s.session_time DESC
+            """,
+            (student_id,)
+        )
+        
 # ============================================================
 # FINANCIAL DATA
 # ============================================================
@@ -624,8 +736,21 @@ def student_page():
 
 
         # Only session history is loaded here
+        session_filter = st.selectbox(
+            "Show Sessions",
+            [
+                "Recent 5 + Upcoming 3",
+                "Last 10 Sessions",
+                "Last 30 Days",
+                "All History"
+            ],
+            key="student_session_filter"
+        )
+        
+        
         sessions = get_session_history(
-            student_id
+            student_id,
+            session_filter
         )
 
 

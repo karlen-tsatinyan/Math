@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import io
+import uuid
 import pandas as pd
 
 from datetime import date
@@ -1627,12 +1628,15 @@ def student_homework():
                     bucket_name = "homework-files"
             
             
+                    unique_id = uuid.uuid4().hex[:10]
+
                     storage_path = (
                         f"submissions/"
                         f"student_{student_id}/"
-                        f"homework_{selected_id}.pdf"
+                        f"homework_{selected_id}_"
+                        f"{unique_id}"
+                        f"{file_extension}"
                     )
-            
             
                     try:
             
@@ -1646,10 +1650,7 @@ def student_homework():
             
                             file_options={
                                 "content-type":
-                                    "application/pdf",
-            
-                                "upsert":
-                                    "true"
+                                    "application/pdf"
                             }
                         )
             

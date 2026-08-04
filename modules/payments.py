@@ -37,10 +37,14 @@ def payment_management():
                 SELECT 
                     p.id,
                     p.student_id,
+                    s.first_name || ' ' || s.last_name AS student_name,
                     COALESCE(p.amount, 0.00) AS amount,
                     COALESCE(p.payment_date, CURRENT_DATE) AS payment_date,
-                    COALESCE(p.period, '') AS period
+                    COALESCE(p.period, '') AS period,
+                    COALESCE(p.status, 'Completed') AS status
                 FROM payments p
+                JOIN students s
+                    ON p.student_id = s.id
                 ORDER BY p.payment_date DESC
                 """
             )
@@ -57,9 +61,56 @@ def payment_management():
     with tab2:
         st.subheader("Record New Payment")
         with st.form("payment_form"):
-            student_id_input = st.number_input("Student ID", min_value=1, step=1)
-            amount_input = st.number_input("Amount ($)", min_value=0.0, format="%.2f")
-            period_input = st.text_input("Period (e.g., June 2026)")
+            # --------------------------------------------------
+            # STUDENT SELECTOR
+            # --------------------------------------------------
+            
+            students = query_dataframe(
+                """
+                SELECT
+                    id,
+                    first_name || ' ' || last_name AS name
+                FROM students
+                WHERE COALESCE(archived, 0) = 0
+                ORDER BY last_name, first_name
+                """
+            )
+            
+            if students.empty:
+            
+                st.warning(
+                    "No active students available."
+                )
+            
+                st.stop()
+            
+            
+            student_name = st.selectbox(
+                "Student",
+                students["name"].tolist(),
+                key="payment_student_select"
+            )
+            
+            
+            student_id_input = int(
+                students[
+                    students["name"] == student_name
+                ]["id"].iloc[0]
+            )
+            
+            
+            amount_input = st.number_input(
+                "Amount ($)",
+                min_value=0.0,
+                format="%.2f",
+                key="payment_amount"
+            )
+            
+            
+            period_input = st.text_input(
+                "Period (e.g., June 2026)",
+                key="payment_period"
+            )
             
             submitted = st.form_submit_button("💾 Save Payment")
             if submitted:

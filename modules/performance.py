@@ -104,7 +104,8 @@ def performance_dashboard():
             COALESCE(percent, 0) AS percent,
             COALESCE(grade_letter, '') AS grade_letter,
             COALESCE(teacher_comment, '') AS teacher_comment
-        _grades
+            'Active' AS record_status
+        FROM homework_grades
         WHERE student_id = %s
 
         UNION ALL
@@ -148,7 +149,7 @@ def performance_dashboard():
                     ELSE 'Active'
                 END AS record_status
                 
-                
+                FROM homework
                 
                 WHERE student_id = %s
                 AND status = 'Reviewed'

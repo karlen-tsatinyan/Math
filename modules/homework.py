@@ -996,7 +996,7 @@ def homework_management():
         ):
 
             if st.button(
-                "🗑 Delete Student Submission",
+                "🗑 Remove Uploaded File",
                 key=f"delete_student_file_{selected_id}"
             ):
 
@@ -1033,7 +1033,7 @@ def homework_management():
         st.divider()
         
         if st.button(
-            "🗄️ Archive Homework",
+            "🗄️ Archive Homework Record",
             key=f"archive_homework_{selected_id}"
         ):
         

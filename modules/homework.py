@@ -1033,24 +1033,20 @@ def homework_management():
         st.divider()
         
         if st.button(
-            "🗑 Archive Homework",
+            "🗄️ Archive Homework",
             key=f"archive_homework_{selected_id}"
         ):
         
-            # Remove teacher assignment file
-            if safe_text(
-                selected["assignment_file"]
-            ):
+            # Delete assignment file from storage
+            if safe_text(selected["assignment_file"]):
         
                 delete_homework_file(
                     selected["assignment_file"]
                 )
         
         
-            # Remove student submission file
-            if safe_text(
-                selected["student_file"]
-            ):
+            # Delete student submission from storage
+            if safe_text(selected["student_file"]):
         
                 delete_homework_file(
                     selected["student_file"]

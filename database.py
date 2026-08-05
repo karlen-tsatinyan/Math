@@ -78,21 +78,24 @@ def query_dataframe(query, params=()):
     except Exception as e:
 
         if conn is not None:
-
+    
             try:
                 conn.rollback()
             except Exception:
                 pass
-
-        print("DATABASE ERROR:")
-        st.error(str(e))
-
-        print("QUERY:")
-        print(query)
-
-        print("PARAMS:")
-        print(params)
-
+    
+        st.error(f"DATABASE ERROR: {e}")
+    
+        st.code(
+            query,
+            language="sql"
+        )
+    
+        st.write(
+            "PARAMS:",
+            params
+        )
+    
         raise e
 
     finally:

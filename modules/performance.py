@@ -1,47 +1,7 @@
 import streamlit as st
 import pandas as pd
-from database import execute, query_dataframe
+from database import query_dataframe
 
-# ============================================================
-# SCHEMA MIGRATION / INITIALIZATION (SUPABASE COMPATIBLE)
-# ============================================================
-def ensure_performance_schema():
-    """Ensure homework_grades table exists AND contains all required columns for Supabase PostgreSQL."""
-    try:
-        execute(
-            """
-            CREATE TABLE IF NOT EXISTS homework_grades (
-                id SERIAL PRIMARY KEY,
-                student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-                lesson_date DATE DEFAULT CURRENT_DATE,
-                topic TEXT,
-                score NUMERIC(5,2),
-                max_score NUMERIC(5,2) DEFAULT 100,
-                percent NUMERIC(5,2),
-                grade_letter TEXT,
-                teacher_comment TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """
-        )
-
-        columns_to_add = [
-            ("lesson_date", "DATE DEFAULT CURRENT_DATE"),
-            ("topic", "TEXT"),
-            ("score", "NUMERIC(5,2)"),
-            ("max_score", "NUMERIC(5,2) DEFAULT 100"),
-            ("percent", "NUMERIC(5,2)"),
-            ("grade_letter", "TEXT"),
-            ("teacher_comment", "TEXT")
-        ]
-
-        for col_name, col_type in columns_to_add:
-            try:
-                execute(f"ALTER TABLE homework_grades ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
-            except Exception:
-                pass
-    except Exception:
-        pass
 
 # ============================================================
 # PERFORMANCE PROGRESSION DASHBOARD (SUPABASE ENVIRONMENT)
@@ -95,49 +55,64 @@ def performance_dashboard():
     # UNIFIED GRADE QUERY (Supabase PostgreSQL Compatible)
     # --------------------------------------------------------
     grades = query_dataframe(
-        """
-        SELECT
-            COALESCE(
-                lesson_date::text,
-                created_at::text,
-                ''
-            ) AS lesson_date,
+    """
+    SELECT
     
-            COALESCE(
-                topic,
-                'Homework Assignment'
-            ) AS topic,
-    
-            COALESCE(score,0) AS score,
-    
-            COALESCE(max_score,100) AS max_score,
-    
-            COALESCE(percent,0) AS percent,
-    
-            COALESCE(
-                grade_letter,
-                ''
-            ) AS grade_letter,
-    
-            COALESCE(
-                teacher_comment,
-                ''
-            ) AS teacher_comment,
-    
-            '' AS record_status
+        COALESCE(
+            reviewed_at::text,
+            created_at::text,
+            ''
+        ) AS lesson_date,
     
     
-        FROM homework_grades
+        COALESCE(
+            curriculum_topic,
+            title,
+            'Homework Assignment'
+        ) AS topic,
     
-        WHERE student_id = %s
+    
+        100 AS max_score,
     
     
-        ORDER BY lesson_date ASC
+        CASE
+            WHEN grade='A+' THEN 98
+            WHEN grade='A' THEN 95
+            WHEN grade='A-' THEN 92
+            WHEN grade='B+' THEN 88
+            WHEN grade='B' THEN 85
+            WHEN grade='B-' THEN 82
+            WHEN grade='C+' THEN 78
+            WHEN grade='C' THEN 75
+            WHEN grade='C-' THEN 72
+            WHEN grade='D' THEN 65
+            WHEN grade='F' THEN 50
+            ELSE 0
+        END AS percent,
     
-        """,
-        (
-            student_id,
-        )
+    
+        grade AS grade_letter,
+    
+    
+        teacher_feedback AS teacher_comment
+    
+    
+    FROM homework
+    
+    
+    WHERE student_id = %s
+    
+    AND status='Reviewed'
+    
+    AND archived=0
+    
+    
+    ORDER BY reviewed_at ASC
+    
+    """,
+    (
+    student_id,
+    )
     )
 
     if grades.empty:
@@ -298,7 +273,7 @@ def student_performance_view(student_id):
             ) AS teacher_comment
     
     
-        FROM homework_grades
+        FROM homework
     
     
         WHERE student_id = %s

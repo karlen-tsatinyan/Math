@@ -1,19 +1,37 @@
-import sqlite3
-
-from config import DATABASE_NAME
+from database import get_connection
 
 
-def get_connection():
-    return sqlite3.connect(DATABASE_NAME)
+def column_exists(cursor, table, column):
+
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = %s
+            AND column_name = %s
+        )
+        """,
+        (
+            table,
+            column
+        )
+    )
+
+    return cursor.fetchone()[0]
 
 
-def execute(sql):
-    conn = get_connection()
+def add_column(cursor, table, column, definition):
 
-    cursor = conn.cursor()
+    if not column_exists(
+        cursor,
+        table,
+        column
+    ):
 
-    cursor.executescript(sql)
-
-    conn.commit()
-
-    conn.close()
+        cursor.execute(
+            f"""
+            ALTER TABLE {table}
+            ADD COLUMN {column} {definition}
+            """
+        )

@@ -895,10 +895,7 @@ def homework_management():
 
                     execute(
                         """
-                        UPDATE homework
-                        SET
-                            assignment_file = NULL,
-                            deleted_assignment_file = 1
+                        DELETE FROM homework
                         WHERE id = %s
                         """,
                         (
@@ -1009,10 +1006,18 @@ def homework_management():
                         UPDATE homework
                         SET
                             student_file = NULL,
-                            deleted_student_file = 1
+                            deleted_student_file = 1,
+                            status = 'Assigned',
+                            submitted_at = NULL,
+                            reviewed_at = NULL,
+                            grade = NULL,
+                            teacher_feedback = NULL
                         WHERE id = %s
                         """,
                         (
+                            int(selected_id),
+                        )
+                    )
                             int(selected_id),
                         )
                     )
@@ -1060,6 +1065,7 @@ def homework_management():
                     assignment_file = NULL,
                     student_file = NULL,
                     archived = 1,
+                    status='Archived',
                     archived_at = CURRENT_TIMESTAMP,
                     deleted_assignment_file = 1,
                     deleted_student_file = 1

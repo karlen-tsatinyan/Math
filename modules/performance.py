@@ -124,7 +124,7 @@ def performance_dashboard():
                 ''
             ) AS teacher_comment,
     
-            'Archived Record' AS record_status
+            '' AS record_status
     
     
         FROM homework_grades
@@ -398,11 +398,6 @@ def student_performance_view(student_id):
                     alt.Tooltip(
                         "grade_letter:N",
                         title="Grade"
-                    ),
-                
-                    alt.Tooltip(
-                        "record_status:N",
-                        title="Record"
                     )
                 ]
 

@@ -85,7 +85,7 @@ def query_dataframe(query, params=()):
                 pass
 
         print("DATABASE ERROR:")
-        print(e)
+        st.error(str(e))
 
         print("QUERY:")
         print(query)

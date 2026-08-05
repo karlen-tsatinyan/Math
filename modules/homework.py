@@ -616,34 +616,39 @@ def homework_management():
         )
 
         submissions = query_dataframe(
-            """
-            SELECT
-                h.id,
-                h.student_id,
-                s.first_name || ' ' || s.last_name
-                    AS student_name,
-                h.title,
-                h.curriculum_topic,
-                h.assigned_date,
-                h.due_date,
-                h.priority,
-                h.assignment_file,
-                h.student_file,
-                h.file_link,
-                h.status,
-                h.comment,
-                h.teacher_feedback,
-                h.grade,
-                h.deleted_assignment_file,
-                h.deleted_student_file,
-                h.submitted_at,
-                h.reviewed_at,
-                h.created_at
-            FROM homework h
-            JOIN students s
-                ON h.student_id = s.id
-            ORDER BY h.created_at DESC
-            """
+        """
+        SELECT
+            h.id,
+            h.student_id,
+            s.first_name || ' ' || s.last_name
+                AS student_name,
+            h.title,
+            h.curriculum_topic,
+            h.assigned_date,
+            h.due_date,
+            h.priority,
+            h.assignment_file,
+            h.student_file,
+            h.file_link,
+            h.status,
+            h.comment,
+            h.teacher_feedback,
+            h.grade,
+            h.deleted_assignment_file,
+            h.deleted_student_file,
+            h.submitted_at,
+            h.reviewed_at,
+            h.created_at
+        
+        FROM homework h
+        
+        JOIN students s
+        ON h.student_id = s.id
+        
+        WHERE h.archived = 0
+        
+        ORDER BY h.created_at DESC
+        """
         )
 
         if submissions.empty:
@@ -1020,7 +1025,65 @@ def homework_management():
                     )
 
                     st.rerun()
+                    
+        # ====================================================
+        # ARCHIVE HOMEWORK
+        # ====================================================
+        
+        st.divider()
+        
+        if st.button(
+            "🗑 Archive Homework",
+            key=f"archive_homework_{selected_id}"
+        ):
+        
+            # Remove teacher assignment file
+            if safe_text(
+                selected["assignment_file"]
+            ):
+        
+                delete_homework_file(
+                    selected["assignment_file"]
+                )
+        
+        
+            # Remove student submission file
+            if safe_text(
+                selected["student_file"]
+            ):
+        
+                delete_homework_file(
+                    selected["student_file"]
+                )
+        
+        
+            execute(
+                """
+                UPDATE homework
+                SET
+                    assignment_file = NULL,
+                    student_file = NULL,
+                    archived = 1,
+                    archived_at = CURRENT_TIMESTAMP,
+                    deleted_assignment_file = 1,
+                    deleted_student_file = 1
+                WHERE id = %s
+                """,
+                (
+                    int(selected_id),
+                )
+            )
+        
+        
+            st.cache_data.clear()
+        
+            st.success(
+                "Homework archived successfully."
+            )
+        
+            st.rerun()
 
+        
         # ====================================================
         # GRADE & FEEDBACK SAVE CONFIRMATION
         # ====================================================

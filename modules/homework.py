@@ -459,29 +459,65 @@ def homework_management():
 
         if st.button(
             "➕ Assign Homework",
-            key="assign_homework_button"
+            key="assign_homework_button",
+            type="primary"
         ):
-
+        
             if not title.strip():
-
+        
                 st.error(
                     "Please enter a Homework Title."
                 )
-
+        
                 return
-
+        
+        
             if (
                 not uploaded_file
                 and not drive_link.strip()
             ):
-
+        
                 st.error(
                     "Please upload an assignment "
                     "PDF/image or provide a Google Drive link."
                 )
-
+        
                 return
-
+        
+        
+            # ==================================================
+            # PREVENT DUPLICATE HOMEWORK ASSIGNMENT
+            # ==================================================
+        
+            duplicate = query_dataframe(
+                """
+                SELECT id
+                FROM homework
+                WHERE student_id = %s
+                AND title = %s
+                AND assigned_date = %s
+                AND due_date = %s
+                AND archived = 0
+                """,
+                (
+                    student_id,
+                    title.strip(),
+                    str(assigned_date),
+                    str(due_date)
+                )
+            )
+        
+        
+            if not duplicate.empty:
+        
+                st.warning(
+                    "⚠️ This homework already exists "
+                    "for this student."
+                )
+        
+                st.stop()
+        
+        
             file_path = None
 
             # ==================================================

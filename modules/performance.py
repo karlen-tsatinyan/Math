@@ -142,12 +142,18 @@ def performance_dashboard():
                 ELSE 0
             END AS percent,
             COALESCE(grade, '') AS grade_letter,
-            COALESCE(teacher_feedback, '') AS teacher_comment
-        FROM homework
-        WHERE student_id = %s
-          AND status = 'Reviewed'
-          AND grade IS NOT NULL
-          AND grade != ''
+            COALESCE(teacher_feedback, '') AS teacher_comment,
+                CASE
+                    WHEN archived = 1 THEN 'Archived'
+                    ELSE 'Active'
+                END AS record_status
+                
+                FROM homework
+                
+                WHERE student_id = %s
+                AND status = 'Reviewed'
+                AND grade IS NOT NULL
+                AND grade != ''
 
         ORDER BY lesson_date ASC
         """,
@@ -414,20 +420,25 @@ def student_performance_view(student_id):
                         "formatted_date:N",
                         title="Date"
                     ),
-
+                
                     alt.Tooltip(
                         "topic:N",
                         title="Topic"
                     ),
-
+                
                     alt.Tooltip(
                         "percent:Q",
                         title="Score (%)"
                     ),
-
+                
                     alt.Tooltip(
                         "grade_letter:N",
                         title="Grade"
+                    ),
+                
+                    alt.Tooltip(
+                        "record_status:N",
+                        title="Record"
                     )
                 ]
 

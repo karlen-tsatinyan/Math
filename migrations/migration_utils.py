@@ -8,8 +8,9 @@ def column_exists(cursor, table, column):
         SELECT EXISTS (
             SELECT 1
             FROM information_schema.columns
-            WHERE table_name = %s
-            AND column_name = %s
+            WHERE table_schema='public'
+            AND table_name=%s
+            AND column_name=%s
         )
         """,
         (
@@ -31,7 +32,7 @@ def add_column(cursor, table, column, definition):
 
         cursor.execute(
             f"""
-            ALTER TABLE {table}
+            ALTER TABLE public.{table}
             ADD COLUMN {column} {definition}
             """
         )

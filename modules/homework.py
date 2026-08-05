@@ -277,17 +277,8 @@ def get_homework_file_url(storage_path):
 # ============================================================
 
 def delete_homework_file(storage_path):
-    """
-    Delete a homework file from Supabase Storage.
 
-    Returns:
-        True  = successful
-        False = failed
-    """
-
-    path = normalize_storage_path(
-        storage_path
-    )
+    path = normalize_storage_path(storage_path)
 
     if not path:
         return True
@@ -307,7 +298,7 @@ def delete_homework_file(storage_path):
     except Exception as e:
 
         st.error(
-            f"Unable to delete file from Supabase Storage: {e}"
+            f"Storage delete failed: {e}"
         )
 
         return False
@@ -323,11 +314,12 @@ def homework_management():
         "Teacher Homework Management"
     )
 
-    tab1, tab2 = st.tabs(
-        [
-            "Assign Homework",
-            "Review & Grade Submissions"
-        ]
+    tab1, tab2, tab3 = st.tabs(
+    [
+    "Assign Homework",
+    "Review & Grade Submissions",
+    "Archived Homework"
+    ]
     )
 
     # ========================================================
@@ -876,40 +868,38 @@ def homework_management():
             )
 
         # ====================================================
-        # DELETE ORIGINAL ASSIGNMENT
+        # DELETE ASSIGNMENT FILE ONLY
         # ====================================================
-
-        if (
-            safe_text(assignment_file)
-            and deleted_assignment == 0
-        ):
-
+        
+        if safe_text(assignment_file):
+        
             if st.button(
-                "🗑 Delete Assignment File",
-                key=f"delete_assignment_{selected_id}"
+                "🗑 Delete Assignment File Only",
+                key=f"delete_assignment_file_{selected_id}"
             ):
-
+        
                 if delete_homework_file(
                     assignment_file
                 ):
-
+        
                     execute(
                         """
-                        DELETE FROM homework
-                        WHERE id = %s
+                        UPDATE homework
+                        SET
+                            assignment_file = NULL
+                        WHERE id=%s
                         """,
                         (
                             int(selected_id),
                         )
                     )
-
+        
                     st.cache_data.clear()
-
+        
                     st.success(
-                        "Assignment file deleted "
-                        "from Supabase Storage."
+                        "Assignment PDF removed. Homework record kept."
                     )
-
+        
                     st.rerun()
 
         # ====================================================
@@ -984,51 +974,41 @@ def homework_management():
             )
 
         # ====================================================
-        # DELETE STUDENT SUBMISSION
+        # DELETE STUDENT FILE ONLY
         # ====================================================
-
-        if (
-            safe_text(student_file)
-            and deleted_student == 0
-        ):
-
+        
+        if safe_text(student_file):
+        
             if st.button(
-                "🗑 Remove Uploaded File",
+                "🗑 Delete Student File Only",
                 key=f"delete_student_file_{selected_id}"
             ):
-
+        
                 if delete_homework_file(
                     student_file
                 ):
-
+        
                     execute(
                         """
                         UPDATE homework
                         SET
-                            student_file = NULL,
-                            deleted_student_file = 1,
-                            status = 'Assigned',
-                            submitted_at = NULL,
-                            reviewed_at = NULL,
-                            grade = NULL,
-                            teacher_feedback = NULL
-                        WHERE id = %s
+                            student_file=NULL,
+                            submitted_at=NULL,
+                            status='Assigned'
+                        WHERE id=%s
                         """,
                         (
                             int(selected_id),
                         )
                     )
-                            int(selected_id),
-                        )
-                    )
-
+        
+        
                     st.cache_data.clear()
-
+        
                     st.success(
-                        "Student submission deleted "
-                        "from Supabase Storage."
+                        "Student submission removed. Homework kept."
                     )
-
+        
                     st.rerun()
                     
         # ====================================================
@@ -1037,21 +1017,27 @@ def homework_management():
         
         st.divider()
         
+        
         if st.button(
-            "🗄️ Archive Homework Record",
+            "📦 Archive Homework",
             key=f"archive_homework_{selected_id}"
         ):
         
-            # Delete assignment file from storage
-            if safe_text(selected["assignment_file"]):
+        
+            # remove assignment file
+            if safe_text(
+                selected["assignment_file"]
+            ):
         
                 delete_homework_file(
                     selected["assignment_file"]
                 )
         
         
-            # Delete student submission from storage
-            if safe_text(selected["student_file"]):
+            # remove student submission
+            if safe_text(
+                selected["student_file"]
+            ):
         
                 delete_homework_file(
                     selected["student_file"]
@@ -1062,14 +1048,13 @@ def homework_management():
                 """
                 UPDATE homework
                 SET
-                    assignment_file = NULL,
-                    student_file = NULL,
-                    archived = 1,
+                    assignment_file=NULL,
+                    student_file=NULL,
+                    archived=1,
                     status='Archived',
-                    archived_at = CURRENT_TIMESTAMP,
-                    deleted_assignment_file = 1,
-                    deleted_student_file = 1
-                WHERE id = %s
+                    archived_at=CURRENT_TIMESTAMP
+        
+                WHERE id=%s
                 """,
                 (
                     int(selected_id),
@@ -1079,12 +1064,13 @@ def homework_management():
         
             st.cache_data.clear()
         
+        
             st.success(
                 "Homework archived successfully."
             )
         
+        
             st.rerun()
-
         
         # ====================================================
         # GRADE & FEEDBACK SAVE CONFIRMATION
@@ -1176,7 +1162,125 @@ def homework_management():
         
             # Reload the page so the updated grade/status appears
             st.rerun()
-
+    
+    # ========================================================
+    # TAB 3 — ARCHIVE HOMEWORK
+    # ========================================================
+    with tab3:
+    
+        st.subheader(
+            "📦 Archived Homework"
+        )
+    
+    
+        archived = query_dataframe(
+            """
+            SELECT
+                h.id,
+                s.first_name || ' ' || s.last_name AS student,
+                h.title,
+                h.grade,
+                h.teacher_feedback,
+                h.archived_at
+    
+            FROM homework h
+    
+            JOIN students s
+            ON h.student_id=s.id
+    
+            WHERE h.archived=1
+    
+            ORDER BY h.archived_at DESC
+            """
+        )
+    
+    
+        if archived.empty:
+    
+            st.info(
+                "No archived homework."
+            )
+    
+        else:
+    
+            st.dataframe(
+                archived,
+                use_container_width=True
+            )
+    
+    
+            archive_options = {
+                f"#{r.id} {r.student} - {r.title}":
+                r.id
+                for _,r in archived.iterrows()
+            }
+    
+    
+            selected_archive = st.selectbox(
+                "Select archived homework",
+                list(archive_options.keys())
+            )
+    
+    
+            archive_id = archive_options[
+                selected_archive
+            ]
+    
+    
+            c1,c2 = st.columns(2)
+    
+    
+            with c1:
+    
+                if st.button(
+                    "↩ Restore",
+                    key=f"restore_{archive_id}"
+                ):
+    
+                    execute(
+                        """
+                        UPDATE homework
+                        SET
+                            archived=0,
+                            status='Reviewed'
+    
+                        WHERE id=%s
+                        """,
+                        (
+                            archive_id,
+                        )
+                    )
+    
+                    st.success(
+                        "Homework restored."
+                    )
+    
+                    st.rerun()
+    
+    
+            with c2:
+    
+                if st.button(
+                    "🗑 Permanently Delete Record",
+                    key=f"delete_record_{archive_id}"
+                ):
+    
+                    execute(
+                        """
+                        DELETE FROM homework
+                        WHERE id=%s
+                        """,
+                        (
+                            archive_id,
+                        )
+                    )
+    
+    
+                    st.success(
+                        "Homework permanently deleted."
+                    )
+    
+                    st.rerun()
 
 # ============================================================
 # STUDENT HOMEWORK PORTAL

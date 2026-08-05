@@ -201,10 +201,14 @@ def get_grades(student_id):
             grade AS "Grade",
             teacher_feedback AS "Teacher Feedback",
             reviewed_at AS "Graded On"
+
         FROM homework
+
         WHERE student_id = %s
+          AND archived = 0
           AND grade IS NOT NULL
           AND TRIM(grade) <> ''
+
         ORDER BY due_date DESC
         """,
         (student_id,)

@@ -97,68 +97,47 @@ def performance_dashboard():
     grades = query_dataframe(
         """
         SELECT
-            COALESCE(lesson_date::text, created_at::text, '') AS lesson_date,
-            COALESCE(topic, 'N/A') AS topic,
-            COALESCE(score, 0) AS score,
-            COALESCE(max_score, 100) AS max_score,
-            COALESCE(percent, 0) AS percent,
-            COALESCE(grade_letter, '') AS grade_letter,
-            COALESCE(teacher_comment, '') AS teacher_comment
-            'Active' AS record_status
+            COALESCE(
+                lesson_date::text,
+                created_at::text,
+                ''
+            ) AS lesson_date,
+    
+            COALESCE(
+                topic,
+                'Homework Assignment'
+            ) AS topic,
+    
+            COALESCE(score,0) AS score,
+    
+            COALESCE(max_score,100) AS max_score,
+    
+            COALESCE(percent,0) AS percent,
+    
+            COALESCE(
+                grade_letter,
+                ''
+            ) AS grade_letter,
+    
+            COALESCE(
+                teacher_comment,
+                ''
+            ) AS teacher_comment,
+    
+            'Archived Record' AS record_status
+    
+    
         FROM homework_grades
+    
         WHERE student_id = %s
-
-        UNION ALL
-
-        SELECT
-            COALESCE(reviewed_at::text, due_date::text, created_at::text, '') AS lesson_date,
-            COALESCE(title, curriculum_topic, 'Homework Assignment') AS topic,
-            CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A' THEN 95
-                WHEN grade = 'A-' THEN 90
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B' THEN 85
-                WHEN grade = 'B-' THEN 80
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C' THEN 75
-                WHEN grade = 'C-' THEN 70
-                WHEN grade = 'D' THEN 65
-                WHEN grade = 'F' THEN 50
-                ELSE 0
-            END AS score,
-            100 AS max_score,
-            CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A' THEN 95
-                WHEN grade = 'A-' THEN 90
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B' THEN 85
-                WHEN grade = 'B-' THEN 80
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C' THEN 75
-                WHEN grade = 'C-' THEN 70
-                WHEN grade = 'D' THEN 65
-                WHEN grade = 'F' THEN 50
-                ELSE 0
-            END AS percent,
-            COALESCE(grade, '') AS grade_letter,
-            COALESCE(teacher_feedback, '') AS teacher_comment,
-                CASE
-                    WHEN archived = 1 THEN 'Archived'
-                    ELSE 'Active'
-                END AS record_status
-                
-                FROM homework
-                
-                WHERE student_id = %s
-                AND status = 'Reviewed'
-                AND grade IS NOT NULL
-                AND grade != ''
-
+    
+    
         ORDER BY lesson_date ASC
+    
         """,
-        (student_id, student_id)
+        (
+            student_id,
+        )
     )
 
     if grades.empty:
@@ -287,65 +266,49 @@ def student_performance_view(student_id):
     grades = query_dataframe(
         """
         SELECT
-            COALESCE(lesson_date::text, created_at::text, '') AS lesson_date,
-            COALESCE(topic, 'N/A') AS topic,
-            COALESCE(percent, 0) AS percent,
-            COALESCE(grade_letter, '') AS grade_letter
-
-        FROM homework_grades
-
-        WHERE student_id = %s
-
-
-        UNION ALL
-
-
-        SELECT
+    
             COALESCE(
-                reviewed_at::text,
-                due_date::text,
+                lesson_date::text,
                 created_at::text,
                 ''
             ) AS lesson_date,
-
+    
+    
             COALESCE(
-                title,
-                curriculum_topic,
+                topic,
                 'Homework Assignment'
             ) AS topic,
-
-
-            CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A' THEN 95
-                WHEN grade = 'A-' THEN 90
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B' THEN 85
-                WHEN grade = 'B-' THEN 80
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C' THEN 75
-                WHEN grade = 'C-' THEN 70
-                WHEN grade = 'D' THEN 65
-                WHEN grade = 'F' THEN 50
-                ELSE 0
-            END AS percent,
-
-            COALESCE(grade,'') AS grade_letter
-
-
-        FROM homework
-        
+    
+    
+            COALESCE(
+                percent,
+                0
+            ) AS percent,
+    
+    
+            COALESCE(
+                grade_letter,
+                ''
+            ) AS grade_letter,
+    
+    
+            COALESCE(
+                teacher_comment,
+                ''
+            ) AS teacher_comment
+    
+    
+        FROM homework_grades
+    
+    
         WHERE student_id = %s
-          AND archived = 0
-          AND grade IS NOT NULL
-          AND grade != ''
-
-
+    
+    
         ORDER BY lesson_date ASC
+    
         """,
         (
             student_id,
-            student_id
         )
     )
 

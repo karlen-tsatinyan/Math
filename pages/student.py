@@ -325,9 +325,9 @@ def student_page():
     # --------------------------------------------------------
     # Manual Refresh
     # --------------------------------------------------------
-
+    
     st.sidebar.divider()
-
+    
     if st.sidebar.button(
         "🔄 Refresh Data",
         use_container_width=True,
@@ -336,7 +336,7 @@ def student_page():
     
         st.cache_data.clear()
     
-        st.session_state["refresh_message"] = (
+        st.toast(
             "✅ Data refreshed successfully."
         )
     

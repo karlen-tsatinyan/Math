@@ -593,10 +593,9 @@ def admin_page():
     # ========================================================
     # MANUAL REFRESH
     # ========================================================
-
+    
     st.sidebar.divider()
-
-
+    
     if st.sidebar.button(
         "🔄 Refresh Data",
         use_container_width=True,
@@ -605,11 +604,21 @@ def admin_page():
     
         st.cache_data.clear()
     
-        st.toast(
-            "✅ Data refreshed"
+        st.session_state["refresh_message"] = (
+            "✅ Data refreshed successfully."
         )
     
         st.rerun()
+    
+    
+    # Show refresh message after rerun
+    if "refresh_message" in st.session_state:
+    
+        st.sidebar.success(
+            st.session_state["refresh_message"]
+        )
+    
+        del st.session_state["refresh_message"]
 
 
     # ========================================================

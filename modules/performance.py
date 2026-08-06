@@ -9,9 +9,6 @@ from database import query_dataframe
 def performance_dashboard():
     st.title("📈 Performance Progression Tracking")
 
-    # Run auto-migration check for Supabase PostgreSQL schema
-    ensure_performance_schema()
-
     # Fetch active students
     students = query_dataframe(
         """

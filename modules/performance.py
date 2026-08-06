@@ -215,9 +215,10 @@ def performance_dashboard():
             column_config={
                 "lesson_date": "Lesson Date",
                 "topic": "Topic",
-                "score": "Score",
-                "max_score": "Max Score",
-                "percent": st.column_config.NumberColumn("Percentage", format="%.1f%%"),
+                "percent": st.column_config.NumberColumn(
+                    "Percentage",
+                    format="%.1f%%"
+                ),
                 "grade_letter": "Grade",
                 "teacher_comment": "Teacher Comments"
             }
@@ -238,32 +239,43 @@ def student_performance_view(student_id):
         SELECT
     
             COALESCE(
-                lesson_date::text,
+                reviewed_at::text,
                 created_at::text,
                 ''
             ) AS lesson_date,
     
     
             COALESCE(
-                topic,
+                curriculum_topic,
+                title,
                 'Homework Assignment'
             ) AS topic,
     
     
-            COALESCE(
-                percent,
-                0
-            ) AS percent,
+            CASE
+                WHEN grade='A+' THEN 98
+                WHEN grade='A' THEN 95
+                WHEN grade='A-' THEN 92
+                WHEN grade='B+' THEN 88
+                WHEN grade='B' THEN 85
+                WHEN grade='B-' THEN 82
+                WHEN grade='C+' THEN 78
+                WHEN grade='C' THEN 75
+                WHEN grade='C-' THEN 72
+                WHEN grade='D' THEN 65
+                WHEN grade='F' THEN 50
+                ELSE 0
+            END AS percent,
     
     
             COALESCE(
-                grade_letter,
+                grade,
                 ''
             ) AS grade_letter,
     
     
             COALESCE(
-                teacher_comment,
+                teacher_feedback,
                 ''
             ) AS teacher_comment
     
@@ -273,8 +285,13 @@ def student_performance_view(student_id):
     
         WHERE student_id = %s
     
+        AND status='Reviewed'
     
-        ORDER BY lesson_date ASC
+        AND archived=0
+    
+    
+        ORDER BY reviewed_at ASC
+    
     
         """,
         (

@@ -68,6 +68,7 @@ def attendance_management():
         )
 
     # Build Dynamic Query (using PostgreSQL %s syntax)
+
     query = """
         SELECT
             a.id AS record_id,
@@ -83,19 +84,41 @@ def attendance_management():
         JOIN students s 
             ON a.student_id = s.id
         WHERE a.session_date BETWEEN %s AND %s
-        ORDER BY a.session_date DESC, a.session_time DESC
     """
-    params = [start_date.isoformat(), end_date.isoformat()]
-
+    
+    params = [
+        start_date.isoformat(),
+        end_date.isoformat()
+    ]
+    
+    
     if selected_student_id:
-        query += " AND a.student_id = %s"
-        params.append(selected_student_id)
-
+    
+        query += """
+            AND a.student_id = %s
+        """
+    
+        params.append(
+            selected_student_id
+        )
+    
+    
     if status_filter != "All Statuses":
-        query += " AND a.status = %s"
-        params.append(status_filter)
-
-    query += " ORDER BY a.session_date DESC, a.session_time DESC"
+    
+        query += """
+            AND a.status = %s
+        """
+    
+        params.append(
+            status_filter
+        )
+    
+    
+    query += """
+        ORDER BY
+            a.session_date DESC,
+            a.session_time DESC
+    """
 
     # Fetches filtered attendance history via cache layer
     history = query_dataframe(query, tuple(params))

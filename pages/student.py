@@ -333,11 +333,23 @@ def student_page():
         use_container_width=True,
         key="student_manual_refresh"
     ):
-
-        # Clear cached database results
+    
         st.cache_data.clear()
-
+    
+        st.session_state["refresh_message"] = (
+            "✅ Data refreshed successfully."
+        )
+    
         st.rerun()
+    
+    
+    if "refresh_message" in st.session_state:
+    
+        st.sidebar.success(
+            st.session_state["refresh_message"]
+        )
+    
+        del st.session_state["refresh_message"]
 
 
     # --------------------------------------------------------

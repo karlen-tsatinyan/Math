@@ -95,15 +95,11 @@ def performance_dashboard():
     
     
     FROM homework
-    
-    
+
     WHERE student_id = %s
     
     AND status='Reviewed'
-    
-    AND archived=0
-    
-    
+        
     ORDER BY reviewed_at ASC
     
     """,
@@ -299,15 +295,11 @@ def student_performance_view(student_id):
     
     
         FROM homework
-    
-    
+
         WHERE student_id = %s
-    
+        
         AND status='Reviewed'
-    
-        AND archived=0
-    
-    
+        
         ORDER BY reviewed_at ASC
     
         """,

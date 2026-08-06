@@ -323,36 +323,6 @@ def student_page():
 
 
     # --------------------------------------------------------
-    # Manual Refresh
-    # --------------------------------------------------------
-    
-    st.sidebar.divider()
-    
-    if st.sidebar.button(
-        "🔄 Refresh Data",
-        use_container_width=True,
-        key="student_manual_refresh"
-    ):
-    
-        st.cache_data.clear()
-    
-        st.toast(
-            "✅ Data refreshed successfully."
-        )
-    
-        st.rerun()
-    
-    
-    if "refresh_message" in st.session_state:
-    
-        st.sidebar.success(
-            st.session_state["refresh_message"]
-        )
-    
-        del st.session_state["refresh_message"]
-
-
-    # --------------------------------------------------------
     # Student Information
     #
     # This is cached and used by multiple sections.

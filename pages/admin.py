@@ -610,6 +610,14 @@ def admin_page():
     
         st.rerun()
 
+     if "refresh_message" in st.session_state:
+    
+        st.sidebar.success(
+            st.session_state["refresh_message"]
+        )
+    
+        del st.session_state["refresh_message"]
+
 
     # ========================================================
     # DASHBOARD

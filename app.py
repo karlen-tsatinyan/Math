@@ -143,6 +143,35 @@ def main():
 
         st.rerun()
 
+    # -------------------------------
+    # Refresh Data
+    # -------------------------------
+
+    st.sidebar.divider()
+
+    if st.sidebar.button(
+        "🔄 Refresh Data",
+        use_container_width=True,
+        key="global_refresh"
+    ):
+
+        st.cache_data.clear()
+
+        st.session_state["refresh_message"] = (
+            "✅ Data refreshed successfully."
+        )
+
+        st.rerun()
+
+
+    if "refresh_message" in st.session_state:
+
+        st.sidebar.success(
+            st.session_state["refresh_message"]
+        )
+
+        del st.session_state["refresh_message"]
+
 
     # -------------------------------
     # Load Pages

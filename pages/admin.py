@@ -569,30 +569,26 @@ def admin_page():
     # --------------------------------------------------------
     # CURRENT MENU
     # --------------------------------------------------------
-
-    current_option = st.session_state.get(
-        "admin_option",
-        "Dashboard"
-    )
-
-
-    if current_option not in menu_options:
-
-        current_option = "Dashboard"
-
-
+    
+    if "admin_option" not in st.session_state:
+        st.session_state.admin_option = "Dashboard"
+    
+    
+    if st.session_state.admin_option not in menu_options:
+        st.session_state.admin_option = "Dashboard"
+    
+    
     option = st.sidebar.radio(
         "Admin Menu",
         menu_options,
         index=menu_options.index(
-            current_option
+            st.session_state.admin_option
         ),
         key="admin_menu_radio"
     )
-
-
+    
+    
     st.session_state.admin_option = option
-
 
     # ========================================================
     # MANUAL REFRESH
@@ -606,10 +602,13 @@ def admin_page():
         use_container_width=True,
         key="admin_manual_refresh"
     ):
-
-        # Clear all cached read-only database queries
+    
         st.cache_data.clear()
-
+    
+        st.toast(
+            "✅ Data refreshed"
+        )
+    
         st.rerun()
 
 

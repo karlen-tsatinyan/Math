@@ -178,19 +178,40 @@ def performance_dashboard():
                     opacity=0.6
                 )
 
-                points = base.mark_circle(size=80, color="#1f77b4").encode(
-                    y=alt.Y("percent:Q", title="Score Percentage (%)", scale=alt.Scale(domain=[0, 100]))
+                points = base.mark_circle(
+                    size=80,
+                    color="#1f77b4"
+                ).encode(
+                    y=alt.Y(
+                        "percent:Q",
+                        title="Score Percentage (%)",
+                        scale=alt.Scale(domain=[0,100])
+                    )
                 )
-
-                line = base.mark_line(strokeWidth=3, color="#1f77b4").encode(
-                    y=alt.Y("percent:Q", scale=alt.Scale(domain=[0, 100]))
+                
+                
+                line = base.mark_line(
+                    strokeWidth=3,
+                    color="#1f77b4"
+                ).encode(
+                    y=alt.Y(
+                        "percent:Q",
+                        scale=alt.Scale(domain=[0,100])
+                    )
                 )
-
-                chart = (area + line + points).interactive().properties(
+                
+                
+                chart = (
+                    line + points
+                ).interactive().properties(
                     height=380
                 )
-
-                st.altair_chart(chart, use_container_width=True)
+                
+                
+                st.altair_chart(
+                    chart,
+                    use_container_width=True
+                )
             except Exception:
                 fallback_df = chart_data[["lesson_date", "percent"]].set_index("lesson_date")
                 fallback_df.rename(columns={"percent": "Score (%)"}, inplace=True)

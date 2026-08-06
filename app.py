@@ -129,19 +129,6 @@ def main():
 
 
     # -------------------------------
-    # Refresh button
-    # -------------------------------
-
-    if st.sidebar.button(
-        "🔄 Refresh Data",
-        use_container_width=True
-    ):
-        # Set a flag to force data reload on the next fetch
-        st.session_state.force_refresh = True
-        st.rerun()
-
-
-    # -------------------------------
     # Logout
     # -------------------------------
 

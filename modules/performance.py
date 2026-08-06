@@ -268,10 +268,7 @@ def student_performance_view(student_id):
             END AS percent,
     
     
-            COALESCE(
-                grade,
-                ''
-            ) AS grade_letter,
+            grade AS grade_letter,
     
     
             COALESCE(
@@ -291,7 +288,6 @@ def student_performance_view(student_id):
     
     
         ORDER BY reviewed_at ASC
-    
     
         """,
         (

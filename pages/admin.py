@@ -604,21 +604,11 @@ def admin_page():
     
         st.cache_data.clear()
     
-        st.session_state["refresh_message"] = (
+        st.toast(
             "✅ Data refreshed successfully."
         )
     
         st.rerun()
-    
-    
-    # Show refresh message after rerun
-    if "refresh_message" in st.session_state:
-    
-        st.sidebar.success(
-            st.session_state["refresh_message"]
-        )
-    
-        del st.session_state["refresh_message"]
 
 
     # ========================================================

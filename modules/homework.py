@@ -1063,37 +1063,44 @@ def homework_management():
         
         
             archived = query_dataframe(
+
                 """
-        
+            
                 SELECT
-        
+            
                     h.id,
-        
+            
                     s.first_name || ' ' || s.last_name
                         AS student,
-        
+            
                     h.title,
-        
+            
+                    h.curriculum_topic,
+            
                     h.grade,
-        
+            
+                    h.teacher_feedback,
+            
+                    h.assigned_date,
+            
                     h.due_date,
-        
+            
                     h.archived_at
-        
-        
+            
+            
                 FROM homework h
-        
-        
+            
+            
                 JOIN students s
-        
-                ON h.student_id=s.id
-        
-        
-                WHERE h.archived=1
-        
-        
+            
+                ON h.student_id = s.id
+            
+            
+                WHERE h.archived = 1
+            
+            
                 ORDER BY h.archived_at DESC
-        
+            
                 """
             )
         
@@ -1146,18 +1153,22 @@ def homework_management():
         
                     execute(
                         """
-        
+                    
                         UPDATE homework
-        
+                    
                         SET
-        
-                            archived=0,
-        
-                            status='Reviewed'
-        
-        
+                    
+                            archived = 0,
+                    
+                            status = 'Reviewed',
+                    
+                            deleted_assignment_file = 0,
+                    
+                            deleted_student_file = 0
+                    
+                    
                         WHERE id=%s
-        
+                    
                         """,
                         (
                             hw_id,
@@ -1177,9 +1188,23 @@ def homework_management():
             with col2:
         
         
+                confirm_delete = st.checkbox(
+                    "I understand this permanently removes this homework record.",
+                    key=f"confirm_archive_delete_{hw_id}"
+                )
+                
+                
                 if st.button(
                     "🗑 Permanently Delete Record"
                 ):
+                
+                    if not confirm_delete:
+                
+                        st.warning(
+                            "Please confirm permanent deletion first."
+                        )
+                
+                        st.stop()
         
         
                     execute(

@@ -7,13 +7,13 @@ from database import query_dataframe
 
 from modules.attendance import attendance_management
 from modules.curriculum import curriculum_management
-from modules.homework import homework_management
 from modules.payments import payment_management
 from modules.performance import performance_dashboard
 from modules.reports import reports_management
 from modules.scheduler import scheduler_management
 from modules.student_profile import student_profile
 from modules.students import student_management
+from modules.homework import (homework_management,archived_homework)
 
 from utils.datetime_utils import today_str
 
@@ -675,10 +675,11 @@ def admin_page():
     # --------------------------------------------------------
     # HOMEWORK
     # --------------------------------------------------------
-
+    
     elif option == "📚 Homework":
-
+    
         homework_management()
+
 
 
 
@@ -735,11 +736,10 @@ def admin_page():
     # --------------------------------------------------------
     # ARCHIVED HOMEWORK
     # --------------------------------------------------------
-
+    
     elif option == "📦 Archived Homework":
-
+    
         archived_homework()
-
 
 
     # --------------------------------------------------------

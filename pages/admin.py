@@ -738,8 +738,6 @@ def admin_page():
 
     elif option == "📦 Archived Homework":
 
-        from modules.homework import archived_homework
-
         archived_homework()
 
 

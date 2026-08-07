@@ -904,41 +904,6 @@ def homework_management():
             )
 
         # ====================================================
-        # DELETE ASSIGNMENT FILE ONLY
-        # ====================================================
-        
-        if safe_text(assignment_file):
-        
-            if st.button(
-                "🗑 Delete Assignment File Only",
-                key=f"delete_assignment_file_{selected_id}"
-            ):
-        
-                if delete_homework_file(
-                    assignment_file
-                ):
-        
-                    execute(
-                        """
-                        UPDATE homework
-                        SET
-                            assignment_file = NULL
-                        WHERE id=%s
-                        """,
-                        (
-                            int(selected_id),
-                        )
-                    )
-        
-                    st.cache_data.clear()
-        
-                    st.success(
-                        "Assignment PDF removed. Homework record kept."
-                    )
-        
-                    st.rerun()
-
-        # ====================================================
         # STUDENT SUBMISSION
         # ====================================================
 
@@ -1008,48 +973,10 @@ def homework_management():
             st.info(
                 "No student submission is available."
             )
-
-        # ====================================================
-        # DELETE STUDENT FILE ONLY
-        # ====================================================
-        
-        if safe_text(student_file):
-        
-            if st.button(
-                "🗑 Delete Student File Only",
-                key=f"delete_student_file_{selected_id}"
-            ):
-        
-                if delete_homework_file(
-                    student_file
-                ):
-        
-                    execute(
-                        """
-                        UPDATE homework
-                        SET
-                            student_file=NULL,
-                            submitted_at=NULL,
-                            status='Assigned'
-                        WHERE id=%s
-                        """,
-                        (
-                            int(selected_id),
-                        )
-                    )
-        
-        
-                    st.cache_data.clear()
-        
-                    st.success(
-                        "Student submission removed. Homework kept."
-                    )
-        
-                    st.rerun()
                     
-        # ====================================================
+        # ==================================================
         # ARCHIVE HOMEWORK
-        # ====================================================
+        # ==================================================
         
         st.divider()
         
@@ -1060,35 +987,49 @@ def homework_management():
         ):
         
         
-            # remove assignment file
-            if safe_text(
-                selected["assignment_file"]
-            ):
+            assignment_file = selected["assignment_file"]
+        
+            student_file = selected["student_file"]
+        
+        
+            # Remove assignment storage file
+        
+            if safe_text(assignment_file):
         
                 delete_homework_file(
-                    selected["assignment_file"]
+                    assignment_file
                 )
         
         
-            # remove student submission
-            if safe_text(
-                selected["student_file"]
-            ):
+            # Remove student submission
+        
+            if safe_text(student_file):
         
                 delete_homework_file(
-                    selected["student_file"]
+                    student_file
                 )
         
         
             execute(
                 """
                 UPDATE homework
+        
                 SET
-                    assignment_file=NULL,
-                    student_file=NULL,
-                    archived=1,
-                    status='Archived',
-                    archived_at=CURRENT_TIMESTAMP
+        
+                    archived = 1,
+        
+                    assignment_file = NULL,
+        
+                    student_file = NULL,
+        
+                    deleted_assignment_file = 1,
+        
+                    deleted_student_file = 1,
+        
+                    status = 'Archived',
+        
+                    archived_at = CURRENT_TIMESTAMP
+        
         
                 WHERE id=%s
                 """,
@@ -1102,11 +1043,165 @@ def homework_management():
         
         
             st.success(
-                "Homework archived successfully."
+                "📦 Homework archived. "
+                "Academic record preserved."
             )
         
         
             st.rerun()
+
+
+        # ============================================================
+        # ARCHIVED HOMEWORK VIEW
+        # ============================================================
+        
+        def archived_homework():
+        
+            st.header(
+                "📦 Archived Homework"
+            )
+        
+        
+            archived = query_dataframe(
+                """
+        
+                SELECT
+        
+                    h.id,
+        
+                    s.first_name || ' ' || s.last_name
+                        AS student,
+        
+                    h.title,
+        
+                    h.grade,
+        
+                    h.due_date,
+        
+                    h.archived_at
+        
+        
+                FROM homework h
+        
+        
+                JOIN students s
+        
+                ON h.student_id=s.id
+        
+        
+                WHERE h.archived=1
+        
+        
+                ORDER BY h.archived_at DESC
+        
+                """
+            )
+        
+        
+            if archived.empty:
+        
+                st.info(
+                    "No archived homework."
+                )
+        
+                return
+        
+        
+        
+            st.dataframe(
+                archived,
+                use_container_width=True,
+                hide_index=True
+            )
+        
+        
+            options = {
+        
+                f"{row.student} - {row.title}":
+                row.id
+        
+                for _,row in archived.iterrows()
+        
+            }
+        
+        
+            selected = st.selectbox(
+                "Select archived homework",
+                list(options.keys())
+            )
+        
+        
+            hw_id = options[selected]
+        
+        
+            col1,col2 = st.columns(2)
+        
+        
+        
+            with col1:
+        
+                if st.button(
+                    "↩ Restore Homework"
+                ):
+        
+                    execute(
+                        """
+        
+                        UPDATE homework
+        
+                        SET
+        
+                            archived=0,
+        
+                            status='Reviewed'
+        
+        
+                        WHERE id=%s
+        
+                        """,
+                        (
+                            hw_id,
+                        )
+                    )
+        
+        
+                    st.success(
+                        "Homework restored."
+                    )
+        
+        
+                    st.rerun()
+        
+        
+        
+            with col2:
+        
+        
+                if st.button(
+                    "🗑 Permanently Delete Record"
+                ):
+        
+        
+                    execute(
+                        """
+        
+                        DELETE FROM homework
+        
+                        WHERE id=%s
+        
+                        """,
+                        (
+                            hw_id,
+                        )
+                    )
+        
+        
+                    st.success(
+                        "Homework permanently deleted."
+                    )
+        
+        
+                    st.rerun()
         
         # ====================================================
         # GRADE & FEEDBACK SAVE CONFIRMATION

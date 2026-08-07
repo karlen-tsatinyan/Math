@@ -553,16 +553,22 @@ def admin_page():
 
 
     menu_options = [
+    
         "Dashboard",
+    
         "Students",
-        "Student Profile",
-        "Performance",
-        "Payments",
+        "Student Profiles",
         "Homework",
         "Schedule",
         "Attendance",
-        "Live Curriculum Board",
+    
+        "Payments",
+        "Student Financials",
         "Reports",
+    
+        "Archived Homework",
+        "Archived Students",
+    
     ]
 
 
@@ -590,92 +596,137 @@ def admin_page():
     
     st.session_state.admin_option = option
 
-
+    
     # ========================================================
     # DASHBOARD
     # ========================================================
-
+    
     if option == "Dashboard":
-
+    
         show_dashboard()
-
-
+    
+    
     # ========================================================
     # STUDENTS
     # ========================================================
-
+    
     elif option == "Students":
-
+    
         student_management()
-
-
+    
+    
     # ========================================================
-    # STUDENT PROFILE
+    # STUDENT PROFILES
     # ========================================================
-
-    elif option == "Student Profile":
-
+    
+    elif option == "Student Profiles":
+    
         student_profile()
-
-
+    
+    
     # ========================================================
     # PERFORMANCE
     # ========================================================
-
+    
     elif option == "Performance":
-
+    
         performance_dashboard()
-
-
+    
+    
     # ========================================================
     # PAYMENTS
     # ========================================================
-
+    
     elif option == "Payments":
-
+    
         payment_management()
-
-
+    
+    
+    # ========================================================
+    # STUDENT FINANCIALS
+    # ========================================================
+    
+    elif option == "Student Financials":
+    
+        financial_dashboard()
+    
+    
     # ========================================================
     # HOMEWORK
     # ========================================================
-
+    
     elif option == "Homework":
-
+    
         homework_management()
-
-
+    
+    
+    # ========================================================
+    # ARCHIVED HOMEWORK
+    # ========================================================
+    
+    elif option == "Archived Homework":
+    
+        from modules.homework import archived_homework
+    
+        archived_homework()
+    
+    
     # ========================================================
     # SCHEDULE
     # ========================================================
-
+    
     elif option == "Schedule":
-
+    
         scheduler_management()
-
-
+    
+    
     # ========================================================
     # ATTENDANCE
     # ========================================================
-
+    
     elif option == "Attendance":
-
+    
         attendance_management()
-
-
+    
+    
+    # ========================================================
+    # ARCHIVED STUDENTS
+    # ========================================================
+    
+    elif option == "Archived Students":
+    
+        archived_students()
+    
+    
     # ========================================================
     # CURRICULUM
     # ========================================================
-
+    
     elif option == "Live Curriculum Board":
-
+    
         curriculum_management()
-
-
+    
+    
     # ========================================================
     # REPORTS
     # ========================================================
-
+    
     elif option == "Reports":
-
+    
         reports_management()
+
+
+
+    
+    # ========================================================
+    # Temporary used names
+    # ========================================================
+
+    elif option == "Student Financials":
+    
+        st.info("Student Financials module coming soon.")
+
+    elif option == "Archived Students":
+    
+        st.info("Archived Students module coming soon.")
+

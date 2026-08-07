@@ -7,7 +7,7 @@ from database import query_dataframe
 
 from modules.attendance import attendance_management
 from modules.curriculum import curriculum_management
-from modules.homework import homework_management
+from modules.homework import homework_management,archived_homework
 from modules.payments import payment_management
 from modules.performance import performance_dashboard
 from modules.reports import reports_management

@@ -24,10 +24,12 @@ def calculate_homework_statistics(df):
         }
 
 
+    df = df.sort_values("due_date")
+    
     scores = (
         df["grade"]
-        .map(GRADE_MAP)
-        .dropna()
+          .map(GRADE_MAP)
+          .dropna()
     )
 
 

@@ -567,7 +567,18 @@ def show_dashboard():
 
 def admin_page():
     st.sidebar.markdown(
-        "### 📚 Admin Control Panel"
+        """
+        <div style="
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-top: -8px;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        ">
+            📚 Admin Control Panel
+        </div>
+        """,
+        unsafe_allow_html=True
     )
     # ========================================================
     # ADMIN SIDEBAR NAVIGATION

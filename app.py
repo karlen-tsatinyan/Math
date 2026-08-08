@@ -106,6 +106,59 @@ def login_screen():
                     "Incorrect username or password."
                 )
 
+# ==========================================
+# COMPACT SIDEBAR FOOTER
+# ==========================================
+
+def sidebar_footer(user):
+
+    st.sidebar.divider()
+
+    st.sidebar.markdown(
+        f"👤 **{user['username']}**"
+    )
+
+    col1, col2 = st.sidebar.columns(2)
+
+    with col1:
+
+        if st.button(
+            "🔄 Refresh",
+            use_container_width=True,
+            key="global_refresh"
+        ):
+
+            st.cache_data.clear()
+
+            st.session_state["refresh_message"] = (
+                "✅ Data refreshed successfully."
+            )
+
+            st.rerun()
+
+    with col2:
+
+        if st.button(
+            "Logout",
+            use_container_width=True,
+            key="global_logout"
+        ):
+
+            st.session_state.user = None
+
+            st.cache_data.clear()
+
+            st.rerun()
+
+
+    if "refresh_message" in st.session_state:
+
+        st.sidebar.success(
+            st.session_state["refresh_message"]
+        )
+
+        del st.session_state["refresh_message"]
+
 
 # ==========================================
 # MAIN
@@ -123,59 +176,9 @@ def main():
     user = st.session_state.user
 
 
-    st.sidebar.success(
-        f"Logged in as\n\n**{user['username']}**"
-    )
-
-
-    # -------------------------------
-    # Logout
-    # -------------------------------
-
-    if st.sidebar.button(
-        "Logout",
-        use_container_width=True
-    ):
-
-        st.session_state.user = None
-
-        st.cache_data.clear()
-
-        st.rerun()
-
-    # -------------------------------
-    # Refresh Data
-    # -------------------------------
-
-    st.sidebar.divider()
-
-    if st.sidebar.button(
-        "🔄 Refresh Data",
-        use_container_width=True,
-        key="global_refresh"
-    ):
-
-        st.cache_data.clear()
-
-        st.session_state["refresh_message"] = (
-            "✅ Data refreshed successfully."
-        )
-
-        st.rerun()
-
-
-    if "refresh_message" in st.session_state:
-
-        st.sidebar.success(
-            st.session_state["refresh_message"]
-        )
-
-        del st.session_state["refresh_message"]
-
-
-    # -------------------------------
-    # Load Pages
-    # -------------------------------
+    # ==========================================
+    # LOAD PAGES
+    # ==========================================
 
     with st.spinner("Loading..."):
 
@@ -188,6 +191,12 @@ def main():
             student_page()
 
 
+    # ==========================================
+    # COMPACT SIDEBAR FOOTER
+    # ==========================================
+
+    sidebar_footer(user)
+
 # ==========================================
 # START
 # ==========================================
@@ -197,8 +206,7 @@ if __name__ == "__main__":
     main()
 
     APP_END = time.perf_counter()
-    
+
     st.sidebar.caption(
         f"Page load: {APP_END - APP_START:.2f} seconds"
     )
-

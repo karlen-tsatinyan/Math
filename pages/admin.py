@@ -182,7 +182,7 @@ def show_dashboard():
     today_date = today_str()
 
 
-    # --------------------------------------------------------
+    # -------------- ------------------------------------------
     # KPI DATA
     # --------------------------------------------------------
 
@@ -541,243 +541,243 @@ def show_dashboard():
 
             st.rerun()
 
-# ========================================================
-# ADMIN MENU STRUCTURE
-# ========================================================
-
-# --------------------------------------------------------
-# ADMIN MENU
-# --------------------------------------------------------
-
-st.sidebar.markdown(
-    "### ADMIN MENU"
-)
-
-admin_menu = [
-    "🏠 Dashboard",
-    "👨‍🎓 Students",
-    "👤 Student Profiles",
-]
-
-
-# --------------------------------------------------------
-# ACADEMIC
-# --------------------------------------------------------
-
-st.sidebar.markdown(
-    "### ACADEMIC"
-)
-
-academic_menu = [
-    "📚 Homework",
-    "📅 Schedule",
-    "📋 Attendance",
-    "📘 Live Curriculum Board",
-]
-
-
-# --------------------------------------------------------
-# FINANCE & REPORTING
-# --------------------------------------------------------
-
-st.sidebar.markdown(
-    "### FINANCE & REPORTING"
-)
-
-finance_menu = [
-    "💰 Payments",
-    "📈 Student Financials",
-    "📊 Reports",
-]
-
-
-# --------------------------------------------------------
-# ARCHIVING
-# --------------------------------------------------------
-
-st.sidebar.markdown(
-    "### ARCHIVING"
-)
-
-archive_menu = [
-    "📦 Archived Homework",
-    "👨‍🎓 Archived Students",
-]
-
-
-# ========================================================
-# COMBINE MENU OPTIONS
-# ========================================================
-
-menu_options = (
-    admin_menu
-    + academic_menu
-    + finance_menu
-    + archive_menu
-)
-
-
-# ========================================================
-# CURRENT MENU STATE
-# ========================================================
-
-if "admin_option" not in st.session_state:
-
-    st.session_state.admin_option = (
-        "🏠 Dashboard"
+    # ========================================================
+    # ADMIN MENU STRUCTURE
+    # ========================================================
+    
+    # --------------------------------------------------------
+    # ADMIN MENU
+    # --------------------------------------------------------
+    
+    st.sidebar.markdown(
+        "### ADMIN MENU"
     )
-
-
-if (
-    st.session_state.admin_option
-    not in menu_options
-):
-
-    st.session_state.admin_option = (
-        "🏠 Dashboard"
+    
+    admin_menu = [
+        "🏠 Dashboard",
+        "👨‍🎓 Students",
+        "👤 Student Profiles",
+    ]
+    
+    
+    # --------------------------------------------------------
+    # ACADEMIC
+    # --------------------------------------------------------
+    
+    st.sidebar.markdown(
+        "### ACADEMIC"
     )
-
-
-# ========================================================
-# SIDEBAR NAVIGATION
-# ========================================================
-
-option = st.sidebar.radio(
-
-    "Navigation",
-
-    menu_options,
-
-    index=menu_options.index(
+    
+    academic_menu = [
+        "📚 Homework",
+        "📅 Schedule",
+        "📋 Attendance",
+        "📘 Live Curriculum Board",
+    ]
+    
+    
+    # --------------------------------------------------------
+    # FINANCE & REPORTING
+    # --------------------------------------------------------
+    
+    st.sidebar.markdown(
+        "### FINANCE & REPORTING"
+    )
+    
+    finance_menu = [
+        "💰 Payments",
+        "📈 Student Financials",
+        "📊 Reports",
+    ]
+    
+    
+    # --------------------------------------------------------
+    # ARCHIVING
+    # --------------------------------------------------------
+    
+    st.sidebar.markdown(
+        "### ARCHIVING"
+    )
+    
+    archive_menu = [
+        "📦 Archived Homework",
+        "👨‍🎓 Archived Students",
+    ]
+    
+    
+    # ========================================================
+    # COMBINE MENU OPTIONS
+    # ========================================================
+    
+    menu_options = (
+        admin_menu
+        + academic_menu
+        + finance_menu
+        + archive_menu
+    )
+    
+    
+    # ========================================================
+    # CURRENT MENU STATE
+    # ========================================================
+    
+    if "admin_option" not in st.session_state:
+    
+        st.session_state.admin_option = (
+            "🏠 Dashboard"
+        )
+    
+    
+    if (
         st.session_state.admin_option
-    ),
-
-    key="admin_menu_radio"
-
-)
-
-
-st.session_state.admin_option = option
-
+        not in menu_options
+    ):
+    
+        st.session_state.admin_option = (
+            "🏠 Dashboard"
+        )
+    
+    
     # ========================================================
-    # ROUTING
+    # SIDEBAR NAVIGATION
     # ========================================================
-
-
-    # --------------------------------------------------------
-    # DASHBOARD
-    # --------------------------------------------------------
-
-    if option == "🏠 Dashboard":
-
-        show_dashboard()
-
-
-
-    # --------------------------------------------------------
-    # STUDENTS
-    # --------------------------------------------------------
-
-    elif option == "👨‍🎓 Students":
-
-        student_management()
-
-
-
-    # --------------------------------------------------------
-    # STUDENT PROFILES
-    # --------------------------------------------------------
-
-    elif option == "👤 Student Profiles":
-
-        student_profile()
-
-
-
-    # --------------------------------------------------------
-    # HOMEWORK
-    # --------------------------------------------------------
     
-    elif option == "📚 Homework":
+    option = st.sidebar.radio(
     
-        homework_management()
-
-
-
-
-    # --------------------------------------------------------
-    # SCHEDULE
-    # --------------------------------------------------------
-
-    elif option == "📅 Schedule":
-
-        scheduler_management()
-
-
-
-    # --------------------------------------------------------
-    # ATTENDANCE
-    # --------------------------------------------------------
-
-    elif option == "📋 Attendance":
-
-        attendance_management()
-
-
-
-    # --------------------------------------------------------
-    # PAYMENTS
-    # --------------------------------------------------------
-
-    elif option == "💰 Payments":
-
-        payment_management()
-
-
-
-    # --------------------------------------------------------
-    # STUDENT FINANCIALS
-    # --------------------------------------------------------
-
-    elif option == "📈 Student Financials":
-
-        financial_dashboard()
-
-
-
-    # --------------------------------------------------------
-    # REPORTS
-    # --------------------------------------------------------
-
-    elif option == "📊 Reports":
-
-        reports_management()
-
-
-
-    # --------------------------------------------------------
-    # ARCHIVED HOMEWORK
-    # --------------------------------------------------------
+        "Navigation",
     
-    elif option == "📦 Archived Homework":
+        menu_options,
     
-        archived_homework()
-
-
-    # --------------------------------------------------------
-    # ARCHIVED STUDENTS
-    # --------------------------------------------------------
-
-    elif option == "👨‍🎓 Archived Students":
-
-        archived_students()
-
-
-    # ========================================================
-    # LIVE CURRICULUM BOARD
-    # ========================================================    
+        index=menu_options.index(
+            st.session_state.admin_option
+        ),
     
-    elif option == "📘 Live Curriculum Board":
+        key="admin_menu_radio"
     
-        curriculum_management()
-
+    )
+    
+    
+    st.session_state.admin_option = option
+    
+        # ========================================================
+        # ROUTING
+        # ========================================================
+    
+    
+        # --------------------------------------------------------
+        # DASHBOARD
+        # --------------------------------------------------------
+    
+        if option == "🏠 Dashboard":
+    
+            show_dashboard()
+    
+    
+    
+        # --------------------------------------------------------
+        # STUDENTS
+        # --------------------------------------------------------
+    
+        elif option == "👨‍🎓 Students":
+    
+            student_management()
+    
+    
+    
+        # --------------------------------------------------------
+        # STUDENT PROFILES
+        # --------------------------------------------------------
+    
+        elif option == "👤 Student Profiles":
+    
+            student_profile()
+    
+    
+    
+        # --------------------------------------------------------
+        # HOMEWORK
+        # --------------------------------------------------------
+        
+        elif option == "📚 Homework":
+        
+            homework_management()
+    
+    
+    
+    
+        # --------------------------------------------------------
+        # SCHEDULE
+        # --------------------------------------------------------
+    
+        elif option == "📅 Schedule":
+    
+            scheduler_management()
+    
+    
+    
+        # --------------------------------------------------------
+        # ATTENDANCE
+        # --------------------------------------------------------
+    
+        elif option == "📋 Attendance":
+    
+            attendance_management()
+    
+    
+    
+        # --------------------------------------------------------
+        # PAYMENTS
+        # --------------------------------------------------------
+    
+        elif option == "💰 Payments":
+    
+            payment_management()
+    
+    
+    
+        # --------------------------------------------------------
+        # STUDENT FINANCIALS
+        # --------------------------------------------------------
+    
+        elif option == "📈 Student Financials":
+    
+            financial_dashboard()
+    
+    
+    
+        # --------------------------------------------------------
+        # REPORTS
+        # --------------------------------------------------------
+    
+        elif option == "📊 Reports":
+    
+            reports_management()
+    
+    
+    
+        # --------------------------------------------------------
+        # ARCHIVED HOMEWORK
+        # --------------------------------------------------------
+        
+        elif option == "📦 Archived Homework":
+        
+            archived_homework()
+    
+    
+        # --------------------------------------------------------
+        # ARCHIVED STUDENTS
+        # --------------------------------------------------------
+    
+        elif option == "👨‍🎓 Archived Students":
+    
+            archived_students()
+    
+    
+        # ========================================================
+        # LIVE CURRICULUM BOARD
+        # ========================================================    
+        
+        elif option == "📘 Live Curriculum Board":
+        
+            curriculum_management()
+    

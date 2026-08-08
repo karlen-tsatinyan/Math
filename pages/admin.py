@@ -469,77 +469,93 @@ def show_dashboard():
                 use_container_width=True
             )
 
-
     # ========================================================
     # QUICK ACTIONS
     # ========================================================
-
+    
     st.subheader(
         "⚡ Quick Actions"
     )
-
-
+    
+    
     col1, col2, col3, col4 = st.columns(4)
-
-
+    
+    
+    # --------------------------------------------------------
+    # ADD STUDENT
+    # --------------------------------------------------------
+    
     with col1:
-
+    
         if st.button(
             "➕ Add Student",
             use_container_width=True,
             key="quick_add_student"
         ):
-
+    
             st.session_state.admin_option = (
-                "Students"
+                "👨‍🎓 Students"
             )
-
+    
             st.rerun()
-
-
+    
+    
+    # --------------------------------------------------------
+    # SCHEDULE
+    # --------------------------------------------------------
+    
     with col2:
-
+    
         if st.button(
             "📅 Schedule",
             use_container_width=True,
             key="quick_schedule"
         ):
-
+    
             st.session_state.admin_option = (
-                "Schedule"
+                "📅 Schedule"
             )
-
+    
             st.rerun()
-
-
+    
+    
+    # --------------------------------------------------------
+    # PAYMENT
+    # --------------------------------------------------------
+    
     with col3:
-
+    
         if st.button(
             "💰 Payment",
             use_container_width=True,
             key="quick_payment"
         ):
-
+    
             st.session_state.admin_option = (
-                "Payments"
+                "💰 Payments"
             )
-
+    
             st.rerun()
-
-
+    
+    
+    # --------------------------------------------------------
+    # HOMEWORK
+    # --------------------------------------------------------
+    
     with col4:
-
+    
         if st.button(
             "📚 Homework",
             use_container_width=True,
             key="quick_homework"
         ):
-
+    
             st.session_state.admin_option = (
-                "Homework"
+                "📚 Homework"
             )
-
+    
             st.rerun()
+
 
 # ========================================================
 # ADMIN MENU STRUCTURE
@@ -630,9 +646,7 @@ def admin_page():
         )
     
     
-    if (
-        st.session_state.admin_option
-        not in menu_options
+    if (st.session_state.admin_option not in menu_options
     ):
     
         st.session_state.admin_option = (
@@ -779,7 +793,7 @@ def admin_page():
     # LIVE CURRICULUM BOARD
     # ========================================================    
         
-        elif option == "📘 Live Curriculum Board":
-        
-            curriculum_management()
+    elif option == "📘 Live Curriculum Board":
     
+        curriculum_management()
+

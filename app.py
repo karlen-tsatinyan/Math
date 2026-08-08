@@ -21,9 +21,9 @@ import time
 
 APP_START = time.perf_counter()
 
-
 # ==========================================
 # HIDE STREAMLIT RUNNING INDICATORS
+# + COMPACT SIDEBAR
 # ==========================================
 
 st.markdown(
@@ -50,11 +50,27 @@ st.markdown(
         visibility: hidden;
     }
 
+
+    /* =====================================================
+       COMPACT SIDEBAR
+       ===================================================== */
+
+    /* Remove most empty space above sidebar content */
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 0rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    /* Reduce sidebar container spacing */
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
 )
-
 
 # ==========================================
 # SESSION STATE

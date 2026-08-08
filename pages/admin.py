@@ -541,102 +541,123 @@ def show_dashboard():
 
             st.rerun()
 
+# ========================================================
+# ADMIN MENU STRUCTURE
+# ========================================================
 
-# ============================================================
-# MAIN ADMIN PAGE
-# ============================================================
+# --------------------------------------------------------
+# ADMIN MENU
+# --------------------------------------------------------
 
-def admin_page():
+st.sidebar.markdown(
+    "### ADMIN MENU"
+)
 
-    st.sidebar.title(
-        "Admin Control Panel"
+admin_menu = [
+    "🏠 Dashboard",
+    "👨‍🎓 Students",
+    "👤 Student Profiles",
+]
+
+
+# --------------------------------------------------------
+# ACADEMIC
+# --------------------------------------------------------
+
+st.sidebar.markdown(
+    "### ACADEMIC"
+)
+
+academic_menu = [
+    "📚 Homework",
+    "📅 Schedule",
+    "📋 Attendance",
+    "📘 Live Curriculum Board",
+]
+
+
+# --------------------------------------------------------
+# FINANCE & REPORTING
+# --------------------------------------------------------
+
+st.sidebar.markdown(
+    "### FINANCE & REPORTING"
+)
+
+finance_menu = [
+    "💰 Payments",
+    "📈 Student Financials",
+    "📊 Reports",
+]
+
+
+# --------------------------------------------------------
+# ARCHIVING
+# --------------------------------------------------------
+
+st.sidebar.markdown(
+    "### ARCHIVING"
+)
+
+archive_menu = [
+    "📦 Archived Homework",
+    "👨‍🎓 Archived Students",
+]
+
+
+# ========================================================
+# COMBINE MENU OPTIONS
+# ========================================================
+
+menu_options = (
+    admin_menu
+    + academic_menu
+    + finance_menu
+    + archive_menu
+)
+
+
+# ========================================================
+# CURRENT MENU STATE
+# ========================================================
+
+if "admin_option" not in st.session_state:
+
+    st.session_state.admin_option = (
+        "🏠 Dashboard"
     )
 
 
-    # ========================================================
-    # ADMIN MENU STRUCTURE
-    # ========================================================
+if (
+    st.session_state.admin_option
+    not in menu_options
+):
 
-    menu_options = [
-
-        # ----------------------------
-        # ACADEMICS
-        # ----------------------------
-
-        "🏠 Dashboard",
-
-        "👨‍🎓 Students",
-
-        "👤 Student Profiles",
-
-        "📚 Homework",
-
-        "📅 Schedule",
-
-        "📋 Attendance",
+    st.session_state.admin_option = (
+        "🏠 Dashboard"
+    )
 
 
-        # ----------------------------
-        # FINANCE
-        # ----------------------------
+# ========================================================
+# SIDEBAR NAVIGATION
+# ========================================================
 
-        "💰 Payments",
+option = st.sidebar.radio(
 
-        "📈 Student Financials",
+    "Navigation",
 
-        "📊 Reports",
+    menu_options,
 
-
-        # ----------------------------
-        # SYSTEM
-        # ----------------------------
-
-        "📦 Archived Homework",
-
-        "👨‍🎓 Archived Students",
-
-    ]
-
-
-    # ========================================================
-    # CURRENT MENU STATE
-    # ========================================================
-
-    if "admin_option" not in st.session_state:
-
-        st.session_state.admin_option = (
-            "🏠 Dashboard"
-        )
-
-
-    if (
+    index=menu_options.index(
         st.session_state.admin_option
-        not in menu_options
-    ):
+    ),
 
-        st.session_state.admin_option = (
-            "🏠 Dashboard"
-        )
+    key="admin_menu_radio"
 
-
-    option = st.sidebar.radio(
-
-        "Admin Menu",
-
-        menu_options,
-
-        index=menu_options.index(
-            st.session_state.admin_option
-        ),
-
-        key="admin_menu_radio"
-
-    )
+)
 
 
-    st.session_state.admin_option = option
-
-
+st.session_state.admin_option = option
 
     # ========================================================
     # ROUTING

@@ -305,6 +305,171 @@ def delete_homework_file(storage_path):
 
 
 # ============================================================
+# ARCHIVED HOMEWORK
+# ============================================================
+
+def archived_homework():
+
+    st.subheader(
+        "📦 Archived Homework"
+    )
+
+    archived = query_dataframe(
+        """
+        SELECT
+            h.id,
+            s.first_name || ' ' || s.last_name AS student,
+            h.title,
+            h.curriculum_topic,
+            h.grade,
+            h.teacher_feedback,
+            h.assigned_date,
+            h.due_date,
+            h.archived_at
+
+        FROM homework h
+
+        JOIN students s
+            ON h.student_id = s.id
+
+        WHERE h.archived = 1
+
+        ORDER BY h.archived_at DESC
+        """
+    )
+
+    # ========================================================
+    # NO ARCHIVED HOMEWORK
+    # ========================================================
+
+    if archived.empty:
+
+        st.info(
+            "No archived homework."
+        )
+
+        return
+
+    # ========================================================
+    # ARCHIVED HOMEWORK TABLE
+    # ========================================================
+
+    st.dataframe(
+        archived,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
+    # ========================================================
+    # SELECT ARCHIVED HOMEWORK
+    # ========================================================
+
+    archive_options = {
+        f"#{int(row['id'])} — "
+        f"{safe_text(row['student'])} — "
+        f"{safe_text(row['title'])}":
+        int(row["id"])
+
+        for _, row in archived.iterrows()
+    }
+
+    selected_archive = st.selectbox(
+        "Select Archived Homework",
+        list(archive_options.keys()),
+        key="archived_homework_select"
+    )
+
+    archive_id = archive_options[
+        selected_archive
+    ]
+
+    # ========================================================
+    # RESTORE / DELETE
+    # ========================================================
+
+    col1, col2 = st.columns(2)
+
+    # ========================================================
+    # RESTORE
+    # ========================================================
+
+    with col1:
+
+        if st.button(
+            "↩ Restore Homework",
+            key=f"restore_archived_{archive_id}"
+        ):
+
+            execute(
+                """
+                UPDATE homework
+
+                SET
+                    archived = 0,
+                    status = 'Reviewed',
+                    deleted_assignment_file = 0,
+                    deleted_student_file = 0
+
+                WHERE id = %s
+                """,
+                (
+                    archive_id,
+                )
+            )
+
+            st.cache_data.clear()
+
+            st.success(
+                "✅ Homework restored successfully."
+            )
+
+            st.rerun()
+
+    # ========================================================
+    # PERMANENT DELETE
+    # ========================================================
+
+    with col2:
+
+        confirm_delete = st.checkbox(
+            "I understand this permanently removes this homework record.",
+            key=f"confirm_archive_delete_{archive_id}"
+        )
+
+        if st.button(
+            "🗑 Permanently Delete Record",
+            key=f"delete_archived_{archive_id}"
+        ):
+
+            if not confirm_delete:
+
+                st.warning(
+                    "Please confirm permanent deletion first."
+                )
+
+                st.stop()
+
+            execute(
+                """
+                DELETE FROM homework
+                WHERE id = %s
+                """,
+                (
+                    archive_id,
+                )
+            )
+
+            st.cache_data.clear()
+
+            st.success(
+                "🗑 Homework permanently deleted."
+            )
+
+            st.rerun()
+
+# ============================================================
 # ADMIN HOMEWORK MANAGEMENT
 # ============================================================
 
@@ -1050,183 +1215,6 @@ def homework_management():
         
             st.rerun()
 
-
-        # ============================================================
-        # ARCHIVED HOMEWORK VIEW
-        # ============================================================
-        
-        def archived_homework():
-        
-            st.header(
-                "📦 Archived Homework"
-            )
-        
-        
-            archived = query_dataframe(
-
-                """
-            
-                SELECT
-            
-                    h.id,
-            
-                    s.first_name || ' ' || s.last_name
-                        AS student,
-            
-                    h.title,
-            
-                    h.curriculum_topic,
-            
-                    h.grade,
-            
-                    h.teacher_feedback,
-            
-                    h.assigned_date,
-            
-                    h.due_date,
-            
-                    h.archived_at
-            
-            
-                FROM homework h
-            
-            
-                JOIN students s
-            
-                ON h.student_id = s.id
-            
-            
-                WHERE h.archived = 1
-            
-            
-                ORDER BY h.archived_at DESC
-            
-                """
-            )
-        
-        
-            if archived.empty:
-        
-                st.info(
-                    "No archived homework."
-                )
-        
-                return
-        
-        
-        
-            st.dataframe(
-                archived,
-                use_container_width=True,
-                hide_index=True
-            )
-        
-        
-            options = {
-        
-                f"{row.student} - {row.title}":
-                row.id
-        
-                for _,row in archived.iterrows()
-        
-            }
-        
-        
-            selected = st.selectbox(
-                "Select archived homework",
-                list(options.keys())
-            )
-        
-        
-            hw_id = options[selected]
-        
-        
-            col1,col2 = st.columns(2)
-        
-        
-        
-            with col1:
-        
-                if st.button(
-                    "↩ Restore Homework"
-                ):
-        
-                    execute(
-                        """
-                    
-                        UPDATE homework
-                    
-                        SET
-                    
-                            archived = 0,
-                    
-                            status = 'Reviewed',
-                    
-                            deleted_assignment_file = 0,
-                    
-                            deleted_student_file = 0
-                    
-                    
-                        WHERE id=%s
-                    
-                        """,
-                        (
-                            hw_id,
-                        )
-                    )
-        
-        
-                    st.success(
-                        "Homework restored."
-                    )
-        
-        
-                    st.rerun()
-        
-        
-        
-            with col2:
-        
-        
-                confirm_delete = st.checkbox(
-                    "I understand this permanently removes this homework record.",
-                    key=f"confirm_archive_delete_{hw_id}"
-                )
-                
-                
-                if st.button(
-                    "🗑 Permanently Delete Record"
-                ):
-                
-                    if not confirm_delete:
-                
-                        st.warning(
-                            "Please confirm permanent deletion first."
-                        )
-                
-                        st.stop()
-        
-        
-                    execute(
-                        """
-        
-                        DELETE FROM homework
-        
-                        WHERE id=%s
-        
-                        """,
-                        (
-                            hw_id,
-                        )
-                    )
-        
-        
-                    st.success(
-                        "Homework permanently deleted."
-                    )
-        
-        
-                    st.rerun()
         
         # ====================================================
         # GRADE & FEEDBACK SAVE CONFIRMATION
@@ -1319,124 +1307,14 @@ def homework_management():
             # Reload the page so the updated grade/status appears
             st.rerun()
     
+
     # ========================================================
-    # TAB 3 — ARCHIVE HOMEWORK
+    # TAB 3 — ARCHIVED HOMEWORK
     # ========================================================
+    
     with tab3:
     
-        st.subheader(
-            "📦 Archived Homework"
-        )
-    
-    
-        archived = query_dataframe(
-            """
-            SELECT
-                h.id,
-                s.first_name || ' ' || s.last_name AS student,
-                h.title,
-                h.grade,
-                h.teacher_feedback,
-                h.archived_at
-    
-            FROM homework h
-    
-            JOIN students s
-            ON h.student_id=s.id
-    
-            WHERE h.archived=1
-    
-            ORDER BY h.archived_at DESC
-            """
-        )
-    
-    
-        if archived.empty:
-    
-            st.info(
-                "No archived homework."
-            )
-    
-        else:
-    
-            st.dataframe(
-                archived,
-                use_container_width=True
-            )
-    
-    
-            archive_options = {
-                f"#{r.id} {r.student} - {r.title}":
-                r.id
-                for _,r in archived.iterrows()
-            }
-    
-    
-            selected_archive = st.selectbox(
-                "Select archived homework",
-                list(archive_options.keys())
-            )
-    
-    
-            archive_id = archive_options[
-                selected_archive
-            ]
-    
-    
-            c1,c2 = st.columns(2)
-    
-    
-            with c1:
-    
-                if st.button(
-                    "↩ Restore",
-                    key=f"restore_{archive_id}"
-                ):
-    
-                    execute(
-                        """
-                        UPDATE homework
-                        SET
-                            archived=0,
-                            status='Reviewed'
-    
-                        WHERE id=%s
-                        """,
-                        (
-                            archive_id,
-                        )
-                    )
-    
-                    st.success(
-                        "Homework restored."
-                    )
-    
-                    st.rerun()
-    
-    
-            with c2:
-    
-                if st.button(
-                    "🗑 Permanently Delete Record",
-                    key=f"delete_record_{archive_id}"
-                ):
-    
-                    execute(
-                        """
-                        DELETE FROM homework
-                        WHERE id=%s
-                        """,
-                        (
-                            archive_id,
-                        )
-                    )
-    
-    
-                    st.success(
-                        "Homework permanently deleted."
-                    )
-    
-                    st.rerun()
+        archived_homework()
 
 # ============================================================
 # STUDENT HOMEWORK PORTAL

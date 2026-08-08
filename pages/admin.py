@@ -13,10 +13,7 @@ from modules.reports import reports_management
 from modules.scheduler import scheduler_management
 from modules.student_profile import student_profile
 from modules.students import student_management
-from modules.homework import (
-    homework_management,
-    archived_homework
-)
+from modules.homework import homework_management, archived_homework
 
 from utils.datetime_utils import today_str
 

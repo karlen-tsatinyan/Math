@@ -566,7 +566,8 @@ def show_dashboard():
 # --------------------------------------------------------
 
 def admin_page():
-    st.sidebar.title("Admin Control Panel"
+    st.sidebar.markdown(
+        "### 📚 Admin Control Panel"
     )
     # ========================================================
     # ADMIN SIDEBAR NAVIGATION

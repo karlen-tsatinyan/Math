@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import timedelta
+
 from utils.datetime_utils import today_str
 from database import query_dataframe
 
@@ -214,6 +215,7 @@ def get_grades(student_id):
         (student_id,)
     )
 
+
 @st.cache_data(ttl=CACHE_TTL)
 def get_session_history(student_id):
 
@@ -244,7 +246,8 @@ def get_session_history(student_id):
         """,
         (student_id,)
     )
-        
+
+
 # ============================================================
 # FINANCIAL DATA
 # ============================================================
@@ -303,30 +306,243 @@ def student_page():
         return
 
 
+    # ========================================================
+    # SIDEBAR
+    # ========================================================
+
     # --------------------------------------------------------
-    # Sidebar
+    # Student Portal Title
     # --------------------------------------------------------
 
-    st.sidebar.title("Student Portal")
-
-    option = st.sidebar.radio(
-        "Menu",
-        [
-            "Dashboard",
-            "Homework",
-            "Performance",
-            "Financial Statements",
-            "Schedule"
-        ],
-        key="student_portal_menu"
+    st.sidebar.markdown(
+        """
+        <div class="student-portal-title">
+            📚 Student Portal
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 
+    # ========================================================
+    # SIDEBAR CSS
+    # ========================================================
+
+    st.sidebar.markdown(
+        """
+        <style>
+
+        /* ====================================================
+           STUDENT PORTAL TITLE
+           ==================================================== */
+
+        .student-portal-title {
+
+            font-size: 1.10rem;
+
+            font-weight: 700;
+
+            margin-top: -8px;
+            margin-bottom: 6px;
+
+            padding: 0;
+
+            line-height: 1.1;
+        }
+
+
+        /* ====================================================
+           SECTION HEADINGS
+           ==================================================== */
+
+        .student-section {
+
+            font-size: 0.72rem;
+
+            font-weight: 700;
+
+            letter-spacing: 0.06em;
+
+            margin-top: 9px;
+            margin-bottom: 3px;
+
+            padding-bottom: 3px;
+
+            border-bottom:
+                1px solid rgba(128,128,128,0.30);
+        }
+
+
+        .student-section.first {
+
+            margin-top: 0px;
+        }
+
+
+        /* ====================================================
+           COMPACT NAVIGATION
+           ==================================================== */
+
+        [data-testid="stSidebar"] .stRadio > div {
+
+            gap: 0px !important;
+        }
+
+
+        [data-testid="stSidebar"] .stRadio label {
+
+            margin-bottom: 0px !important;
+
+            padding-top: 2px !important;
+            padding-bottom: 2px !important;
+        }
+
+
+        /* Compact radio options */
+
+        [data-testid="stSidebar"] .stRadio [role="radiogroup"] {
+
+            gap: 0px !important;
+        }
+
+
+        /* ====================================================
+           REDUCE GENERAL SIDEBAR SPACING
+           ==================================================== */
+
+        [data-testid="stSidebar"] .element-container {
+
+            margin-bottom: 0px !important;
+        }
+
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # ========================================================
+    # STUDENT MENU
+    # ========================================================
+
+    st.sidebar.markdown(
+        '<div class="student-section first">'
+        'MY LEARNING'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    student_menu = [
+
+        "🏠 Dashboard",
+
+        "📚 Homework",
+
+        "📊 Performance",
+
+    ]
+
+
     # --------------------------------------------------------
-    # Student Information
+    # SCHEDULE
+    # --------------------------------------------------------
+
+    st.sidebar.markdown(
+        '<div class="student-section">'
+        'SCHEDULE'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    schedule_menu = [
+
+        "📅 Schedule",
+
+    ]
+
+
+    # --------------------------------------------------------
+    # FINANCIAL
+    # --------------------------------------------------------
+
+    st.sidebar.markdown(
+        '<div class="student-section">'
+        'FINANCIAL'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    financial_menu = [
+
+        "💰 Financial Statements",
+
+    ]
+
+
+    # ========================================================
+    # COMBINE MENU OPTIONS
+    # ========================================================
+
+    student_menu_options = (
+
+        student_menu
+
+        + schedule_menu
+
+        + financial_menu
+
+    )
+
+
+    # ========================================================
+    # CURRENT MENU STATE
+    # ========================================================
+
+    if "student_portal_menu" not in st.session_state:
+
+        st.session_state.student_portal_menu = (
+            "🏠 Dashboard"
+        )
+
+
+    if (
+        st.session_state.student_portal_menu
+        not in student_menu_options
+    ):
+
+        st.session_state.student_portal_menu = (
+            "🏠 Dashboard"
+        )
+
+
+    # ========================================================
+    # NAVIGATION
+    # ========================================================
+
+    option = st.sidebar.radio(
+
+        "Navigation",
+
+        student_menu_options,
+
+        index=student_menu_options.index(
+            st.session_state.student_portal_menu
+        ),
+
+        key="student_portal_menu"
+
+    )
+
+
+    # ========================================================
+    # STUDENT INFORMATION
     #
-    # This is cached and used by multiple sections.
-    # --------------------------------------------------------
+    # Cached and used by multiple sections.
+    # ========================================================
 
     student_df = get_student_info(student_id)
 
@@ -343,24 +559,27 @@ def student_page():
     student = student_df.iloc[0]
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # DASHBOARD
-    # --------------------------------------------------------
+    # ========================================================
 
-    if option == "Dashboard":
+    if option == "🏠 Dashboard":
 
         st.title("Student Dashboard")
 
 
         st.success(
-            f"Welcome {student['first_name']} \t\t"
-            f"{student['last_name']} &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp; "
-            f"Grade: {student['grade']} &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp; "
+            f"Welcome {student['first_name']} "
+            f"{student['last_name']} | "
+            f"Grade: {student['grade']} | "
             f"Subject: {student['subject']}"
         )
 
 
-        # Only Dashboard data is loaded here
+        # ----------------------------------------------------
+        # Dashboard data
+        # ----------------------------------------------------
+
         dashboard = get_dashboard_data(
             student_id,
             today_str()
@@ -371,29 +590,38 @@ def student_page():
 
         sessions_count = dashboard["sessions_count"]
 
-        # payments_summary = dashboard["payments_summary"]
 
+        # ----------------------------------------------------
+        # Homework total
+        # ----------------------------------------------------
 
         hw_total = (
+
             int(homework_due.iloc[0]["total"])
+
             if not homework_due.empty
+
             else 0
         )
 
+
+        # ----------------------------------------------------
+        # Session total
+        # ----------------------------------------------------
 
         sess_total = (
+
             int(sessions_count.iloc[0]["total"])
+
             if not sessions_count.empty
+
             else 0
         )
 
-        '''
-        pay_total = (
-            float(payments_summary.iloc[0]["total"])
-            if not payments_summary.empty
-            else 0.0
-        )
-        '''
+
+        # ----------------------------------------------------
+        # Metrics
+        # ----------------------------------------------------
 
         c1, c2 = st.columns(2)
 
@@ -409,15 +637,13 @@ def student_page():
             sess_total
         )
 
-        '''
-        c3.metric(
-            "💰 Payments Made",
-            f"${pay_total:,.2f}"
-        )
-        '''
 
         st.divider()
 
+
+        # ====================================================
+        # NEXT UPCOMING SESSION
+        # ====================================================
 
         st.subheader(
             "Next Upcoming Session"
@@ -450,14 +676,19 @@ def student_page():
 
 
             if (
+
                 zoom_url
+
                 and str(zoom_url).strip()
+
                 not in ["", "nan", "None"]
+
             ):
 
                 st.markdown(
                     f"🔗 [Join Zoom Meeting]({zoom_url})"
                 )
+
 
             else:
 
@@ -477,7 +708,7 @@ def student_page():
     # HOMEWORK
     # ========================================================
 
-    elif option == "Homework":
+    elif option == "📚 Homework":
 
         from modules.homework import student_homework
 
@@ -488,7 +719,7 @@ def student_page():
     # PERFORMANCE
     # ========================================================
 
-    elif option == "Performance":
+    elif option == "📊 Performance":
 
         st.title(
             "📊 Performance"
@@ -534,18 +765,22 @@ def student_page():
                     hide_index=True
                 )
 
+
         # ----------------------------------------------------
         # ADVANCED PROGRESSION ANALYTICS
         # ----------------------------------------------------
+
         with tab_analytics:
 
-            from modules.performance import student_performance_view
-        
+            from modules.performance import (
+                student_performance_view
+            )
+
             student_performance_view(
                 student_id
             )
 
-        
+
         # ----------------------------------------------------
         # SESSION HISTORY
         # ----------------------------------------------------
@@ -585,145 +820,208 @@ def student_page():
                     use_container_width=True,
                     hide_index=True
                 )
+
+
     # ========================================================
     # FINANCIAL STATEMENTS
     # ========================================================
-    
-    elif option == "Financial Statements":
-    
+
+    elif option == "💰 Financial Statements":
+
         from modules.student_financials import (
             student_financials
         )
-    
+
         student_financials()
+
+
     # ========================================================
     # SCHEDULE
     # ========================================================
 
-    elif option == "Schedule":
+    elif option == "📅 Schedule":
 
-        st.title("📅 My Sessions")
-    
-        sessions = get_session_history(student_id)
-    
+        st.title(
+            "📅 My Sessions"
+        )
+
+
+        sessions = get_session_history(
+            student_id
+        )
+
+
         if sessions.empty:
-    
-            st.info("No sessions found.")
-    
+
+            st.info(
+                "No sessions found."
+            )
+
         else:
-        
+
             sessions["Date"] = pd.to_datetime(
                 sessions["Date"]
             )
-        
+
+
             today = pd.to_datetime(
                 today_str()
             )
-        
-            # -----------------------------
+
+
+            # ------------------------------------------------
             # SESSION FILTER
-            # -----------------------------
-        
+            # ------------------------------------------------
+
             filter_option = st.selectbox(
+
                 "Show Sessions",
+
                 [
                     "Recent 5 + Upcoming 3 (Default)",
                     "Last 10 Sessions",
                     "Last 30 Days",
                     "All Sessions"
                 ],
+
                 key="student_session_filter"
             )
-        
-        
-            if filter_option == "Recent 5 + Upcoming 3 (Default)":
-        
-                # Completed / past sessions
+
+
+            # ------------------------------------------------
+            # DEFAULT FILTER
+            # ------------------------------------------------
+
+            if (
+                filter_option
+                == "Recent 5 + Upcoming 3 (Default)"
+            ):
+
                 recent = (
+
                     sessions[
                         sessions["Date"] <= today
                     ]
+
                     .sort_values(
                         ["Date", "Time"],
                         ascending=False
                     )
+
                     .head(5)
                 )
-        
-        
-                # Future sessions
+
+
                 upcoming = (
+
                     sessions[
                         sessions["Date"] > today
                     ]
+
                     .sort_values(
                         ["Date", "Time"]
                     )
+
                     .head(3)
                 )
-        
-        
+
+
                 sessions_display = pd.concat(
                     [
                         upcoming,
                         recent
                     ]
                 )
-        
-        
+
+
+            # ------------------------------------------------
+            # LAST 10
+            # ------------------------------------------------
+
             elif filter_option == "Last 10 Sessions":
-        
+
                 sessions_display = (
+
                     sessions
+
                     .sort_values(
                         ["Date", "Time"],
                         ascending=False
                     )
+
                     .head(10)
                 )
-        
-        
+
+
+            # ------------------------------------------------
+            # LAST 30 DAYS
+            # ------------------------------------------------
+
             elif filter_option == "Last 30 Days":
-        
-                start_date = today - pd.Timedelta(days=30)
-        
+
+                start_date = (
+                    today
+                    - pd.Timedelta(days=30)
+                )
+
+
                 sessions_display = sessions[
                     sessions["Date"] >= start_date
                 ]
-        
-        
+
+
+            # ------------------------------------------------
+            # ALL SESSIONS
+            # ------------------------------------------------
+
             else:
-        
+
                 sessions_display = (
+
                     sessions
+
                     .sort_values(
                         ["Date", "Time"],
                         ascending=False
                     )
                 )
-        
-        
-            # Format date for display
-        
+
+
+            # ------------------------------------------------
+            # FORMAT DATE
+            # ------------------------------------------------
+
             sessions_display["Date"] = (
+
                 sessions_display["Date"]
-                .dt.strftime("%b %d, %Y")
+
+                .dt.strftime(
+                    "%b %d, %Y"
+                )
             )
-        
-        
-            # -----------------------------
+
+
+            # ------------------------------------------------
             # DISPLAY
-            # -----------------------------
-        
+            # ------------------------------------------------
+
             display_sessions = sessions.copy()
 
+
             display_sessions["Date"] = (
-                pd.to_datetime(display_sessions["Date"])
-                .dt.strftime("%Y-%m-%d")
+
+                pd.to_datetime(
+                    display_sessions["Date"]
+                )
+
+                .dt.strftime(
+                    "%Y-%m-%d"
+                )
             )
-            
-            
+
+
             st.dataframe(
+
                 display_sessions[
                     [
                         "Date",
@@ -732,46 +1030,57 @@ def student_page():
                         "Attendance"
                     ]
                 ],
+
                 use_container_width=True,
+
                 hide_index=True,
+
                 column_config={
+
                     "Date": "📅 Date",
+
                     "Time": "⏰ Time",
+
                     "Topic": "📘 Topic",
+
                     "Attendance": "✅ Attendance"
+
                 }
             )
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # PERMANENT CLASSROOM INFO
-        # ----------------------------------------------------
+        # ====================================================
 
         z_link = student.get(
             "zoom_link"
         )
+
 
         m_id = student.get(
             "meeting_id"
         )
 
 
-        if (
-            z_link
-            or m_id
-        ):
+        if z_link or m_id:
 
-            st.sidebar.divider()
-
-            st.sidebar.subheader(
-                "Permanent Classroom Info"
+            st.sidebar.markdown(
+                '<div class="student-section">'
+                'CLASSROOM'
+                '</div>',
+                unsafe_allow_html=True
             )
 
 
             if (
+
                 z_link
+
                 and str(z_link).strip()
+
                 not in ["", "nan", "None"]
+
             ):
 
                 st.sidebar.markdown(
@@ -780,11 +1089,15 @@ def student_page():
 
 
             if (
+
                 m_id
+
                 and str(m_id).strip()
+
                 not in ["", "nan", "None"]
+
             ):
 
-                st.sidebar.text(
+                st.sidebar.caption(
                     f"Meeting ID: {m_id}"
                 )

@@ -306,14 +306,110 @@ def student_page():
         return
 
 
-    # ========================================================
-    # SIDEBAR
-    # ========================================================
-
     # --------------------------------------------------------
-    # Student Portal Title
+    # Sidebar
     # --------------------------------------------------------
-
+    
+    # ========================================================
+    # STUDENT SIDEBAR CSS
+    # ========================================================
+    
+    st.sidebar.markdown(
+        """
+        <style>
+    
+        /* ====================================================
+           STUDENT PORTAL TITLE
+           ==================================================== */
+    
+        .student-portal-title {
+    
+            font-size: 1.10rem;
+    
+            font-weight: 700;
+    
+            margin-top: -8px;
+            margin-bottom: 7px;
+    
+            padding: 0;
+    
+            line-height: 1.1;
+        }
+    
+    
+        /* ====================================================
+           SECTION HEADINGS
+           ==================================================== */
+    
+        .student-section {
+    
+            font-size: 0.72rem;
+    
+            font-weight: 700;
+    
+            letter-spacing: 0.06em;
+    
+            margin-top: 9px;
+            margin-bottom: 3px;
+    
+            padding-bottom: 3px;
+    
+            border-bottom:
+                1px solid rgba(128,128,128,0.30);
+        }
+    
+    
+        .student-section.first {
+    
+            margin-top: 0px;
+        }
+    
+    
+        /* ====================================================
+           NAVIGATION BUTTONS
+           ==================================================== */
+    
+        .student-nav-button {
+    
+            width: 100%;
+    
+            text-align: left;
+    
+            border: none;
+    
+            background: transparent;
+    
+            padding: 5px 8px;
+    
+            margin: 0;
+    
+            border-radius: 5px;
+    
+            font-size: 0.86rem;
+    
+            line-height: 1.2;
+    
+            cursor: pointer;
+        }
+    
+    
+        .student-nav-button:hover {
+    
+            background-color:
+                rgba(128,128,128,0.12);
+        }
+    
+    
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    
+    # ========================================================
+    # STUDENT PORTAL TITLE
+    # ========================================================
+    
     st.sidebar.markdown(
         """
         <div class="student-portal-title">
@@ -322,220 +418,111 @@ def student_page():
         """,
         unsafe_allow_html=True
     )
-
-
+    
+    
     # ========================================================
-    # SIDEBAR CSS
+    # CURRENT MENU STATE
     # ========================================================
-
-    st.sidebar.markdown(
-        """
-        <style>
-
-        /* ====================================================
-           STUDENT PORTAL TITLE
-           ==================================================== */
-
-        .student-portal-title {
-
-            font-size: 1.10rem;
-
-            font-weight: 700;
-
-            margin-top: -8px;
-            margin-bottom: 6px;
-
-            padding: 0;
-
-            line-height: 1.1;
-        }
-
-
-        /* ====================================================
-           SECTION HEADINGS
-           ==================================================== */
-
-        .student-section {
-
-            font-size: 0.72rem;
-
-            font-weight: 700;
-
-            letter-spacing: 0.06em;
-
-            margin-top: 9px;
-            margin-bottom: 3px;
-
-            padding-bottom: 3px;
-
-            border-bottom:
-                1px solid rgba(128,128,128,0.30);
-        }
-
-
-        .student-section.first {
-
-            margin-top: 0px;
-        }
-
-
-        /* ====================================================
-           COMPACT NAVIGATION
-           ==================================================== */
-
-        [data-testid="stSidebar"] .stRadio > div {
-
-            gap: 0px !important;
-        }
-
-
-        [data-testid="stSidebar"] .stRadio label {
-
-            margin-bottom: 0px !important;
-
-            padding-top: 2px !important;
-            padding-bottom: 2px !important;
-        }
-
-
-        /* Compact radio options */
-
-        [data-testid="stSidebar"] .stRadio [role="radiogroup"] {
-
-            gap: 0px !important;
-        }
-
-
-        /* ====================================================
-           REDUCE GENERAL SIDEBAR SPACING
-           ==================================================== */
-
-        [data-testid="stSidebar"] .element-container {
-
-            margin-bottom: 0px !important;
-        }
-
-
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-
+    
+    if "student_portal_menu" not in st.session_state:
+    
+        st.session_state.student_portal_menu = (
+            "🏠 Dashboard"
+        )
+    
+    
     # ========================================================
-    # STUDENT MENU
+    # NAVIGATION HELPER
     # ========================================================
-
+    
+    def student_nav_button(
+        label,
+        value
+    ):
+    
+        if st.sidebar.button(
+            label,
+            use_container_width=True,
+            key=f"student_nav_{value}"
+        ):
+    
+            st.session_state.student_portal_menu = value
+    
+            st.rerun()
+    
+    
+    # ========================================================
+    # MY LEARNING
+    # ========================================================
+    
     st.sidebar.markdown(
         '<div class="student-section first">'
         'MY LEARNING'
         '</div>',
         unsafe_allow_html=True
     )
-
-
-    student_menu = [
-
+    
+    
+    student_nav_button(
         "🏠 Dashboard",
-
+        "🏠 Dashboard"
+    )
+    
+    
+    student_nav_button(
         "📚 Homework",
-
+        "📚 Homework"
+    )
+    
+    
+    student_nav_button(
         "📊 Performance",
-
-    ]
-
-
-    # --------------------------------------------------------
+        "📊 Performance"
+    )
+    
+    
+    # ========================================================
     # SCHEDULE
-    # --------------------------------------------------------
-
+    # ========================================================
+    
     st.sidebar.markdown(
         '<div class="student-section">'
         'SCHEDULE'
         '</div>',
         unsafe_allow_html=True
     )
-
-
-    schedule_menu = [
-
+    
+    
+    student_nav_button(
         "📅 Schedule",
-
-    ]
-
-
-    # --------------------------------------------------------
+        "📅 Schedule"
+    )
+    
+    
+    # ========================================================
     # FINANCIAL
-    # --------------------------------------------------------
-
+    # ========================================================
+    
     st.sidebar.markdown(
         '<div class="student-section">'
         'FINANCIAL'
         '</div>',
         unsafe_allow_html=True
     )
-
-
-    financial_menu = [
-
+    
+    
+    student_nav_button(
         "💰 Financial Statements",
-
-    ]
-
-
-    # ========================================================
-    # COMBINE MENU OPTIONS
-    # ========================================================
-
-    student_menu_options = (
-
-        student_menu
-
-        + schedule_menu
-
-        + financial_menu
-
+        "💰 Financial Statements"
     )
-
-
+    
+    
     # ========================================================
-    # CURRENT MENU STATE
+    # CURRENT OPTION
     # ========================================================
+    
+    option = st.session_state.student_portal_menu
 
-    if "student_portal_menu" not in st.session_state:
-
-        st.session_state.student_portal_menu = (
-            "🏠 Dashboard"
-        )
-
-
-    if (
-        st.session_state.student_portal_menu
-        not in student_menu_options
-    ):
-
-        st.session_state.student_portal_menu = (
-            "🏠 Dashboard"
-        )
-
-
-    # ========================================================
-    # NAVIGATION
-    # ========================================================
-
-    option = st.sidebar.radio(
-
-        "Navigation",
-
-        student_menu_options,
-
-        index=student_menu_options.index(
-            st.session_state.student_portal_menu
-        ),
-
-        key="student_portal_menu"
-
-    )
 
 
     # ========================================================

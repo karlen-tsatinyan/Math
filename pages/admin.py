@@ -866,7 +866,7 @@ def admin_page():
 
     elif option == "📊 Performance":
 
-        student_performance_view(student_id)
+        performance_dashboard()
 
 
     # --------------------------------------------------------

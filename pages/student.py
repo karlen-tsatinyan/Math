@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import timedelta
 
 from utils.datetime_utils import today_str
 from database import query_dataframe
@@ -21,8 +20,7 @@ def get_student_id():
 
     user = st.session_state.get("user", {})
 
-    # Preferred method:
-    # student_id should already be attached to logged-in user
+    # Preferred method
     student_id = user.get("student_id")
 
     if student_id is not None:
@@ -33,7 +31,7 @@ def get_student_id():
         except (ValueError, TypeError):
             pass
 
-    # Fallback only if student_id is not already available
+    # Fallback using user ID
     user_id = user.get("id")
 
     if user_id:
@@ -202,14 +200,11 @@ def get_grades(student_id):
             grade AS "Grade",
             teacher_feedback AS "Teacher Feedback",
             reviewed_at AS "Graded On"
-
         FROM homework
-
         WHERE student_id = %s
           AND archived = 0
           AND grade IS NOT NULL
           AND TRIM(grade) <> ''
-
         ORDER BY due_date DESC
         """,
         (student_id,)
@@ -290,9 +285,9 @@ def get_parent_pin(student_id):
 
 def student_page():
 
-    # --------------------------------------------------------
-    # Resolve Student
-    # --------------------------------------------------------
+    # ========================================================
+    # RESOLVE STUDENT
+    # ========================================================
 
     student_id = get_student_id()
 
@@ -306,233 +301,11 @@ def student_page():
         return
 
 
-    # --------------------------------------------------------
-    # Sidebar
-    # --------------------------------------------------------
-    
-    # ========================================================
-    # STUDENT SIDEBAR CSS
-    # ========================================================
-    
-    st.sidebar.markdown(
-        """
-        <style>
-    
-        /* ====================================================
-           STUDENT PORTAL TITLE
-           ==================================================== */
-    
-        .student-portal-title {
-    
-            font-size: 1.10rem;
-    
-            font-weight: 700;
-    
-            margin-top: -8px;
-            margin-bottom: 7px;
-    
-            padding: 0;
-    
-            line-height: 1.1;
-        }
-    
-    
-        /* ====================================================
-           SECTION HEADINGS
-           ==================================================== */
-    
-        .student-section {
-    
-            font-size: 0.72rem;
-    
-            font-weight: 700;
-    
-            letter-spacing: 0.06em;
-    
-            margin-top: 9px;
-            margin-bottom: 3px;
-    
-            padding-bottom: 3px;
-    
-            border-bottom:
-                1px solid rgba(128,128,128,0.30);
-        }
-    
-    
-        .student-section.first {
-    
-            margin-top: 0px;
-        }
-    
-    
-        /* ====================================================
-           NAVIGATION BUTTONS
-           ==================================================== */
-    
-        .student-nav-button {
-    
-            width: 100%;
-    
-            text-align: left;
-    
-            border: none;
-    
-            background: transparent;
-    
-            padding: 5px 8px;
-    
-            margin: 0;
-    
-            border-radius: 5px;
-    
-            font-size: 0.86rem;
-    
-            line-height: 1.2;
-    
-            cursor: pointer;
-        }
-    
-    
-        .student-nav-button:hover {
-    
-            background-color:
-                rgba(128,128,128,0.12);
-        }
-    
-    
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    
-    # ========================================================
-    # STUDENT PORTAL TITLE
-    # ========================================================
-    
-    st.sidebar.markdown(
-        """
-        <div class="student-portal-title">
-            📚 Student Portal
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    
-    # ========================================================
-    # CURRENT MENU STATE
-    # ========================================================
-    
-    if "student_portal_menu" not in st.session_state:
-    
-        st.session_state.student_portal_menu = (
-            "🏠 Dashboard"
-        )
-    
-    
-    # ========================================================
-    # NAVIGATION HELPER
-    # ========================================================
-    
-    def student_nav_button(
-        label,
-        value
-    ):
-    
-        if st.sidebar.button(
-            label,
-            use_container_width=True,
-            key=f"student_nav_{value}"
-        ):
-    
-            st.session_state.student_portal_menu = value
-    
-            st.rerun()
-    
-    
-    # ========================================================
-    # MY LEARNING
-    # ========================================================
-    
-    st.sidebar.markdown(
-        '<div class="student-section first">'
-        'MY LEARNING'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    
-    
-    student_nav_button(
-        "🏠 Dashboard",
-        "🏠 Dashboard"
-    )
-    
-    
-    student_nav_button(
-        "📚 Homework",
-        "📚 Homework"
-    )
-    
-    
-    student_nav_button(
-        "📊 Performance",
-        "📊 Performance"
-    )
-    
-    
-    # ========================================================
-    # SCHEDULE
-    # ========================================================
-    
-    st.sidebar.markdown(
-        '<div class="student-section">'
-        'SCHEDULE'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    
-    
-    student_nav_button(
-        "📅 Schedule",
-        "📅 Schedule"
-    )
-    
-    
-    # ========================================================
-    # FINANCIAL
-    # ========================================================
-    
-    st.sidebar.markdown(
-        '<div class="student-section">'
-        'FINANCIAL'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    
-    
-    student_nav_button(
-        "💰 Financial Statements",
-        "💰 Financial Statements"
-    )
-    
-    
-    # ========================================================
-    # CURRENT OPTION
-    # ========================================================
-    
-    option = st.session_state.student_portal_menu
-
-
-
     # ========================================================
     # STUDENT INFORMATION
-    #
-    # Cached and used by multiple sections.
     # ========================================================
 
     student_df = get_student_info(student_id)
-
 
     if student_df.empty:
 
@@ -542,8 +315,295 @@ def student_page():
 
         return
 
-
     student = student_df.iloc[0]
+
+
+    # ========================================================
+    # SIDEBAR CSS
+    # ========================================================
+
+    st.sidebar.markdown(
+        """
+        <style>
+
+        /* ================================================
+           STUDENT PORTAL TITLE
+           ================================================ */
+
+        .student-portal-title {
+
+            font-size: 1.10rem;
+
+            font-weight: 700;
+
+            margin-top: -8px;
+            margin-bottom: 7px;
+
+            padding: 0;
+
+            line-height: 1.1;
+        }
+
+
+        /* ================================================
+           SECTION HEADINGS
+           ================================================ */
+
+        .student-section {
+
+            font-size: 0.72rem;
+
+            font-weight: 700;
+
+            letter-spacing: 0.06em;
+
+            margin-top: 9px;
+            margin-bottom: 3px;
+
+            padding-bottom: 3px;
+
+            border-bottom:
+                1px solid rgba(128,128,128,0.30);
+        }
+
+
+        .student-section.first {
+
+            margin-top: 0px;
+        }
+
+
+        /* ================================================
+           NAVIGATION BUTTONS
+           ================================================ */
+
+        [data-testid="stSidebar"] .stButton {
+
+            margin-bottom: 0px !important;
+        }
+
+
+        [data-testid="stSidebar"] .stButton > button {
+
+            padding: 4px 8px !important;
+
+            min-height: 30px !important;
+
+            font-size: 0.86rem !important;
+
+            text-align: left !important;
+
+            justify-content: flex-start !important;
+
+            border-radius: 5px !important;
+        }
+
+
+        /* ================================================
+           REMOVE EXCESS SPACING
+           ================================================ */
+
+        [data-testid="stSidebar"] .element-container {
+
+            margin-bottom: 0px !important;
+        }
+
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # ========================================================
+    # STUDENT PORTAL TITLE
+    # ========================================================
+
+    st.sidebar.markdown(
+        """
+        <div class="student-portal-title">
+            📚 Student Portal
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # ========================================================
+    # CURRENT MENU STATE
+    #
+    # IMPORTANT:
+    # We only set the default if the state does not exist.
+    # We NEVER reset it during a normal rerun.
+    # ========================================================
+
+    valid_student_options = [
+
+        "🏠 Dashboard",
+
+        "📚 Homework",
+
+        "📊 Performance",
+
+        "📅 Schedule",
+
+        "💰 Financial Statements"
+
+    ]
+
+
+    if "student_portal_menu" not in st.session_state:
+
+        st.session_state.student_portal_menu = (
+            "🏠 Dashboard"
+        )
+
+
+    if (
+        st.session_state.student_portal_menu
+        not in valid_student_options
+    ):
+
+        st.session_state.student_portal_menu = (
+            "🏠 Dashboard"
+        )
+
+
+    # ========================================================
+    # NAVIGATION BUTTON FUNCTION
+    # ========================================================
+
+    def student_nav_button(
+        label,
+        value
+    ):
+
+        if st.sidebar.button(
+            label,
+            use_container_width=True,
+            key=f"student_nav_{value}"
+        ):
+
+            st.session_state.student_portal_menu = value
+
+            st.rerun()
+
+
+    # ========================================================
+    # MY LEARNING
+    # ========================================================
+
+    st.sidebar.markdown(
+        '<div class="student-section first">'
+        'MY LEARNING'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    student_nav_button(
+        "🏠 Dashboard",
+        "🏠 Dashboard"
+    )
+
+
+    student_nav_button(
+        "📚 Homework",
+        "📚 Homework"
+    )
+
+
+    student_nav_button(
+        "📊 Performance",
+        "📊 Performance"
+    )
+
+
+    # ========================================================
+    # SCHEDULE
+    # ========================================================
+
+    st.sidebar.markdown(
+        '<div class="student-section">'
+        'SCHEDULE'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    student_nav_button(
+        "📅 Schedule",
+        "📅 Schedule"
+    )
+
+
+    # ========================================================
+    # FINANCIAL
+    # ========================================================
+
+    st.sidebar.markdown(
+        '<div class="student-section">'
+        'FINANCIAL'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    student_nav_button(
+        "💰 Financial Statements",
+        "💰 Financial Statements"
+    )
+
+
+    # ========================================================
+    # CLASSROOM INFORMATION
+    # ========================================================
+
+    z_link = student.get("zoom_link")
+
+    m_id = student.get("meeting_id")
+
+
+    if z_link or m_id:
+
+        st.sidebar.markdown(
+            '<div class="student-section">'
+            'CLASSROOM'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+
+        if (
+            z_link
+            and str(z_link).strip()
+            not in ["", "nan", "None"]
+        ):
+
+            st.sidebar.markdown(
+                f"🔗 [General Zoom Room]({z_link})"
+            )
+
+
+        if (
+            m_id
+            and str(m_id).strip()
+            not in ["", "nan", "None"]
+        ):
+
+            st.sidebar.caption(
+                f"Meeting ID: {m_id}"
+            )
+
+
+    # ========================================================
+    # CURRENT PAGE
+    # ========================================================
+
+    option = st.session_state.get(
+        "student_portal_menu",
+        "🏠 Dashboard"
+    )
 
 
     # ========================================================
@@ -563,10 +623,6 @@ def student_page():
         )
 
 
-        # ----------------------------------------------------
-        # Dashboard data
-        # ----------------------------------------------------
-
         dashboard = get_dashboard_data(
             student_id,
             today_str()
@@ -578,13 +634,11 @@ def student_page():
         sessions_count = dashboard["sessions_count"]
 
 
-        # ----------------------------------------------------
-        # Homework total
-        # ----------------------------------------------------
-
         hw_total = (
 
-            int(homework_due.iloc[0]["total"])
+            int(
+                homework_due.iloc[0]["total"]
+            )
 
             if not homework_due.empty
 
@@ -592,23 +646,17 @@ def student_page():
         )
 
 
-        # ----------------------------------------------------
-        # Session total
-        # ----------------------------------------------------
-
         sess_total = (
 
-            int(sessions_count.iloc[0]["total"])
+            int(
+                sessions_count.iloc[0]["total"]
+            )
 
             if not sessions_count.empty
 
             else 0
         )
 
-
-        # ----------------------------------------------------
-        # Metrics
-        # ----------------------------------------------------
 
         c1, c2 = st.columns(2)
 
@@ -663,19 +711,14 @@ def student_page():
 
 
             if (
-
                 zoom_url
-
                 and str(zoom_url).strip()
-
                 not in ["", "nan", "None"]
-
             ):
 
                 st.markdown(
                     f"🔗 [Join Zoom Meeting]({zoom_url})"
                 )
-
 
             else:
 
@@ -815,9 +858,19 @@ def student_page():
 
     elif option == "💰 Financial Statements":
 
+        # IMPORTANT:
+        # Explicitly preserve the current page before
+        # entering the Financial Statements module.
+
+        st.session_state.student_portal_menu = (
+            "💰 Financial Statements"
+        )
+
+
         from modules.student_financials import (
             student_financials
         )
+
 
         student_financials()
 
@@ -861,22 +914,19 @@ def student_page():
             # ------------------------------------------------
 
             filter_option = st.selectbox(
-
                 "Show Sessions",
-
                 [
                     "Recent 5 + Upcoming 3 (Default)",
                     "Last 10 Sessions",
                     "Last 30 Days",
                     "All Sessions"
                 ],
-
                 key="student_session_filter"
             )
 
 
             # ------------------------------------------------
-            # DEFAULT FILTER
+            # DEFAULT
             # ------------------------------------------------
 
             if (
@@ -975,24 +1025,10 @@ def student_page():
 
 
             # ------------------------------------------------
-            # FORMAT DATE
-            # ------------------------------------------------
-
-            sessions_display["Date"] = (
-
-                sessions_display["Date"]
-
-                .dt.strftime(
-                    "%b %d, %Y"
-                )
-            )
-
-
-            # ------------------------------------------------
             # DISPLAY
             # ------------------------------------------------
 
-            display_sessions = sessions.copy()
+            display_sessions = sessions_display.copy()
 
 
             display_sessions["Date"] = (
@@ -1034,57 +1070,3 @@ def student_page():
 
                 }
             )
-
-
-        # ====================================================
-        # PERMANENT CLASSROOM INFO
-        # ====================================================
-
-        z_link = student.get(
-            "zoom_link"
-        )
-
-
-        m_id = student.get(
-            "meeting_id"
-        )
-
-
-        if z_link or m_id:
-
-            st.sidebar.markdown(
-                '<div class="student-section">'
-                'CLASSROOM'
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-
-            if (
-
-                z_link
-
-                and str(z_link).strip()
-
-                not in ["", "nan", "None"]
-
-            ):
-
-                st.sidebar.markdown(
-                    f"🔗 [General Zoom Room]({z_link})"
-                )
-
-
-            if (
-
-                m_id
-
-                and str(m_id).strip()
-
-                not in ["", "nan", "None"]
-
-            ):
-
-                st.sidebar.caption(
-                    f"Meeting ID: {m_id}"
-                )

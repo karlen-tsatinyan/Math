@@ -557,153 +557,250 @@ def show_dashboard():
             st.rerun()
 
 
+
 # ========================================================
 # ADMIN MENU STRUCTURE
 # ========================================================
+
 
 # --------------------------------------------------------
 # ADMIN MENU
 # --------------------------------------------------------
 
 def admin_page():
+
     st.sidebar.markdown(
         """
         <div style="
-            font-size: 1.15rem;
+            font-size: 1.10rem;
             font-weight: 700;
             margin-top: -8px;
-            margin-bottom: 5px;
-            line-height: 1.2;
+            margin-bottom: 7px;
         ">
             📚 Admin Control Panel
         </div>
         """,
         unsafe_allow_html=True
     )
+
+
     # ========================================================
     # ADMIN SIDEBAR NAVIGATION
     # ========================================================
-    
+
     # --------------------------------------------------------
     # SIDEBAR STYLING
     # --------------------------------------------------------
-    
+
     st.sidebar.markdown(
         """
         <style>
-    
-        /* Section headings */
+
+        /* ====================================================
+           SECTION HEADINGS
+           ==================================================== */
+
         .admin-section {
+
             font-size: 0.75rem;
+
             font-weight: 700;
+
             letter-spacing: 0.08em;
-            margin-top: 18px;
-            margin-bottom: 6px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid rgba(128,128,128,0.35);
+
+            margin-top: 12px;
+
+            margin-bottom: 4px;
+
+            padding-bottom: 4px;
+
+            border-bottom:
+                1px solid rgba(128,128,128,0.35);
         }
-    
+
+
         .admin-section:first-child {
-            margin-top: 5px;
+
+            margin-top: 2px;
         }
-    
+
+
+        /* ====================================================
+           COMPACT ADMIN BUTTONS
+           ==================================================== */
+
+        [data-testid="stSidebar"] .stButton {
+
+            margin-bottom: 0px !important;
+        }
+
+
+        [data-testid="stSidebar"] .stButton > button {
+
+            padding: 4px 8px !important;
+
+            min-height: 30px !important;
+
+            font-size: 0.86rem !important;
+
+            text-align: left !important;
+
+            justify-content: flex-start !important;
+
+            border-radius: 5px !important;
+        }
+
+
+        /* ====================================================
+           REMOVE EXTRA SPACING
+           ==================================================== */
+
+        [data-testid="stSidebar"] .element-container {
+
+            margin-bottom: 0px !important;
+        }
+
+
         </style>
         """,
         unsafe_allow_html=True
     )
-    
-    
+
+
     # --------------------------------------------------------
     # CURRENT PAGE
     # --------------------------------------------------------
-    
+
     if "admin_option" not in st.session_state:
-    
+
         st.session_state.admin_option = (
             "🏠 Dashboard"
         )
-    
-    
+
+
     # ========================================================
     # HELPER FUNCTION
     # ========================================================
-    
+
     def admin_nav_button(label):
-    
+
         if st.sidebar.button(
             label,
             use_container_width=True,
             key=f"admin_nav_{label}"
         ):
-    
+
             st.session_state.admin_option = label
-    
+
             st.rerun()
-    
-    
+
+
     # ========================================================
     # ADMIN MENU
     # ========================================================
-    
+
     st.sidebar.markdown(
         '<div class="admin-section">ADMIN MENU</div>',
         unsafe_allow_html=True
     )
-    
-    admin_nav_button("🏠 Dashboard")
-    admin_nav_button("👨‍🎓 Students")
-    admin_nav_button("👤 Student Profiles")
-    
-    
+
+
+    admin_nav_button(
+        "🏠 Dashboard"
+    )
+
+    admin_nav_button(
+        "👨‍🎓 Students"
+    )
+
+    admin_nav_button(
+        "👤 Student Profiles"
+    )
+
+
     # ========================================================
     # ACADEMIC
     # ========================================================
-    
+
     st.sidebar.markdown(
         '<div class="admin-section">ACADEMIC</div>',
         unsafe_allow_html=True
     )
-    
-    admin_nav_button("📚 Homework")
-    admin_nav_button("📅 Schedule")
-    admin_nav_button("📋 Attendance")
-    admin_nav_button("📘 Live Curriculum Board")
-    
-    
+
+
+    admin_nav_button(
+        "📚 Homework"
+    )
+
+    admin_nav_button(
+        "📅 Schedule"
+    )
+
+    admin_nav_button(
+        "📋 Attendance"
+    )
+
+    admin_nav_button(
+        "📊 Performance"
+    )
+
+    admin_nav_button(
+        "📘 Live Curriculum Board"
+    )
+
+
     # ========================================================
     # FINANCE & REPORTING
     # ========================================================
-    
+
     st.sidebar.markdown(
         '<div class="admin-section">FINANCE & REPORTING</div>',
         unsafe_allow_html=True
     )
-    
-    admin_nav_button("💰 Payments")
-    admin_nav_button("📈 Student Financials")
-    admin_nav_button("📊 Reports")
-    
-    
+
+
+    admin_nav_button(
+        "💰 Payments"
+    )
+
+    admin_nav_button(
+        "📈 Student Financials"
+    )
+
+    admin_nav_button(
+        "📊 Reports"
+    )
+
+
     # ========================================================
     # ARCHIVING
     # ========================================================
-    
+
     st.sidebar.markdown(
         '<div class="admin-section">ARCHIVING</div>',
         unsafe_allow_html=True
     )
-    
-    admin_nav_button("📦 Archived Homework")
-    admin_nav_button("👨‍🎓 Archived Students")
-    
-    
+
+
+    admin_nav_button(
+        "📦 Archived Homework"
+    )
+
+    admin_nav_button(
+        "👨‍🎓 Archived Students"
+    )
+
+
     # ========================================================
     # CURRENT OPTION
     # ========================================================
-    
-    option = st.session_state.admin_option
 
-    
+    option = st.session_state.get(
+        "admin_option",
+        "🏠 Dashboard"
+    )
+
+
     # ========================================================
     # ROUTING
     # ========================================================
@@ -718,7 +815,6 @@ def admin_page():
         show_dashboard()
 
 
-
     # --------------------------------------------------------
     # STUDENTS
     # --------------------------------------------------------
@@ -726,7 +822,6 @@ def admin_page():
     elif option == "👨‍🎓 Students":
 
         student_management()
-
 
 
     # --------------------------------------------------------
@@ -738,16 +833,13 @@ def admin_page():
         student_profile()
 
 
-
     # --------------------------------------------------------
     # HOMEWORK
     # --------------------------------------------------------
-    
+
     elif option == "📚 Homework":
-    
+
         homework_management()
-
-
 
 
     # --------------------------------------------------------
@@ -759,7 +851,6 @@ def admin_page():
         scheduler_management()
 
 
-
     # --------------------------------------------------------
     # ATTENDANCE
     # --------------------------------------------------------
@@ -768,6 +859,14 @@ def admin_page():
 
         attendance_management()
 
+
+    # --------------------------------------------------------
+    # PERFORMANCE
+    # --------------------------------------------------------
+
+    elif option == "📊 Performance":
+
+        performance_management()
 
 
     # --------------------------------------------------------
@@ -779,7 +878,6 @@ def admin_page():
         payment_management()
 
 
-
     # --------------------------------------------------------
     # STUDENT FINANCIALS
     # --------------------------------------------------------
@@ -787,7 +885,6 @@ def admin_page():
     elif option == "📈 Student Financials":
 
         financial_dashboard()
-
 
 
     # --------------------------------------------------------
@@ -799,13 +896,12 @@ def admin_page():
         reports_management()
 
 
-
     # --------------------------------------------------------
     # ARCHIVED HOMEWORK
     # --------------------------------------------------------
-    
+
     elif option == "📦 Archived Homework":
-    
+
         archived_homework()
 
 
@@ -818,11 +914,11 @@ def admin_page():
         archived_students()
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # LIVE CURRICULUM BOARD
-    # ========================================================    
-        
+    # --------------------------------------------------------
+
     elif option == "📘 Live Curriculum Board":
-    
+
         curriculum_management()
 

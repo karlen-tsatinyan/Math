@@ -14,12 +14,12 @@ from database import execute, query_dataframe
 
 def generate_time_slots():
     """
-    Generate 15-minute time slots from 8:00 AM through 8:00 PM.
+    Generate 15-minute time slots from 6:45 AM through 9:00 PM.
     """
     slots = []
 
-    start = datetime.strptime("08:00 AM", "%I:%M %p")
-    end = datetime.strptime("08:00 PM", "%I:%M %p")
+    start = datetime.strptime("6:45 AM", "%I:%M %p")
+    end = datetime.strptime("09:00 PM", "%I:%M %p")
 
     current = start
 

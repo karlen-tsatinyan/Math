@@ -37,12 +37,16 @@ def ensure_payments_schema():
 # ============================================================
 
 def payment_management():
-    st.error("🚨 THIS IS THE PAYMENT_MANAGEMENT FUNCTION I AM RUNNING")
-    st.sidebar.warning("PAYMENT VERSION: NEW")
 
-    # --------------------------------------------------------
+    # ========================================================
+    # DEBUG — CONFIRMED ROUTING
+    # ========================================================
+
+    st.success("✅ PAYMENT MANAGEMENT IS RUNNING")
+
+    # ========================================================
     # ENSURE PAYMENT SCHEMA
-    # --------------------------------------------------------
+    # ========================================================
 
     ensure_payments_schema()
 
@@ -66,37 +70,20 @@ def payment_management():
 
     with tab1:
 
-        st.subheader("💳 Payment Records")
+        st.subheader("💳 Payment History")
 
         try:
 
             payments = query_dataframe(
                 """
                 SELECT
-
                     p.id,
-
                     p.student_id,
-
-                    s.first_name || ' ' || s.last_name
-                        AS student_name,
-
-                    COALESCE(
-                        p.amount,
-                        0.00
-                    ) AS amount,
-
+                    s.first_name || ' ' || s.last_name AS student_name,
+                    p.amount,
                     p.payment_date,
-
-                    COALESCE(
-                        p.period,
-                        ''
-                    ) AS period,
-
-                    COALESCE(
-                        p.status,
-                        'Completed'
-                    ) AS status
+                    p.period,
+                    p.status
 
                 FROM payments p
 
@@ -104,36 +91,26 @@ def payment_management():
                     ON p.student_id = s.id
 
                 ORDER BY
-                    p.payment_date DESC,
+                    p.payment_date DESC NULLS LAST,
                     p.id DESC
                 """
             )
 
             if payments.empty:
 
-                st.info(
-                    "No payment records found."
-                )
+                st.info("No payment records found.")
 
             else:
 
-                # ------------------------------------------------
-                # FORMAT PAYMENT DATE FOR DISPLAY
-                # ------------------------------------------------
-
-                payments["payment_date"] = (
-                    payments["payment_date"]
-                    .apply(
-                        lambda x:
-                            convert_to_date(x).strftime("%b %d, %Y")
-                            if pd_is_valid_date(x)
-                            else ""
-                    )
+                # Make sure date is displayed nicely
+                payments["payment_date"] = payments[
+                    "payment_date"
+                ].apply(
+                    lambda x:
+                    convert_to_date(x).strftime("%m/%d/%Y")
+                    if pd_is_valid_date(x)
+                    else ""
                 )
-
-                # ------------------------------------------------
-                # DISPLAY COLUMN NAMES
-                # ------------------------------------------------
 
                 display_payments = payments.rename(
                     columns={
@@ -146,10 +123,6 @@ def payment_management():
                         "status": "Status"
                     }
                 )
-
-                # ------------------------------------------------
-                # DISPLAY
-                # ------------------------------------------------
 
                 st.dataframe(
                     display_payments[
@@ -166,14 +139,6 @@ def payment_management():
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-
-                        "Payment ID": st.column_config.NumberColumn(
-                            "Payment ID"
-                        ),
-
-                        "Student ID": st.column_config.NumberColumn(
-                            "Student ID"
-                        ),
 
                         "Amount": st.column_config.NumberColumn(
                             "Amount",
@@ -198,30 +163,16 @@ def payment_management():
 
     with tab2:
 
-        st.subheader(
-            "➕ Record New Payment"
-        )
-
-        # ----------------------------------------------------
-        # GET ACTIVE STUDENTS
-        # ----------------------------------------------------
+        st.subheader("➕ Record New Payment")
 
         students = query_dataframe(
             """
             SELECT
-
                 id,
-
-                first_name || ' ' || last_name
-                    AS name
-
+                first_name || ' ' || last_name AS name
             FROM students
-
             WHERE COALESCE(archived, 0) = 0
-
-            ORDER BY
-                last_name,
-                first_name
+            ORDER BY last_name, first_name
             """
         )
 
@@ -232,20 +183,29 @@ def payment_management():
             )
 
         else:
-            st.subheader("➕ Record New Payment")
-
-            st.error("🚨 PAYMENT FORM — NEW CODE IS RUNNING")
 
             with st.form("payment_form"):
 
-                st.write("### Test Payment Form")
-            
+                # ------------------------------------------------
+                # STUDENT
+                # ------------------------------------------------
+
                 student_name = st.selectbox(
-                    "Student",
+                    "👨‍🎓 Student",
                     students["name"].tolist(),
                     key="payment_student_select"
                 )
-            
+
+                student_id_input = int(
+                    students[
+                        students["name"] == student_name
+                    ]["id"].iloc[0]
+                )
+
+                # ------------------------------------------------
+                # AMOUNT
+                # ------------------------------------------------
+
                 amount_input = st.number_input(
                     "💵 Amount ($)",
                     min_value=0.0,
@@ -253,26 +213,32 @@ def payment_management():
                     format="%.2f",
                     key="payment_amount"
                 )
-            
-                st.write("### PAYMENT DATE TEST")
-            
+
+                # ------------------------------------------------
+                # PAYMENT DATE
+                # ------------------------------------------------
+
                 payment_date_input = st.date_input(
                     "📅 Payment Date",
                     value=date.today(),
                     format="MM/DD/YYYY",
                     key="payment_date_input"
                 )
-            
-                st.write(
-                    f"Selected date: {payment_date_input}"
-                )
-            
+
+                # ------------------------------------------------
+                # PERIOD
+                # ------------------------------------------------
+
                 period_input = st.text_input(
                     "📆 Period Paid For",
-                    placeholder="e.g. June 2026",
+                    placeholder="e.g. August 2026",
                     key="payment_period"
                 )
-            
+
+                # ------------------------------------------------
+                # STATUS
+                # ------------------------------------------------
+
                 status_input = st.selectbox(
                     "📌 Payment Status",
                     [
@@ -280,9 +246,14 @@ def payment_management():
                         "Pending",
                         "Refunded"
                     ],
+                    index=0,
                     key="payment_status"
                 )
-            
+
+                # ------------------------------------------------
+                # SAVE
+                # ------------------------------------------------
+
                 submitted = st.form_submit_button(
                     "💾 Save Payment",
                     use_container_width=True
@@ -302,7 +273,6 @@ def payment_management():
                                 period,
                                 status
                             )
-
                             VALUES
                             (
                                 %s,
@@ -342,7 +312,7 @@ def payment_management():
     with tab3:
 
         st.subheader(
-            "✏️ Edit or Remove Payment Entries"
+            "✏️ Edit / Manage Payments"
         )
 
         try:
@@ -350,24 +320,13 @@ def payment_management():
             payments_list = query_dataframe(
                 """
                 SELECT
-
                     p.id,
-
                     p.student_id,
-
-                    s.first_name || ' ' || s.last_name
-                        AS student_name,
-
+                    s.first_name || ' ' || s.last_name AS student_name,
                     p.amount,
-
                     p.payment_date,
-
                     p.period,
-
-                    COALESCE(
-                        p.status,
-                        'Completed'
-                    ) AS status
+                    p.status
 
                 FROM payments p
 
@@ -375,7 +334,7 @@ def payment_management():
                     ON p.student_id = s.id
 
                 ORDER BY
-                    p.payment_date DESC,
+                    p.payment_date DESC NULLS LAST,
                     p.id DESC
                 """
             )
@@ -388,9 +347,9 @@ def payment_management():
 
             else:
 
-                # --------------------------------------------
+                # =================================================
                 # PAYMENT SELECTOR
-                # --------------------------------------------
+                # =================================================
 
                 payment_options = {}
 
@@ -412,13 +371,9 @@ def payment_management():
 
                     if pd_is_valid_date(raw_date):
 
-                        display_date = (
-                            convert_to_date(
-                                raw_date
-                            ).strftime(
-                                "%b %d, %Y"
-                            )
-                        )
+                        display_date = convert_to_date(
+                            raw_date
+                        ).strftime("%m/%d/%Y")
 
                     else:
 
@@ -434,10 +389,8 @@ def payment_management():
                     payment_options[label] = row["id"]
 
                 selected_label = st.selectbox(
-                    "Select Payment to Edit",
-                    list(
-                        payment_options.keys()
-                    ),
+                    "Select Payment",
+                    list(payment_options.keys()),
                     key="edit_payment_selector"
                 )
 
@@ -449,9 +402,9 @@ def payment_management():
                     payments_list["id"] == selected_id
                 ].iloc[0]
 
-                # --------------------------------------------
+                # =================================================
                 # CURRENT VALUES
-                # --------------------------------------------
+                # =================================================
 
                 current_amount = float(
                     selected_row["amount"] or 0
@@ -465,10 +418,6 @@ def payment_management():
                     selected_row["status"] or "Completed"
                 )
 
-                # --------------------------------------------
-                # CURRENT PAYMENT DATE
-                # --------------------------------------------
-
                 raw_payment_date = (
                     selected_row["payment_date"]
                 )
@@ -477,32 +426,31 @@ def payment_management():
                     raw_payment_date
                 ):
 
-                    current_payment_date = (
-                        convert_to_date(
-                            raw_payment_date
-                        )
+                    current_payment_date = convert_to_date(
+                        raw_payment_date
                     )
 
                 else:
 
                     current_payment_date = date.today()
 
-                # --------------------------------------------
+                # =================================================
                 # EDIT FORM
-                # --------------------------------------------
+                # =================================================
 
                 with st.form(
-                    "edit_payment_form"
+                    f"edit_payment_form_{selected_id}"
                 ):
 
                     st.write(
-                        f"**Student:** {selected_row['student_name']}"
+                        f"**👨‍🎓 Student:** "
+                        f"{selected_row['student_name']}"
                     )
-                    
-                    # ----------------------------------------
+
+                    # ------------------------------------------------
                     # AMOUNT
-                    # ----------------------------------------
-                    
+                    # ------------------------------------------------
+
                     new_amount = st.number_input(
                         "💵 Amount ($)",
                         min_value=0.0,
@@ -511,45 +459,47 @@ def payment_management():
                         format="%.2f",
                         key=f"edit_amount_{selected_id}"
                     )
-                    
-                    # ----------------------------------------
+
+                    # ------------------------------------------------
                     # PAYMENT DATE
-                    # ----------------------------------------
-                    
+                    # ------------------------------------------------
+
                     new_payment_date = st.date_input(
                         "📅 Payment Date",
                         value=current_payment_date,
                         format="MM/DD/YYYY",
                         key=f"edit_payment_date_{selected_id}"
                     )
-                    
-                    # ----------------------------------------
+
+                    # ------------------------------------------------
                     # PERIOD
-                    # ----------------------------------------
-                    
+                    # ------------------------------------------------
+
                     new_period = st.text_input(
                         "📆 Period Paid For",
                         value=current_period,
                         key=f"edit_period_{selected_id}"
                     )
-                    
-                    # ----------------------------------------
+
+                    # ------------------------------------------------
                     # STATUS
-                    # ----------------------------------------
-                    
+                    # ------------------------------------------------
+
                     status_options = [
                         "Completed",
                         "Pending",
                         "Refunded"
                     ]
-                    
+
                     if current_status not in status_options:
                         current_status = "Completed"
-                    
+
                     new_status = st.selectbox(
                         "📌 Payment Status",
                         status_options,
-                        index=status_options.index(current_status),
+                        index=status_options.index(
+                            current_status
+                        ),
                         key=f"edit_status_{selected_id}"
                     )
 
@@ -567,9 +517,9 @@ def payment_management():
                         use_container_width=True
                     )
 
-                    # ========================================
-                    # UPDATE PAYMENT
-                    # ========================================
+                    # =================================================
+                    # UPDATE
+                    # =================================================
 
                     if update_sub:
 
@@ -580,13 +530,9 @@ def payment_management():
                                 UPDATE payments
 
                                 SET
-
                                     amount = %s,
-
                                     payment_date = %s,
-
                                     period = %s,
-
                                     status = %s
 
                                 WHERE id = %s
@@ -614,9 +560,9 @@ def payment_management():
                                 f"Error updating payment: {e}"
                             )
 
-                    # ========================================
-                    # DELETE PAYMENT
-                    # ========================================
+                    # =================================================
+                    # DELETE
+                    # =================================================
 
                     if delete_sub:
 
@@ -625,7 +571,6 @@ def payment_management():
                             execute(
                                 """
                                 DELETE FROM payments
-
                                 WHERE id = %s
                                 """,
                                 (
@@ -650,9 +595,8 @@ def payment_management():
         except Exception as e:
 
             st.error(
-                f"Error loading management interface: {e}"
+                f"Error loading payment management: {e}"
             )
-
 
 # ============================================================
 # DATE HELPERS

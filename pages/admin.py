@@ -7,7 +7,7 @@ from database import query_dataframe
 
 from modules.attendance import attendance_management
 from modules.curriculum import curriculum_management
-# from modules.payments import payment_management
+from modules.payments import payment_management
 from modules.reports import reports_management
 from modules.scheduler import scheduler_management
 from modules.student_profile import student_profile
@@ -15,18 +15,7 @@ from modules.students import student_management
 from modules.homework import homework_management, archived_homework
 from modules.archived_students import archived_students
 from modules.performance import performance_dashboard
-
 import modules.payments as payments_module
-
-st.sidebar.error(
-    f"PAYMENTS MODULE FILE: {payments_module.__file__}"
-)
-
-payment_management = payments_module.payment_management
-
-
-
-
 from utils.datetime_utils import today_str
 
 

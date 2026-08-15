@@ -232,66 +232,48 @@ def payment_management():
 
         else:
 
-            with st.form(
-                "payment_form"
-            ):
-
-                # --------------------------------------------
+            with st.form("payment_form"):
+            
                 # STUDENT
-                # --------------------------------------------
-
                 student_name = st.selectbox(
                     "Student",
                     students["name"].tolist(),
                     key="payment_student_select"
                 )
-
+            
                 student_id_input = int(
                     students[
                         students["name"] == student_name
                     ]["id"].iloc[0]
                 )
-
-                # --------------------------------------------
+            
                 # AMOUNT
-                # --------------------------------------------
-
                 amount_input = st.number_input(
-                    "Amount ($)",
+                    "💵 Amount ($)",
                     min_value=0.0,
                     step=0.01,
                     format="%.2f",
                     key="payment_amount"
                 )
-
-                # --------------------------------------------
+            
                 # PAYMENT DATE
-                # --------------------------------------------
-
-                st.markdown("### 📅 Payment Date")
-                
                 payment_date_input = st.date_input(
-                    "Date Payment Was Received",
+                    "📅 Payment Date",
                     value=date.today(),
+                    format="MM/DD/YYYY",
                     key="payment_date_input"
                 )
-
-                # --------------------------------------------
+            
                 # PERIOD
-                # --------------------------------------------
-
                 period_input = st.text_input(
-                    "Period Paid For",
+                    "📆 Period Paid For",
                     placeholder="e.g. June 2026",
                     key="payment_period"
                 )
-
-                # --------------------------------------------
+            
                 # STATUS
-                # --------------------------------------------
-
                 status_input = st.selectbox(
-                    "Payment Status",
+                    "📌 Payment Status",
                     [
                         "Completed",
                         "Pending",
@@ -300,11 +282,7 @@ def payment_management():
                     index=0,
                     key="payment_status"
                 )
-
-                # --------------------------------------------
-                # SAVE
-                # --------------------------------------------
-
+            
                 submitted = st.form_submit_button(
                     "💾 Save Payment",
                     use_container_width=True
@@ -518,65 +496,60 @@ def payment_management():
                 ):
 
                     st.write(
-                        f"**Student:** "
-                        f"{selected_row['student_name']}"
+                        f"**Student:** {selected_row['student_name']}"
                     )
-
+                    
                     # ----------------------------------------
                     # AMOUNT
                     # ----------------------------------------
-
+                    
                     new_amount = st.number_input(
-                        "Update Amount ($)",
+                        "💵 Amount ($)",
                         min_value=0.0,
                         value=current_amount,
                         step=0.01,
                         format="%.2f",
                         key=f"edit_amount_{selected_id}"
                     )
-
+                    
                     # ----------------------------------------
                     # PAYMENT DATE
                     # ----------------------------------------
-
-                    st.markdown("### 📅 Payment Date")
                     
                     new_payment_date = st.date_input(
-                        "Date Payment Was Received",
+                        "📅 Payment Date",
                         value=current_payment_date,
+                        format="MM/DD/YYYY",
                         key=f"edit_payment_date_{selected_id}"
                     )
-
+                    
                     # ----------------------------------------
                     # PERIOD
                     # ----------------------------------------
-
+                    
                     new_period = st.text_input(
-                        "Period Paid For",
+                        "📆 Period Paid For",
                         value=current_period,
                         key=f"edit_period_{selected_id}"
                     )
-
+                    
                     # ----------------------------------------
                     # STATUS
                     # ----------------------------------------
-
+                    
                     status_options = [
                         "Completed",
                         "Pending",
                         "Refunded"
                     ]
-
+                    
                     if current_status not in status_options:
-
                         current_status = "Completed"
-
+                    
                     new_status = st.selectbox(
-                        "Payment Status",
+                        "📌 Payment Status",
                         status_options,
-                        index=status_options.index(
-                            current_status
-                        ),
+                        index=status_options.index(current_status),
                         key=f"edit_status_{selected_id}"
                     )
 

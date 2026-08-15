@@ -567,8 +567,6 @@ def show_dashboard():
 # --------------------------------------------------------
 
 def admin_page():
-    st.write("TEST 123 — ADMIN PAGE IS RUNNING")
-
     st.sidebar.markdown(
         """
         <div style="

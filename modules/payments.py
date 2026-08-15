@@ -233,21 +233,15 @@ def payment_management():
         else:
 
             with st.form("payment_form"):
+
+                st.write("### Test Payment Form")
             
-                # STUDENT
                 student_name = st.selectbox(
                     "Student",
                     students["name"].tolist(),
                     key="payment_student_select"
                 )
             
-                student_id_input = int(
-                    students[
-                        students["name"] == student_name
-                    ]["id"].iloc[0]
-                )
-            
-                # AMOUNT
                 amount_input = st.number_input(
                     "💵 Amount ($)",
                     min_value=0.0,
@@ -256,7 +250,8 @@ def payment_management():
                     key="payment_amount"
                 )
             
-                # PAYMENT DATE
+                st.write("### PAYMENT DATE TEST")
+            
                 payment_date_input = st.date_input(
                     "📅 Payment Date",
                     value=date.today(),
@@ -264,14 +259,16 @@ def payment_management():
                     key="payment_date_input"
                 )
             
-                # PERIOD
+                st.write(
+                    f"Selected date: {payment_date_input}"
+                )
+            
                 period_input = st.text_input(
                     "📆 Period Paid For",
                     placeholder="e.g. June 2026",
                     key="payment_period"
                 )
             
-                # STATUS
                 status_input = st.selectbox(
                     "📌 Payment Status",
                     [
@@ -279,7 +276,6 @@ def payment_management():
                         "Pending",
                         "Refunded"
                     ],
-                    index=0,
                     key="payment_status"
                 )
             

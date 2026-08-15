@@ -761,12 +761,6 @@ def admin_page():
 
     elif option == "💰 Payments":
 
-        st.error("🚨 PAYMENT ROUTER REACHED")
-
-        st.caption(
-            f"Current option: {repr(option)}"
-        )
-
         payment_management()
 
     # ========================================================

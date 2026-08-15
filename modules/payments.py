@@ -231,6 +231,8 @@ def payment_management():
             )
 
         else:
+            st.error("PAYMENT FORM — NEW CODE IS RUNNING")
+
 
             with st.form("payment_form"):
 

@@ -3,31 +3,7 @@ from datetime import date
 from database import execute, query_dataframe
 
 
-def ensure_payments_schema():
-    """Safely ensure essential columns exist in the payments table."""
-    columns_to_add = [
-        ("payments", "amount", "NUMERIC DEFAULT 0.00"),
-        ("payments", "payment_date", "DATE DEFAULT CURRENT_DATE"),
-        ("payments", "period", "TEXT"),
-        ("payments", "status", "TEXT DEFAULT 'Completed'"),
-    ]
-
-    for table_name, col_name, col_type in columns_to_add:
-        try:
-            execute(
-                f"""
-                ALTER TABLE {table_name}
-                ADD COLUMN IF NOT EXISTS {col_name} {col_type};
-                """
-            )
-        except Exception:
-            pass
-
-
 def payment_management():
-
-    # Automatically patch any missing columns
-    ensure_payments_schema()
 
     st.title("💰 Payment Management")
 
@@ -59,23 +35,31 @@ def payment_management():
                     p.id,
                     s.first_name || ' ' || s.last_name AS student_name,
                     COALESCE(p.amount, 0.00) AS amount,
-                    COALESCE(p.payment_date, CURRENT_DATE) AS payment_date,
+                    p.payment_date,
                     COALESCE(p.period, '') AS period,
                     COALESCE(p.status, 'Completed') AS status
-
                 FROM payments p
-
                 JOIN students s
                     ON p.student_id = s.id
-
-                ORDER BY p.payment_date DESC
+                ORDER BY p.payment_date DESC, p.id DESC
                 """
             )
 
             if not payments.empty:
 
+                display_payments = payments.rename(
+                    columns={
+                        "id": "Payment ID",
+                        "student_name": "Student",
+                        "amount": "Amount",
+                        "payment_date": "Payment Date",
+                        "period": "Period",
+                        "status": "Status"
+                    }
+                )
+
                 st.dataframe(
-                    payments,
+                    display_payments,
                     use_container_width=True,
                     hide_index=True
                 )
@@ -109,11 +93,8 @@ def payment_management():
             SELECT
                 id,
                 first_name || ' ' || last_name AS name
-
             FROM students
-
             WHERE COALESCE(archived, 0) = 0
-
             ORDER BY last_name, first_name
             """
         )
@@ -151,6 +132,7 @@ def payment_management():
                 amount_input = st.number_input(
                     "Amount ($)",
                     min_value=0.0,
+                    step=0.01,
                     format="%.2f",
                     key="payment_amount"
                 )
@@ -170,12 +152,13 @@ def payment_management():
                 # --------------------------------------------------
 
                 period_input = st.text_input(
-                    "Period (e.g., June 2026)",
+                    "Period Paid For",
+                    placeholder="e.g., August 2026",
                     key="payment_period"
                 )
 
                 # --------------------------------------------------
-                # SAVE
+                # SUBMIT
                 # --------------------------------------------------
 
                 submitted = st.form_submit_button(
@@ -193,7 +176,7 @@ def payment_management():
                     elif not period_input.strip():
 
                         st.error(
-                            "Please enter the period this payment covers."
+                            "Please enter the period the payment is for."
                         )
 
                     else:
@@ -222,12 +205,11 @@ def payment_management():
                                 (
                                     student_id_input,
                                     amount_input,
-                                    str(payment_date_input),
+                                    payment_date_input,
                                     period_input.strip()
                                 )
                             )
 
-                            # Clear cached database results
                             st.cache_data.clear()
 
                             st.success(
@@ -259,23 +241,25 @@ def payment_management():
                 SELECT
                     p.id,
                     p.student_id,
-                    s.first_name || ' ' || s.last_name
-                        AS student_name,
+                    s.first_name || ' ' || s.last_name AS student_name,
                     p.amount,
                     p.payment_date,
                     p.period,
                     p.status
-
                 FROM payments p
-
                 JOIN students s
                     ON p.student_id = s.id
-
                 ORDER BY p.payment_date DESC, p.id DESC
                 """
             )
 
-            if not payments_list.empty:
+            if payments_list.empty:
+
+                st.info(
+                    "No payments available to edit."
+                )
+
+            else:
 
                 # --------------------------------------------------
                 # PAYMENT SELECTOR
@@ -285,10 +269,16 @@ def payment_management():
 
                 for _, row in payments_list.iterrows():
 
+                    amount = (
+                        float(row["amount"])
+                        if row["amount"] is not None
+                        else 0.0
+                    )
+
                     payment_date_display = (
                         str(row["payment_date"])
                         if row["payment_date"] is not None
-                        else ""
+                        else "No date"
                     )
 
                     period_display = (
@@ -297,94 +287,140 @@ def payment_management():
                         else ""
                     )
 
-                    amount_display = (
-                        f"{float(row['amount']):.2f}"
-                        if row["amount"] is not None
-                        else "0.00"
-                    )
-
                     label = (
                         f"{row['student_name']} — "
-                        f"${amount_display} — "
+                        f"${amount:,.2f} — "
                         f"{payment_date_display} — "
                         f"{period_display}"
                     )
 
-                    payment_options[label] = row["id"]
+                    payment_options[label] = int(
+                        row["id"]
+                    )
 
                 selected_label = st.selectbox(
                     "Select Payment to Edit",
                     list(payment_options.keys()),
-                    key="edit_payment_select"
+                    key="payment_edit_selector"
                 )
 
-                if selected_label:
+                selected_id = payment_options[
+                    selected_label
+                ]
 
-                    selected_id = payment_options[
-                        selected_label
-                    ]
+                selected_rows = payments_list[
+                    payments_list["id"] == selected_id
+                ]
 
-                    selected_row = payments_list[
-                        payments_list["id"] == selected_id
-                    ].iloc[0]
+                if not selected_rows.empty:
+
+                    selected_row = (
+                        selected_rows.iloc[0]
+                    )
 
                     # --------------------------------------------------
                     # EDIT FORM
                     # --------------------------------------------------
 
-                    with st.form("edit_payment_form"):
+                    with st.form(
+                        f"edit_payment_form_{selected_id}"
+                    ):
+
+                        st.write(
+                            f"**Student:** "
+                            f"{selected_row['student_name']}"
+                        )
+
+                        # --------------------------------------------------
+                        # AMOUNT
+                        # --------------------------------------------------
+
+                        current_amount = (
+                            float(selected_row["amount"])
+                            if selected_row["amount"] is not None
+                            else 0.0
+                        )
 
                         new_amount = st.number_input(
                             "Update Amount ($)",
                             min_value=0.0,
-                            value=float(
-                                selected_row["amount"] or 0
-                            ),
+                            step=0.01,
+                            value=current_amount,
                             format="%.2f",
                             key=f"edit_amount_{selected_id}"
                         )
 
                         # --------------------------------------------------
-                        # EDIT PAYMENT DATE
+                        # PAYMENT DATE
                         # --------------------------------------------------
 
-                        existing_date = selected_row[
-                            "payment_date"
-                        ]
+                        current_payment_date = (
+                            selected_row["payment_date"]
+                        )
 
-                        if pd_is_valid_date(existing_date):
+                        if current_payment_date is None:
 
-                            if hasattr(
-                                existing_date,
-                                "date"
-                            ):
-                                existing_date = (
-                                    existing_date.date()
-                                )
-
-                            elif not isinstance(
-                                existing_date,
-                                date
-                            ):
-                                existing_date = date.today()
+                            current_payment_date = date.today()
 
                         else:
 
-                            existing_date = date.today()
+                            # Convert pandas Timestamp /
+                            # datetime to Python date
+                            if hasattr(
+                                current_payment_date,
+                                "date"
+                            ):
+
+                                current_payment_date = (
+                                    current_payment_date.date()
+                                )
+
+                            elif isinstance(
+                                current_payment_date,
+                                str
+                            ):
+
+                                try:
+
+                                    current_payment_date = (
+                                        date.fromisoformat(
+                                            current_payment_date[:10]
+                                        )
+                                    )
+
+                                except Exception:
+
+                                    current_payment_date = (
+                                        date.today()
+                                    )
 
                         new_payment_date = st.date_input(
-                            "Update Payment Date",
-                            value=existing_date,
+                            "Payment Date",
+                            value=current_payment_date,
                             key=f"edit_payment_date_{selected_id}"
                         )
 
+                        # --------------------------------------------------
+                        # PERIOD
+                        # --------------------------------------------------
+
+                        current_period = (
+                            str(
+                                selected_row["period"]
+                            )
+                            if selected_row["period"] is not None
+                            else ""
+                        )
+
                         new_period = st.text_input(
-                            "Update Period",
-                            value=str(
-                                selected_row["period"] or ""
-                            ),
+                            "Period Paid For",
+                            value=current_period,
                             key=f"edit_period_{selected_id}"
                         )
+
+                        # --------------------------------------------------
+                        # BUTTONS
+                        # --------------------------------------------------
 
                         col1, col2 = st.columns(2)
 
@@ -396,9 +432,9 @@ def payment_management():
                             "🗑️ Delete Payment"
                         )
 
-                        # --------------------------------------------------
+                        # ==================================================
                         # UPDATE PAYMENT
-                        # --------------------------------------------------
+                        # ==================================================
 
                         if update_sub:
 
@@ -411,106 +447,79 @@ def payment_management():
                             elif not new_period.strip():
 
                                 st.error(
-                                    "Please enter the payment period."
+                                    "Please enter the period the payment is for."
                                 )
 
                             else:
 
+                                try:
+
+                                    execute(
+                                        """
+                                        UPDATE payments
+                                        SET
+                                            amount = %s,
+                                            payment_date = %s,
+                                            period = %s,
+                                            status = 'Completed'
+                                        WHERE id = %s
+                                        """,
+                                        (
+                                            new_amount,
+                                            new_payment_date,
+                                            new_period.strip(),
+                                            selected_id
+                                        )
+                                    )
+
+                                    st.cache_data.clear()
+
+                                    st.success(
+                                        "✅ Payment updated successfully!"
+                                    )
+
+                                    st.rerun()
+
+                                except Exception as e:
+
+                                    st.error(
+                                        f"Error updating payment: {e}"
+                                    )
+
+                        # ==================================================
+                        # DELETE PAYMENT
+                        # ==================================================
+
+                        if delete_sub:
+
+                            try:
+
                                 execute(
                                     """
-                                    UPDATE payments
-
-                                    SET
-                                        amount = %s,
-                                        payment_date = %s,
-                                        period = %s,
-                                        status = 'Completed'
-
+                                    DELETE FROM payments
                                     WHERE id = %s
                                     """,
                                     (
-                                        new_amount,
-                                        str(new_payment_date),
-                                        new_period.strip(),
-                                        selected_id
+                                        selected_id,
                                     )
                                 )
 
                                 st.cache_data.clear()
 
                                 st.success(
-                                    "✅ Payment updated successfully!"
+                                    "✅ Payment deleted successfully!"
                                 )
 
                                 st.rerun()
 
-                        # --------------------------------------------------
-                        # DELETE PAYMENT
-                        # --------------------------------------------------
+                            except Exception as e:
 
-                        if delete_sub:
-
-                            execute(
-                                """
-                                DELETE FROM payments
-                                WHERE id = %s
-                                """,
-                                (selected_id,)
-                            )
-
-                            st.cache_data.clear()
-
-                            st.success(
-                                "✅ Payment deleted successfully!"
-                            )
-
-                            st.rerun()
-
-            else:
-
-                st.info(
-                    "No payments available to edit."
-                )
+                                st.error(
+                                    f"Error deleting payment: {e}"
+                                )
 
         except Exception as e:
 
             st.error(
-                f"Error loading management interface: {e}"
+                f"Error loading payment management interface: {e}"
             )
-
-
-# ==========================================================
-# HELPER FOR DATE VALIDATION
-# ==========================================================
-
-def pd_is_valid_date(value):
-    """
-    Safely determine whether a database date value
-    can be converted into a Python date.
-    """
-
-    if value is None:
-        return False
-
-    try:
-
-        if hasattr(value, "date"):
-            return True
-
-        if isinstance(value, date):
-            return True
-
-        # Handle string dates such as 2026-08-14
-        if isinstance(value, str):
-
-            date.fromisoformat(
-                value[:10]
-            )
-
-            return True
-
-        return False
-
-    except Exception:
-
-        return False

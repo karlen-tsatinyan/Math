@@ -5,20 +5,7 @@ from authentication import login
 from pages.student import student_page
 from supabase_client import get_supabase
 
-import pages.admin as admin_module
-
-st.sidebar.error(
-    f"🚨 ADMIN FILE: {admin_module.__file__}"
-)
-
-admin_page = admin_module.admin_page
-st.sidebar.error(
-    f"🚨 ADMIN FUNCTION: {admin_page.__module__}"
-)
-
-st.sidebar.error(
-    f"🚨 ADMIN FUNCTION LINE: {admin_page.__code__.co_firstlineno}"
-)
+from pages.admin import admin_page
 
 # ==========================================
 # PAGE CONFIG

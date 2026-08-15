@@ -679,28 +679,27 @@ def admin_page():
     # ========================================================
     # FINANCE & REPORTING
     # ========================================================
-
+    
     st.sidebar.markdown(
         '<div class="admin-section">FINANCE & REPORTING</div>',
         unsafe_allow_html=True
     )
-
+    
     # --------------------------------------------------------
-    # PAYMENTS — DIRECT BUTTON
+    # PAYMENTS
     # --------------------------------------------------------
-
-    if st.sidebar.button(
-        "💰 Payments",
-        use_container_width=True,
-        key="admin_nav_payments"
-    ):
-
-        st.session_state["admin_option"] = "💰 Payments"
-
-        st.rerun()
-
-    admin_nav_button("📈 Student Financials")
-    admin_nav_button("📊 Reports")
+    
+    admin_nav_button(
+        "💰 Payments"
+    )
+    
+    # --------------------------------------------------------
+    # REPORTS
+    # --------------------------------------------------------
+    
+    admin_nav_button(
+        "📊 Reports"
+    )
 
     # ========================================================
     # ARCHIVING
@@ -762,14 +761,6 @@ def admin_page():
     elif option == "💰 Payments":
 
         payment_management()
-
-    # ========================================================
-    # STUDENT FINANCIALS
-    # ========================================================
-
-    elif option == "📈 Student Financials":
-
-        financial_dashboard()
 
     # ========================================================
     # REPORTS

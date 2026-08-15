@@ -39,12 +39,6 @@ def ensure_payments_schema():
 def payment_management():
 
     # ========================================================
-    # DEBUG — CONFIRMED ROUTING
-    # ========================================================
-
-    st.success("✅ PAYMENT MANAGEMENT IS RUNNING")
-
-    # ========================================================
     # ENSURE PAYMENT SCHEMA
     # ========================================================
 

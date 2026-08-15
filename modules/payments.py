@@ -37,6 +37,7 @@ def ensure_payments_schema():
 # ============================================================
 
 def payment_management():
+    st.error("🚨 THIS IS THE PAYMENT_MANAGEMENT FUNCTION I AM RUNNING")
     st.sidebar.warning("PAYMENT VERSION: NEW")
 
     # --------------------------------------------------------

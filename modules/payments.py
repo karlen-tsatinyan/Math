@@ -267,12 +267,10 @@ def payment_management():
                 # PAYMENT DATE
                 # --------------------------------------------
 
-                st.markdown(
-                    "**📅 Payment Date**"
-                )
-
+                st.markdown("### 📅 Payment Date")
+                
                 payment_date_input = st.date_input(
-                    "Select the date payment was received",
+                    "Date Payment Was Received",
                     value=date.today(),
                     key="payment_date_input"
                 )
@@ -540,12 +538,10 @@ def payment_management():
                     # PAYMENT DATE
                     # ----------------------------------------
 
-                    st.markdown(
-                        "**📅 Payment Date**"
-                    )
-
+                    st.markdown("### 📅 Payment Date")
+                    
                     new_payment_date = st.date_input(
-                        "Update the date payment was received",
+                        "Date Payment Was Received",
                         value=current_payment_date,
                         key=f"edit_payment_date_{selected_id}"
                     )

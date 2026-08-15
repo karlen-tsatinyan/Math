@@ -876,6 +876,7 @@ def admin_page():
     # --------------------------------------------------------
 
     elif option == "💰 Payments":
+        st.error("🚨 ADMIN ROUTER REACHED PAYMENT MANAGEMENT")
 
         payment_management()
 

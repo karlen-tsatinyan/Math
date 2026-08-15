@@ -1,9 +1,17 @@
 import streamlit as st
 
 from authentication import login
-from pages.admin import admin_page
+# from pages.admin import admin_page
 from pages.student import student_page
 from supabase_client import get_supabase
+
+import pages.admin as admin_module
+
+st.sidebar.error(
+    f"🚨 ADMIN FILE: {admin_module.__file__}"
+)
+
+admin_page = admin_module.admin_page
 
 # ==========================================
 # PAGE CONFIG

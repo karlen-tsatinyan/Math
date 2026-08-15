@@ -579,6 +579,8 @@ def show_dashboard():
 # --------------------------------------------------------
 
 def admin_page():
+    st.error("🚨 ADMIN.PY IS RUNNING THIS VERSION")
+
 
     st.sidebar.markdown(
         """

@@ -184,8 +184,6 @@ def sidebar_footer(user):
 # ==========================================
 
 def main():
-    st.error("🚨 APP.PY IS RUNNING THIS VERSION")
-
 
     if st.session_state.user is None:
 

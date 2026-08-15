@@ -15,7 +15,6 @@ from modules.students import student_management
 from modules.homework import homework_management, archived_homework
 from modules.archived_students import archived_students
 from modules.performance import performance_dashboard
-import modules.payments as payments_module
 from utils.datetime_utils import today_str
 
 
@@ -568,8 +567,6 @@ def show_dashboard():
 # --------------------------------------------------------
 
 def admin_page():
-    st.error("🚨 ADMIN.PY IS RUNNING THIS VERSION")
-
 
     st.sidebar.markdown(
         """
@@ -585,103 +582,59 @@ def admin_page():
         unsafe_allow_html=True
     )
 
-
     # ========================================================
-    # ADMIN SIDEBAR NAVIGATION
-    # ========================================================
-
-    # --------------------------------------------------------
     # SIDEBAR STYLING
-    # --------------------------------------------------------
+    # ========================================================
 
     st.sidebar.markdown(
         """
         <style>
 
-        /* ====================================================
-           SECTION HEADINGS
-           ==================================================== */
-
         .admin-section {
-
             font-size: 0.75rem;
-
             font-weight: 700;
-
             letter-spacing: 0.08em;
-
             margin-top: 12px;
-
             margin-bottom: 4px;
-
             padding-bottom: 4px;
-
-            border-bottom:
-                1px solid rgba(128,128,128,0.35);
+            border-bottom: 1px solid rgba(128,128,128,0.35);
         }
 
-
         .admin-section:first-child {
-
             margin-top: 2px;
         }
 
-
-        /* ====================================================
-           COMPACT ADMIN BUTTONS
-           ==================================================== */
-
         [data-testid="stSidebar"] .stButton {
-
             margin-bottom: 0px !important;
         }
 
-
         [data-testid="stSidebar"] .stButton > button {
-
             padding: 4px 8px !important;
-
             min-height: 30px !important;
-
             font-size: 0.86rem !important;
-
             text-align: left !important;
-
             justify-content: flex-start !important;
-
             border-radius: 5px !important;
         }
 
-
-        /* ====================================================
-           REMOVE EXTRA SPACING
-           ==================================================== */
-
         [data-testid="stSidebar"] .element-container {
-
             margin-bottom: 0px !important;
         }
-
 
         </style>
         """,
         unsafe_allow_html=True
     )
 
-
-    # --------------------------------------------------------
-    # CURRENT PAGE
-    # --------------------------------------------------------
+    # ========================================================
+    # DEFAULT PAGE
+    # ========================================================
 
     if "admin_option" not in st.session_state:
-
-        st.session_state.admin_option = (
-            "🏠 Dashboard"
-        )
-
+        st.session_state["admin_option"] = "🏠 Dashboard"
 
     # ========================================================
-    # HELPER FUNCTION
+    # NAVIGATION HELPER
     # ========================================================
 
     def admin_nav_button(label):
@@ -692,10 +645,9 @@ def admin_page():
             key=f"admin_nav_{label}"
         ):
 
-            st.session_state.admin_option = label
+            st.session_state["admin_option"] = label
 
             st.rerun()
-
 
     # ========================================================
     # ADMIN MENU
@@ -706,19 +658,9 @@ def admin_page():
         unsafe_allow_html=True
     )
 
-
-    admin_nav_button(
-        "🏠 Dashboard"
-    )
-
-    admin_nav_button(
-        "👨‍🎓 Students"
-    )
-
-    admin_nav_button(
-        "👤 Student Profiles"
-    )
-
+    admin_nav_button("🏠 Dashboard")
+    admin_nav_button("👨‍🎓 Students")
+    admin_nav_button("👤 Student Profiles")
 
     # ========================================================
     # ACADEMIC
@@ -729,27 +671,11 @@ def admin_page():
         unsafe_allow_html=True
     )
 
-
-    admin_nav_button(
-        "📚 Homework"
-    )
-
-    admin_nav_button(
-        "📅 Schedule"
-    )
-
-    admin_nav_button(
-        "📋 Attendance"
-    )
-
-    admin_nav_button(
-        "📊 Performance"
-    )
-
-    admin_nav_button(
-        "📘 Live Curriculum Board"
-    )
-
+    admin_nav_button("📚 Homework")
+    admin_nav_button("📅 Schedule")
+    admin_nav_button("📋 Attendance")
+    admin_nav_button("📊 Performance")
+    admin_nav_button("📘 Live Curriculum Board")
 
     # ========================================================
     # FINANCE & REPORTING
@@ -760,19 +686,22 @@ def admin_page():
         unsafe_allow_html=True
     )
 
+    # --------------------------------------------------------
+    # PAYMENTS — DIRECT BUTTON
+    # --------------------------------------------------------
 
-    admin_nav_button(
-        "💰 Payments"
-    )
+    if st.sidebar.button(
+        "💰 Payments",
+        use_container_width=True,
+        key="admin_nav_payments"
+    ):
 
-    admin_nav_button(
-        "📈 Student Financials"
-    )
+        st.session_state["admin_option"] = "💰 Payments"
 
-    admin_nav_button(
-        "📊 Reports"
-    )
+        st.rerun()
 
+    admin_nav_button("📈 Student Financials")
+    admin_nav_button("📊 Reports")
 
     # ========================================================
     # ARCHIVING
@@ -783,15 +712,8 @@ def admin_page():
         unsafe_allow_html=True
     )
 
-
-    admin_nav_button(
-        "📦 Archived Homework"
-    )
-
-    admin_nav_button(
-        "👨‍🎓 Archived Students"
-    )
-
+    admin_nav_button("📦 Archived Homework")
+    admin_nav_button("👨‍🎓 Archived Students")
 
     # ========================================================
     # CURRENT OPTION
@@ -802,126 +724,98 @@ def admin_page():
         "🏠 Dashboard"
     )
 
-
     # ========================================================
     # ROUTING
     # ========================================================
-
-
-    # --------------------------------------------------------
-    # DASHBOARD
-    # --------------------------------------------------------
 
     if option == "🏠 Dashboard":
 
         show_dashboard()
 
-
-    # --------------------------------------------------------
-    # STUDENTS
-    # --------------------------------------------------------
-
     elif option == "👨‍🎓 Students":
 
         student_management()
-
-
-    # --------------------------------------------------------
-    # STUDENT PROFILES
-    # --------------------------------------------------------
 
     elif option == "👤 Student Profiles":
 
         student_profile()
 
-
-    # --------------------------------------------------------
-    # HOMEWORK
-    # --------------------------------------------------------
-
     elif option == "📚 Homework":
 
         homework_management()
-
-
-    # --------------------------------------------------------
-    # SCHEDULE
-    # --------------------------------------------------------
 
     elif option == "📅 Schedule":
 
         scheduler_management()
 
-
-    # --------------------------------------------------------
-    # ATTENDANCE
-    # --------------------------------------------------------
-
     elif option == "📋 Attendance":
 
         attendance_management()
-
-
-    # --------------------------------------------------------
-    # PERFORMANCE
-    # --------------------------------------------------------
 
     elif option == "📊 Performance":
 
         performance_dashboard()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # PAYMENTS
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "💰 Payments":
-        st.error("🚨 ADMIN ROUTER REACHED PAYMENT MANAGEMENT")
+
+        st.error("🚨 PAYMENT ROUTER REACHED")
+
+        st.caption(
+            f"Current option: {repr(option)}"
+        )
 
         payment_management()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # STUDENT FINANCIALS
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "📈 Student Financials":
 
         financial_dashboard()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # REPORTS
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "📊 Reports":
 
         reports_management()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # ARCHIVED HOMEWORK
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "📦 Archived Homework":
 
         archived_homework()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # ARCHIVED STUDENTS
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "👨‍🎓 Archived Students":
 
         archived_students()
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # LIVE CURRICULUM BOARD
-    # --------------------------------------------------------
+    # ========================================================
 
     elif option == "📘 Live Curriculum Board":
 
         curriculum_management()
 
+    # ========================================================
+    # UNKNOWN OPTION
+    # ========================================================
+
+    else:
+
+        st.error(
+            f"Unknown admin option: {repr(option)}"
+        )

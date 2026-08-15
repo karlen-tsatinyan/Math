@@ -12,6 +12,13 @@ st.sidebar.error(
 )
 
 admin_page = admin_module.admin_page
+st.sidebar.error(
+    f"🚨 ADMIN FUNCTION: {admin_page.__module__}"
+)
+
+st.sidebar.error(
+    f"🚨 ADMIN FUNCTION LINE: {admin_page.__code__.co_firstlineno}"
+)
 
 # ==========================================
 # PAGE CONFIG

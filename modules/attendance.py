@@ -75,14 +75,18 @@ def attendance_management():
             s.first_name || ' ' || s.last_name AS student,
             a.session_date::text AS session_date,
             a.session_time::text AS session_time,
+            COALESCE(se.topic, '') AS lesson_topic,
             a.status AS status,
-            TO_CHAR(
-                a.marked_at,
-                'YYYY-MM-DD HH12:MI AM'
-            ) AS recorded_at
+            a.marked_at::text AS recorded_at
         FROM attendance a
-        JOIN students s 
+        JOIN students s
             ON a.student_id = s.id
+    
+        LEFT JOIN sessions se
+            ON se.student_id = a.student_id
+            AND se.session_date = a.session_date
+            AND se.session_time = a.session_time
+    
         WHERE a.session_date BETWEEN %s AND %s
     """
     
@@ -149,6 +153,7 @@ def attendance_management():
                 "student": "Student",
                 "session_date": "Date",
                 "session_time": "Time",
+                "lesson_topic": "Lesson Topic",
                 "status": "Status",
                 "recorded_at": "Recorded At"
             }

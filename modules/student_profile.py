@@ -188,82 +188,66 @@ def student_profile():
 
     st.divider()
 
-    next_session = (
+    next_session = query_dataframe(
         """
         SELECT
-
             session_date,
             session_time,
             topic
-
         FROM sessions
-
-        WHERE student_id=%s
-        AND session_date >= %s
-
-        ORDER BY session_date, session_time
-
+        WHERE student_id = %s
+          AND session_date >= %s
+        ORDER BY
+            session_date,
+            session_time
         LIMIT 1
         """,
-        (student_id, today_str())
+        (
+            student_id,
+            today_str()
+        )
     )
-
-    if len(next_session) > 0:
-
+    
+    if not next_session.empty:
+    
         st.info(
             f"""
     **Next Lesson**
-
+    
     📅 {next_session.iloc[0]['session_date']}
-
+    
     🕒 {next_session.iloc[0]['session_time']}
-
+    
     📖 {next_session.iloc[0]['topic']}
     """
         )
 
-    latest_grade = (
-
+    latest_grade = query_dataframe(
         """
         SELECT
-
             assignment,
-
             percentage,
-
             grade_date
-
-
         FROM homework_grades
-
-
-        WHERE student_id=%s
-
-
+        WHERE student_id = %s
         ORDER BY grade_date DESC
-
-
         LIMIT 1
-
         """,
-
         (
             student_id,
         )
-
     )
-
-    if len(latest_grade) > 0:
-
+    
+    if not latest_grade.empty:
+    
         st.success(
-
             f"""
-    Latest Homework Grade
-
+    **Latest Homework Grade**
+    
     📚 {latest_grade.iloc[0]['assignment']}
-
+    
     📊 {latest_grade.iloc[0]['percentage']}%
-
+    
     📅 {latest_grade.iloc[0]['grade_date']}
     """
         )

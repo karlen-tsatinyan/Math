@@ -152,14 +152,16 @@ def student_profile():
     )
 
     # Homework submitted
-    homework_count = (
+    homework_count = query_dataframe(
         """
         SELECT
             COUNT(*) AS total
         FROM homework
-        WHERE student_id=%s
+        WHERE student_id = %s
         """,
-        (student_id,)
+        (
+            student_id,
+        )
     )
 
     col1, col2, col3, col4 = st.columns(4)

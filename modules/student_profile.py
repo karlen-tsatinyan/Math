@@ -115,7 +115,7 @@ def student_profile():
     st.subheader("📊 Student Overview")
 
     # Total payments
-    payment_total = query_dataframe(
+    payment_total = (
         """
         SELECT
             COALESCE(SUM(amount),0) AS total
@@ -126,7 +126,7 @@ def student_profile():
     )
 
     # Session count
-    session_count = query_dataframe(
+    session_count = (
         """
         SELECT
             COUNT(*) AS total
@@ -137,7 +137,7 @@ def student_profile():
     )
 
     # Attendance
-    attendance_count = query_dataframe(
+    attendance_count = (
         """
         SELECT
             COUNT(*) AS total
@@ -149,7 +149,7 @@ def student_profile():
     )
 
     # Homework submitted
-    homework_count = query_dataframe(
+    homework_count = (
         """
         SELECT
             COUNT(*) AS total
@@ -183,7 +183,7 @@ def student_profile():
 
     st.divider()
 
-    next_session = query_dataframe(
+    next_session = (
         """
         SELECT
 
@@ -217,7 +217,7 @@ def student_profile():
     """
         )
 
-    latest_grade = query_dataframe(
+    latest_grade = (
 
         """
         SELECT
@@ -285,7 +285,7 @@ def student_profile():
 
     with tab1:
 
-        payments=query_dataframe(
+        payments=(
 
             """
 
@@ -335,85 +335,58 @@ def student_profile():
 
             )
 
+    
     # HOMEWORK
-
+    
     with tab2:
-
-        homework=query_dataframe(
-
+    
+        homework = query_dataframe(
             """
-
             SELECT
-
-            status,
-
-            comment,
-
-            teacher_feedback,
-
-            created_at
-
-
+                title AS "Homework Title",
+                curriculum_topic AS "Curriculum Topic",
+                status AS "Status",
+                teacher_feedback AS "Teacher Feedback",
+                created_at AS "Assigned"
             FROM homework
-
-
-            WHERE student_id=%s
-
-
+            WHERE student_id = %s
             ORDER BY created_at DESC
-
-
             """,
-
             (
-
-            student_id,
-
+                student_id,
             )
-
         )
-
-        if len(homework)==0:
-
+    
+        if len(homework) == 0:
+    
             st.info(
                 "No homework."
             )
-
+    
         else:
-
+    
             st.dataframe(
-
                 homework,
-
                 hide_index=True,
-
                 use_container_width=True
-
             )
 
+
+    
     # SESSIONS
 
     with tab3:
 
         sessions = query_dataframe(
-
             """
             SELECT
-
                 session_date,
-
                 session_time,
-
                 topic,
-
                 notes
-
             FROM sessions
-
             WHERE student_id=%s
-
             ORDER BY session_date, session_time
-
             """,
 
             (

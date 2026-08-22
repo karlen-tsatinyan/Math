@@ -169,13 +169,294 @@ def attendance_management():
             hide_index=True
         )
 
-        # Export Button
-        csv_data = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "📥 Export Attendance CSV",
-            data=csv_data,
-            file_name=f"attendance_report_{start_date}_{end_date}.csv",
-            mime="text/csv"
-        )
+        # ========================================================
+        # EXPORT ATTENDANCE
+        # ========================================================
+        
+        st.subheader("⬇️ Export Attendance")
+        
+        col_export1, col_export2 = st.columns(2)
+        
+        
+        # ========================================================
+        # CSV EXPORT
+        # ========================================================
+        
+        with col_export1:
+        
+            csv_data = display_df.to_csv(
+                index=False
+            ).encode("utf-8")
+        
+            st.download_button(
+                "📥 Export Attendance CSV",
+                data=csv_data,
+                file_name=(
+                    f"attendance_report_"
+                    f"{start_date}_{end_date}.csv"
+                ),
+                mime="text/csv",
+                use_container_width=True,
+                key="attendance_csv_download"
+            )
+        
+        
+        # ========================================================
+        # PDF EXPORT
+        # ========================================================
+        
+        with col_export2:
+        
+            try:
+        
+                from reportlab.lib import colors
+                from reportlab.lib.pagesizes import landscape, letter
+                from reportlab.platypus import (
+                    SimpleDocTemplate,
+                    Table,
+                    TableStyle,
+                    Paragraph,
+                    Spacer
+                )
+                from reportlab.lib.styles import getSampleStyleSheet
+        
+                pdf_buffer = __import__("io").BytesIO()
+        
+                doc = SimpleDocTemplate(
+                    pdf_buffer,
+                    pagesize=landscape(letter),
+                    rightMargin=25,
+                    leftMargin=25,
+                    topMargin=25,
+                    bottomMargin=25
+                )
+        
+                styles = getSampleStyleSheet()
+        
+                elements = []
+        
+                # ------------------------------------------------
+                # TITLE
+                # ------------------------------------------------
+        
+                elements.append(
+                    Paragraph(
+                        "Attendance Report",
+                        styles["Title"]
+                    )
+                )
+        
+                elements.append(
+                    Paragraph(
+                        f"Date Range: {start_date} to {end_date}",
+                        styles["Normal"]
+                    )
+                )
+        
+                if selected_student_id:
+        
+                    elements.append(
+                        Paragraph(
+                            f"Student: {selected_student_label}",
+                            styles["Normal"]
+                        )
+                    )
+        
+                else:
+        
+                    elements.append(
+                        Paragraph(
+                            "Student: All Students",
+                            styles["Normal"]
+                        )
+                    )
+        
+                elements.append(
+                    Paragraph(
+                        f"Status Filter: {status_filter}",
+                        styles["Normal"]
+                    )
+                )
+        
+                elements.append(
+                    Spacer(1, 12)
+                )
+        
+                # ------------------------------------------------
+                # SUMMARY
+                # ------------------------------------------------
+        
+                summary_data = [
+                    [
+                        "Total Sessions",
+                        "Attendance Rate",
+                        "Late Arrivals",
+                        "Unexcused Absences"
+                    ],
+                    [
+                        str(total_sessions),
+                        f"{pct_present}%",
+                        str(lates),
+                        str(unexcused)
+                    ]
+                ]
+        
+                summary_table = Table(
+                    summary_data
+                )
+        
+                summary_table.setStyle(
+                    TableStyle(
+                        [
+                            (
+                                "BACKGROUND",
+                                (0, 0),
+                                (-1, 0),
+                                colors.grey
+                            ),
+                            (
+                                "TEXTCOLOR",
+                                (0, 0),
+                                (-1, 0),
+                                colors.white
+                            ),
+                            (
+                                "FONTNAME",
+                                (0, 0),
+                                (-1, 0),
+                                "Helvetica-Bold"
+                            ),
+                            (
+                                "GRID",
+                                (0, 0),
+                                (-1, -1),
+                                0.5,
+                                colors.grey
+                            ),
+                            (
+                                "ALIGN",
+                                (0, 0),
+                                (-1, -1),
+                                "CENTER"
+                            ),
+                            (
+                                "FONTSIZE",
+                                (0, 0),
+                                (-1, -1),
+                                9
+                            )
+                        ]
+                    )
+                )
+        
+                elements.append(
+                    summary_table
+                )
+        
+                elements.append(
+                    Spacer(1, 15)
+                )
+        
+                # ------------------------------------------------
+                # ATTENDANCE TABLE
+                # ------------------------------------------------
+        
+                pdf_df = display_df.copy()
+        
+                pdf_df = pdf_df.fillna("")
+        
+                pdf_data = [
+                    list(pdf_df.columns)
+                ]
+        
+                for _, row in pdf_df.iterrows():
+        
+                    pdf_data.append(
+                        [
+                            str(value)
+                            for value in row.tolist()
+                        ]
+                    )
+        
+                attendance_table = Table(
+                    pdf_data,
+                    repeatRows=1
+                )
+        
+                attendance_table.setStyle(
+                    TableStyle(
+                        [
+                            (
+                                "BACKGROUND",
+                                (0, 0),
+                                (-1, 0),
+                                colors.grey
+                            ),
+                            (
+                                "TEXTCOLOR",
+                                (0, 0),
+                                (-1, 0),
+                                colors.white
+                            ),
+                            (
+                                "FONTNAME",
+                                (0, 0),
+                                (-1, 0),
+                                "Helvetica-Bold"
+                            ),
+                            (
+                                "GRID",
+                                (0, 0),
+                                (-1, -1),
+                                0.4,
+                                colors.grey
+                            ),
+                            (
+                                "FONTSIZE",
+                                (0, 0),
+                                (-1, -1),
+                                7
+                            ),
+                            (
+                                "VALIGN",
+                                (0, 0),
+                                (-1, -1),
+                                "TOP"
+                            )
+                        ]
+                    )
+                )
+        
+                elements.append(
+                    attendance_table
+                )
+        
+                # ------------------------------------------------
+                # BUILD PDF
+                # ------------------------------------------------
+        
+                doc.build(
+                    elements
+                )
+        
+                pdf_buffer.seek(0)
+        
+                st.download_button(
+                    "📄 Export Attendance PDF",
+                    data=pdf_buffer.getvalue(),
+                    file_name=(
+                        f"attendance_report_"
+                        f"{start_date}_{end_date}.pdf"
+                    ),
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="attendance_pdf_download"
+                )
+        
+            except Exception as e:
+        
+                st.error(
+                    f"Unable to create PDF: {e}"
+                )
     else:
         st.info("No attendance logs found matching the selected filters.")

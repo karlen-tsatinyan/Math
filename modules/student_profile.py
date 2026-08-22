@@ -138,15 +138,17 @@ def student_profile():
     )
 
     # Attendance
-    attendance_count = (
+    attendance_count = query_dataframe(
         """
         SELECT
             COUNT(*) AS total
         FROM attendance
-        WHERE student_id=%s
-        AND status='Present'
+        WHERE student_id = %s
+          AND status = 'Present'
         """,
-        (student_id,)
+        (
+            student_id,
+        )
     )
 
     # Homework submitted

@@ -114,13 +114,12 @@ def student_profile():
 
     st.subheader("📊 Student Overview")
 
-    # Total payments
-    payment_total = (
+    payment_total = query_dataframe(
         """
         SELECT
-            COALESCE(SUM(amount),0) AS total
+            COALESCE(SUM(amount), 0) AS total
         FROM payments
-        WHERE student_id=%s
+        WHERE student_id = %s
         """,
         (student_id,)
     )

@@ -274,54 +274,44 @@ def student_profile():
 
     with tab1:
 
-        payments=(
-
+        payments = query_dataframe(
             """
-
             SELECT
-
-            amount,
-
-            payment_date,
-
-            period
-
-
+                amount AS "Amount",
+                payment_date AS "Payment Date",
+                period AS "Period",
+                status AS "Status"
             FROM payments
-
-
-            WHERE student_id=%s
-
-
+            WHERE student_id = %s
             ORDER BY payment_date DESC
-
-
             """,
-
             (
-
-            student_id,
-
+                student_id,
             )
-
         )
-
-        if len(payments)==0:
-
+    
+        if payments.empty:
+    
             st.info(
                 "No payments."
             )
-
+    
         else:
-
+    
+            # Make sure Amount displays correctly
+            payments["Amount"] = pd.to_numeric(
+                payments["Amount"],
+                errors="coerce"
+            ).fillna(0)
+    
+            payments["Amount"] = payments["Amount"].apply(
+                lambda x: f"${x:,.2f}"
+            )
+    
             st.dataframe(
-
                 payments,
-
                 hide_index=True,
-
                 use_container_width=True
-
             )
 
     

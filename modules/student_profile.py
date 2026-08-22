@@ -230,6 +230,9 @@ def student_profile():
             grade_date
         FROM homework_grades
         WHERE student_id = %s
+          AND assignment IS NOT NULL
+          AND percentage IS NOT NULL
+          AND grade_date IS NOT NULL
         ORDER BY grade_date DESC
         LIMIT 1
         """,

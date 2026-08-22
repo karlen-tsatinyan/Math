@@ -125,14 +125,16 @@ def student_profile():
     )
 
     # Session count
-    session_count = (
+    session_count = query_dataframe(
         """
         SELECT
             COUNT(*) AS total
         FROM sessions
-        WHERE student_id=%s
+        WHERE student_id = %s
         """,
-        (student_id,)
+        (
+            student_id,
+        )
     )
 
     # Attendance
@@ -356,7 +358,7 @@ def student_profile():
             )
         )
     
-        if len(homework) == 0:
+        if homework.empty:
     
             st.info(
                 "No homework."

@@ -77,7 +77,7 @@ def attendance_management():
             a.session_time::text AS session_time,
             COALESCE(se.topic, '') AS lesson_topic,
             a.status AS status,
-            a.marked_at::text AS recorded_at
+            TO_CHAR(a.marked_at, 'YYYY-MM-DD HH24:MI') AS recorded_at
         FROM attendance a
         JOIN students s
             ON a.student_id = s.id

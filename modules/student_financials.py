@@ -2,6 +2,17 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
+
 from database import query_dataframe
 
 
@@ -429,25 +440,263 @@ def student_financials():
     )
 
     # --------------------------------------------------------
-    # CSV
+    # PDF
     # --------------------------------------------------------
-
-    csv = download_data[
+    
+    pdf_buffer = BytesIO()
+    
+    doc = SimpleDocTemplate(
+        pdf_buffer,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    elements = []
+    
+    # --------------------------------------------------------
+    # TITLE
+    # --------------------------------------------------------
+    
+    elements.append(
+        Paragraph(
+            "Financial Statement",
+            styles["Title"]
+        )
+    )
+    
+    elements.append(
+        Paragraph(
+            "Advanced Math Tutoring Portal",
+            styles["Normal"]
+        )
+    )
+    
+    elements.append(Spacer(1, 10))
+    
+    # --------------------------------------------------------
+    # DATE RANGE
+    # --------------------------------------------------------
+    
+    if start_date is not None and end_date is not None:
+    
+        date_text = (
+            f"Statement Period: "
+            f"{start_date.strftime('%m/%d/%Y')} "
+            f"to "
+            f"{end_date.strftime('%m/%d/%Y')}"
+        )
+    
+    elif start_date is not None:
+    
+        date_text = (
+            f"Statement Period: "
+            f"{start_date.strftime('%m/%d/%Y')} onward"
+        )
+    
+    elif end_date is not None:
+    
+        date_text = (
+            f"Statement Period: "
+            f"Through {end_date.strftime('%m/%d/%Y')}"
+        )
+    
+    else:
+    
+        date_text = "Statement Period: All Payments"
+    
+    
+    elements.append(
+        Paragraph(
+            date_text,
+            styles["Normal"]
+        )
+    )
+    
+    elements.append(Spacer(1, 15))
+    
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+    
+    summary_data = [
+        ["Total Paid", "Number of Payments"],
+        [
+            f"${total_paid:,.2f}",
+            str(len(filtered_payments))
+        ]
+    ]
+    
+    summary_table = Table(
+        summary_data,
+        colWidths=[
+            2.5 * 72,
+            2.5 * 72
+        ]
+    )
+    
+    summary_table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, -1),
+                "CENTER"
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                8
+            )
+        ])
+    )
+    
+    elements.append(summary_table)
+    
+    elements.append(Spacer(1, 20))
+    
+    # --------------------------------------------------------
+    # PAYMENT TABLE
+    # --------------------------------------------------------
+    
+    elements.append(
+        Paragraph(
+            "Payment History",
+            styles["Heading2"]
+        )
+    )
+    
+    pdf_data = [
         [
             "Payment Date",
             "Amount",
             "Period",
             "Status"
         ]
-    ].to_csv(
-        index=False
+    ]
+    
+    for _, row in download_data.iterrows():
+    
+        pdf_data.append([
+            str(row["Payment Date"]),
+            f"${float(row['Amount']):,.2f}",
+            str(row["Period"]),
+            str(row["Status"])
+        ])
+    
+    payment_table = Table(
+        pdf_data,
+        colWidths=[
+            1.3 * 72,
+            1.1 * 72,
+            2.0 * 72,
+            1.2 * 72
+        ],
+        repeatRows=1
     )
-
+    
+    payment_table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+            (
+                "ALIGN",
+                (1, 1),
+                (1, -1),
+                "RIGHT"
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            )
+        ])
+    )
+    
+    elements.append(payment_table)
+    
+    elements.append(Spacer(1, 20))
+    
+    elements.append(
+        Paragraph(
+            "🔒 Financial information is protected by Parent PIN authentication.",
+            styles["Normal"]
+        )
+    )
+    
+    # --------------------------------------------------------
+    # BUILD PDF
+    # --------------------------------------------------------
+    
+    doc.build(elements)
+    
+    pdf_buffer.seek(0)
+    
     st.download_button(
-        "📥 Download CSV",
-        csv,
-        file_name="financial_statement.csv",
-        mime="text/csv",
+        "📄 Download PDF",
+        data=pdf_buffer.getvalue(),
+        file_name="financial_statement.pdf",
+        mime="application/pdf",
         use_container_width=True
     )
 

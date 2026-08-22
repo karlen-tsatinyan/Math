@@ -1,9 +1,20 @@
 from datetime import date, timedelta
+import io
+
 import pandas as pd
 import streamlit as st
 
-from database import execute, query_dataframe
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph
+)
 
+from database import execute, query_dataframe
 
 def ensure_attendance_schema():
     """Ensure attendance table exists in PostgreSQL / SQLite."""

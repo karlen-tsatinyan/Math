@@ -343,7 +343,7 @@ def student_profile():
         homework = query_dataframe(
             """
             SELECT
-                title AS "Homework Title",
+                title AS "Homework",
                 curriculum_topic AS "Curriculum Topic",
                 status AS "Status",
                 teacher_feedback AS "Teacher Feedback",

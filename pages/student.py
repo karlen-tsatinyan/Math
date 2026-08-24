@@ -20,7 +20,10 @@ def get_student_id():
 
     user = st.session_state.get("user", {})
 
-    # Preferred method
+    # --------------------------------------------------------
+    # Preferred method: student_id stored in logged-in user
+    # --------------------------------------------------------
+
     student_id = user.get("student_id")
 
     if student_id is not None:
@@ -31,86 +34,119 @@ def get_student_id():
         except (ValueError, TypeError):
             pass
 
-    # Fallback using user ID
+    # --------------------------------------------------------
+    # Fallback: resolve using user ID
+    # --------------------------------------------------------
+
     user_id = user.get("id")
 
     if user_id:
 
-        result = query_dataframe(
-            """
-            SELECT student_id
-            FROM users
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (user_id,)
-        )
+        try:
 
-        if not result.empty:
+            result = query_dataframe(
+                """
+                SELECT
+                    student_id
+                FROM users
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (user_id,)
+            )
 
-            value = result.iloc[0]["student_id"]
+            if not result.empty:
 
-            if value is not None:
+                value = result.iloc[0]["student_id"]
 
-                try:
-                    return int(value)
+                if value is not None:
 
-                except (ValueError, TypeError):
-                    pass
+                    try:
+                        return int(value)
 
-    # Final fallback using username
+                    except (ValueError, TypeError):
+                        pass
+
+        except Exception:
+            pass
+
+    # --------------------------------------------------------
+    # Final fallback: resolve using username
+    # --------------------------------------------------------
+
     username = user.get("username")
 
     if username:
 
-        result = query_dataframe(
-            """
-            SELECT student_id
-            FROM users
-            WHERE LOWER(username) = LOWER(%s)
-            LIMIT 1
-            """,
-            (username,)
-        )
+        try:
 
-        if not result.empty:
+            result = query_dataframe(
+                """
+                SELECT
+                    student_id
+                FROM users
+                WHERE LOWER(username) = LOWER(%s)
+                LIMIT 1
+                """,
+                (username,)
+            )
 
-            value = result.iloc[0]["student_id"]
+            if not result.empty:
 
-            if value is not None:
+                value = result.iloc[0]["student_id"]
 
-                try:
-                    return int(value)
+                if value is not None:
 
-                except (ValueError, TypeError):
-                    pass
+                    try:
+                        return int(value)
+
+                    except (ValueError, TypeError):
+                        pass
+
+        except Exception:
+            pass
 
     return None
 
 
 # ============================================================
 # STUDENT INFORMATION
+#
+# IMPORTANT:
+# This is intentionally NOT cached.
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
 def get_student_info(student_id):
 
-    return query_dataframe(
-        """
-        SELECT
-            id,
-            COALESCE(first_name, '') AS first_name,
-            COALESCE(last_name, '') AS last_name,
-            COALESCE(grade, 'N/A') AS grade,
-            COALESCE(subject, 'N/A') AS subject,
-            zoom_link,
-            meeting_id
-        FROM students
-        WHERE id = %s
-        LIMIT 1
-        """,
-        (student_id,)
-    )
+    if not student_id:
+        return pd.DataFrame()
+
+    try:
+
+        return query_dataframe(
+            """
+            SELECT
+                id,
+                COALESCE(first_name, '') AS first_name,
+                COALESCE(last_name, '') AS last_name,
+                COALESCE(grade, 'N/A') AS grade,
+                COALESCE(subject, 'N/A') AS subject,
+                zoom_link,
+                meeting_id
+            FROM students
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (int(student_id),)
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Unable to load student information: {e}"
+        )
+
+        return pd.DataFrame()
 
 
 # ============================================================
@@ -122,7 +158,8 @@ def get_dashboard_data(student_id, today_date):
 
     homework_due = query_dataframe(
         """
-        SELECT COUNT(*) AS total
+        SELECT
+            COUNT(*) AS total
         FROM homework
         WHERE student_id = %s
           AND status = 'Assigned'
@@ -133,7 +170,8 @@ def get_dashboard_data(student_id, today_date):
 
     sessions_count = query_dataframe(
         """
-        SELECT COUNT(*) AS total
+        SELECT
+            COUNT(*) AS total
         FROM sessions
         WHERE student_id = %s
           AND session_date >= %s
@@ -147,7 +185,10 @@ def get_dashboard_data(student_id, today_date):
     payments_summary = query_dataframe(
         """
         SELECT
-            COALESCE(SUM(amount), 0) AS total
+            COALESCE(
+                SUM(amount),
+                0
+            ) AS total
         FROM payments
         WHERE student_id = %s
         """,
@@ -205,11 +246,16 @@ def get_grades(student_id):
           AND archived = 0
           AND grade IS NOT NULL
           AND TRIM(grade) <> ''
-        ORDER BY due_date DESC
+        ORDER BY
+            due_date DESC
         """,
         (student_id,)
     )
 
+
+# ============================================================
+# SESSION HISTORY
+# ============================================================
 
 @st.cache_data(ttl=CACHE_TTL)
 def get_session_history(student_id):
@@ -219,7 +265,10 @@ def get_session_history(student_id):
         SELECT
             s.session_date AS "Date",
             s.session_time AS "Time",
-            COALESCE(s.topic, '') AS "Topic",
+            COALESCE(
+                s.topic,
+                ''
+            ) AS "Topic",
 
             COALESCE(
                 a.status,
@@ -258,11 +307,16 @@ def get_payment_history(student_id):
             period
         FROM payments
         WHERE student_id = %s
-        ORDER BY payment_date DESC
+        ORDER BY
+            payment_date DESC
         """,
         (student_id,)
     )
 
+
+# ============================================================
+# PARENT PIN
+# ============================================================
 
 @st.cache_data(ttl=CACHE_TTL)
 def get_parent_pin(student_id):
@@ -300,7 +354,6 @@ def student_page():
 
         return
 
-
     # ========================================================
     # STUDENT INFORMATION
     # ========================================================
@@ -316,7 +369,6 @@ def student_page():
         return
 
     student = student_df.iloc[0]
-
 
     # ========================================================
     # SIDEBAR CSS
@@ -414,7 +466,6 @@ def student_page():
         unsafe_allow_html=True
     )
 
-
     # ========================================================
     # STUDENT PORTAL TITLE
     # ========================================================
@@ -428,13 +479,8 @@ def student_page():
         unsafe_allow_html=True
     )
 
-
     # ========================================================
     # CURRENT MENU STATE
-    #
-    # IMPORTANT:
-    # We only set the default if the state does not exist.
-    # We NEVER reset it during a normal rerun.
     # ========================================================
 
     valid_student_options = [
@@ -451,13 +497,11 @@ def student_page():
 
     ]
 
-
     if "student_portal_menu" not in st.session_state:
 
         st.session_state.student_portal_menu = (
             "🏠 Dashboard"
         )
-
 
     if (
         st.session_state.student_portal_menu
@@ -467,7 +511,6 @@ def student_page():
         st.session_state.student_portal_menu = (
             "🏠 Dashboard"
         )
-
 
     # ========================================================
     # NAVIGATION BUTTON FUNCTION
@@ -488,7 +531,6 @@ def student_page():
 
             st.rerun()
 
-
     # ========================================================
     # MY LEARNING
     # ========================================================
@@ -500,24 +542,20 @@ def student_page():
         unsafe_allow_html=True
     )
 
-
     student_nav_button(
         "🏠 Dashboard",
         "🏠 Dashboard"
     )
-
 
     student_nav_button(
         "📚 Homework",
         "📚 Homework"
     )
 
-
     student_nav_button(
         "📊 Performance",
         "📊 Performance"
     )
-
 
     # ========================================================
     # SCHEDULE
@@ -530,12 +568,10 @@ def student_page():
         unsafe_allow_html=True
     )
 
-
     student_nav_button(
         "📅 Schedule",
         "📅 Schedule"
     )
-
 
     # ========================================================
     # FINANCIAL
@@ -548,12 +584,10 @@ def student_page():
         unsafe_allow_html=True
     )
 
-
     student_nav_button(
         "💰 Financial Statements",
         "💰 Financial Statements"
     )
-
 
     # ========================================================
     # CLASSROOM INFORMATION
@@ -563,7 +597,6 @@ def student_page():
 
     m_id = student.get("meeting_id")
 
-
     if z_link or m_id:
 
         st.sidebar.markdown(
@@ -572,7 +605,6 @@ def student_page():
             '</div>',
             unsafe_allow_html=True
         )
-
 
         if (
             z_link
@@ -584,7 +616,6 @@ def student_page():
                 f"🔗 [General Zoom Room]({z_link})"
             )
 
-
         if (
             m_id
             and str(m_id).strip()
@@ -595,7 +626,6 @@ def student_page():
                 f"Meeting ID: {m_id}"
             )
 
-
     # ========================================================
     # CURRENT PAGE
     # ========================================================
@@ -605,15 +635,15 @@ def student_page():
         "🏠 Dashboard"
     )
 
-
     # ========================================================
     # DASHBOARD
     # ========================================================
 
     if option == "🏠 Dashboard":
 
-        st.title("Student Dashboard")
-
+        st.title(
+            "Student Dashboard"
+        )
 
         st.success(
             f"Welcome {student['first_name']} "
@@ -622,17 +652,14 @@ def student_page():
             f"Subject: {student['subject']}"
         )
 
-
         dashboard = get_dashboard_data(
             student_id,
             today_str()
         )
 
-
         homework_due = dashboard["homework_due"]
 
         sessions_count = dashboard["sessions_count"]
-
 
         hw_total = (
 
@@ -645,7 +672,6 @@ def student_page():
             else 0
         )
 
-
         sess_total = (
 
             int(
@@ -657,24 +683,19 @@ def student_page():
             else 0
         )
 
-
         c1, c2 = st.columns(2)
-
 
         c1.metric(
             "📚 Homework Due",
             hw_total
         )
 
-
         c2.metric(
             "📅 Total Upcoming",
             sess_total
         )
 
-
         st.divider()
-
 
         # ====================================================
         # NEXT UPCOMING SESSION
@@ -684,14 +705,11 @@ def student_page():
             "Next Upcoming Session"
         )
 
-
         next_session = dashboard["next_session"]
-
 
         if not next_session.empty:
 
             s = next_session.iloc[0]
-
 
             session_date = s["session_date"]
 
@@ -699,16 +717,13 @@ def student_page():
 
             topic = s["topic"]
 
-
             st.info(
                 f"**Date:** {session_date} "
                 f"at {session_time} | "
                 f"**Topic:** {topic}"
             )
 
-
             zoom_url = s.get("zoom_link")
-
 
             if (
                 zoom_url
@@ -726,13 +741,11 @@ def student_page():
                     "No Zoom link assigned for this session yet."
                 )
 
-
         else:
 
             st.write(
                 "No upcoming sessions scheduled."
             )
-
 
     # ========================================================
     # HOMEWORK
@@ -744,9 +757,16 @@ def student_page():
 
         student_homework()
 
-
     # ========================================================
     # PERFORMANCE
+    #
+    # IMPORTANT:
+    # We intentionally use a radio selector rather than
+    # st.tabs().
+    #
+    # st.tabs() executes the contents of ALL tabs on every
+    # rerun. The radio selector executes only the selected
+    # Performance section.
     # ========================================================
 
     elif option == "📊 Performance":
@@ -755,31 +775,30 @@ def student_page():
             "📊 Performance"
         )
 
-
-        tab_grades, tab_analytics, tab_sessions = st.tabs(
+        performance_section = st.radio(
+            "Performance Section",
             [
                 "📚 Homework Grades",
                 "📈 Advanced Progression Analytics",
                 "📅 Session History"
-            ]
+            ],
+            horizontal=True,
+            key="student_performance_section"
         )
 
-
-        # ----------------------------------------------------
+        # ====================================================
         # HOMEWORK GRADES
-        # ----------------------------------------------------
+        # ====================================================
 
-        with tab_grades:
+        if performance_section == "📚 Homework Grades":
 
             st.subheader(
                 "Homework Grades"
             )
 
-
             grades = get_grades(
                 student_id
             )
-
 
             if grades.empty:
 
@@ -795,37 +814,58 @@ def student_page():
                     hide_index=True
                 )
 
-
-        # ----------------------------------------------------
+        # ====================================================
         # ADVANCED PROGRESSION ANALYTICS
-        # ----------------------------------------------------
+        # ====================================================
 
-        with tab_analytics:
+        elif (
+            performance_section
+            == "📈 Advanced Progression Analytics"
+        ):
 
-            from modules.performance import (
-                student_performance_view
+            st.subheader(
+                "📈 Advanced Progression Analytics"
             )
 
-            student_performance_view(
-                student_id
+            st.caption(
+                "Progression is based on homework due dates, "
+                "not submission dates or grading dates."
             )
 
+            try:
 
-        # ----------------------------------------------------
+                from modules.performance import (
+                    student_performance_view
+                )
+
+                student_performance_view(
+                    int(student_id)
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "Unable to load Performance Analytics."
+                )
+
+                st.exception(e)
+
+        # ====================================================
         # SESSION HISTORY
-        # ----------------------------------------------------
+        # ====================================================
 
-        with tab_sessions:
+        elif (
+            performance_section
+            == "📅 Session History"
+        ):
 
             st.subheader(
                 "Session History"
             )
 
-
             sessions_history = get_session_history(
                 student_id
             )
-
 
             if sessions_history.empty:
 
@@ -844,13 +884,11 @@ def student_page():
                     ]
                 ]
 
-
                 st.dataframe(
                     sessions,
                     use_container_width=True,
                     hide_index=True
                 )
-
 
     # ========================================================
     # FINANCIAL STATEMENTS
@@ -859,21 +897,17 @@ def student_page():
     elif option == "💰 Financial Statements":
 
         # IMPORTANT:
-        # Explicitly preserve the current page before
-        # entering the Financial Statements module.
+        # Preserve current page before entering module.
 
         st.session_state.student_portal_menu = (
             "💰 Financial Statements"
         )
 
-
         from modules.student_financials import (
             student_financials
         )
 
-
         student_financials()
-
 
     # ========================================================
     # SCHEDULE
@@ -885,11 +919,9 @@ def student_page():
             "📅 My Sessions"
         )
 
-
         sessions = get_session_history(
             student_id
         )
-
 
         if sessions.empty:
 
@@ -900,14 +932,13 @@ def student_page():
         else:
 
             sessions["Date"] = pd.to_datetime(
-                sessions["Date"]
+                sessions["Date"],
+                errors="coerce"
             )
-
 
             today = pd.to_datetime(
                 today_str()
             )
-
 
             # ------------------------------------------------
             # SESSION FILTER
@@ -923,7 +954,6 @@ def student_page():
                 ],
                 key="student_session_filter"
             )
-
 
             # ------------------------------------------------
             # DEFAULT
@@ -948,7 +978,6 @@ def student_page():
                     .head(5)
                 )
 
-
                 upcoming = (
 
                     sessions[
@@ -962,14 +991,12 @@ def student_page():
                     .head(3)
                 )
 
-
                 sessions_display = pd.concat(
                     [
                         upcoming,
                         recent
                     ]
                 )
-
 
             # ------------------------------------------------
             # LAST 10
@@ -989,7 +1016,6 @@ def student_page():
                     .head(10)
                 )
 
-
             # ------------------------------------------------
             # LAST 30 DAYS
             # ------------------------------------------------
@@ -1001,11 +1027,9 @@ def student_page():
                     - pd.Timedelta(days=30)
                 )
 
-
                 sessions_display = sessions[
                     sessions["Date"] >= start_date
                 ]
-
 
             # ------------------------------------------------
             # ALL SESSIONS
@@ -1023,25 +1047,25 @@ def student_page():
                     )
                 )
 
-
             # ------------------------------------------------
             # DISPLAY
             # ------------------------------------------------
 
-            display_sessions = sessions_display.copy()
-
+            display_sessions = (
+                sessions_display.copy()
+            )
 
             display_sessions["Date"] = (
 
                 pd.to_datetime(
-                    display_sessions["Date"]
+                    display_sessions["Date"],
+                    errors="coerce"
                 )
 
                 .dt.strftime(
                     "%Y-%m-%d"
                 )
             )
-
 
             st.dataframe(
 

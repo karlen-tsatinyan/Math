@@ -1646,21 +1646,6 @@ def homework_management():
 
                         st.stop()
 
-                    # ------------------------------------------
-                    # CREATE A FILE-LIKE OBJECT
-                    # ------------------------------------------
-
-                    ai_file = io.BytesIO(
-                        ai_file_bytes
-                    )
-
-                    ai_file.name = (
-                        f"homework_{selected_id}.pdf"
-                    )
-
-                    ai_file.type = (
-                        "application/pdf"
-                    )
 
                     # ------------------------------------------
                     # IMPORT AI GRADER
@@ -1676,7 +1661,7 @@ def homework_management():
 
                     ai_result = (
                         grade_homework_with_ai(
-                            uploaded_file=ai_file,
+                            pdf_bytes=ai_file_bytes,
                             homework_title=safe_text(
                                 selected["title"]
                             ),

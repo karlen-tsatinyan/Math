@@ -1143,6 +1143,395 @@ def homework_management():
             st.info(
                 "No student submission is available."
             )
+        # ==================================================
+        # AI HOMEWORK REVIEW
+        # ==================================================
+
+        if (
+            deleted_student == 0
+            and safe_text(student_file)
+        ):
+
+            st.divider()
+
+            st.subheader(
+                "🤖 AI Homework Review"
+            )
+
+            st.caption(
+                "AI provides a preliminary grading recommendation. "
+                "You remain responsible for the final grade."
+            )
+
+            # ------------------------------------------------
+            # AI ANALYSIS BUTTON
+            # ------------------------------------------------
+
+            if st.button(
+                "✨ Analyze Student Work with AI",
+                key=f"ai_analyze_{selected_id}",
+                type="primary"
+            ):
+
+                student_path = (
+                    str(student_file).strip()
+                )
+
+                try:
+
+                    supabase = get_supabase()
+
+                    # ========================================
+                    # DOWNLOAD STUDENT PDF FROM SUPABASE
+                    # ========================================
+
+                    with st.spinner(
+                        "Downloading student submission..."
+                    ):
+
+                        download_result = (
+                            supabase
+                            .storage
+                            .from_("homework-files")
+                            .download(
+                                student_path
+                            )
+                        )
+
+                    # ========================================
+                    # DOWNLOAD RESULT
+                    # ========================================
+
+                    if hasattr(
+                        download_result,
+                        "data"
+                    ):
+
+                        submission_bytes = (
+                            download_result.data
+                        )
+
+                    else:
+
+                        submission_bytes = (
+                            download_result
+                        )
+
+                    if not submission_bytes:
+
+                        st.error(
+                            "Unable to download the student's "
+                            "submission from Supabase."
+                        )
+
+                        st.stop()
+
+                    # ========================================
+                    # AI ANALYSIS
+                    # ========================================
+
+                    with st.spinner(
+                        "🤖 AI is reviewing the student's "
+                        "mathematical work..."
+                    ):
+
+                        ai_result = (
+                            grade_homework_with_ai(
+                                submission_bytes=(
+                                    submission_bytes
+                                ),
+                                submission_filename=(
+                                    os.path.basename(
+                                        student_path
+                                    )
+                                ),
+                                homework_title=(
+                                    safe_text(
+                                        selected["title"]
+                                    )
+                                ),
+                                curriculum_topic=(
+                                    safe_text(
+                                        selected[
+                                            "curriculum_topic"
+                                        ]
+                                    )
+                                ),
+                                instructions=(
+                                    safe_text(
+                                        selected["comment"]
+                                    )
+                                )
+                            )
+                        )
+
+                    # ========================================
+                    # STORE AI RESULT IN SESSION STATE
+                    # ========================================
+
+                    if ai_result.get("success"):
+
+                        st.session_state[
+                            f"ai_result_{selected_id}"
+                        ] = ai_result
+
+                        st.success(
+                            "✅ AI analysis completed."
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            "❌ AI analysis failed."
+                        )
+
+                        st.error(
+                            ai_result.get(
+                                "error",
+                                "Unknown AI error."
+                            )
+                        )
+
+                except Exception as e:
+
+                    st.error(
+                        "❌ Unable to analyze the "
+                        "student submission."
+                    )
+
+                    st.exception(e)
+
+            # ------------------------------------------------
+            # DISPLAY AI RESULT
+            # ------------------------------------------------
+
+            ai_result = st.session_state.get(
+                f"ai_result_{selected_id}"
+            )
+
+            if ai_result:
+
+                st.divider()
+
+                st.markdown(
+                    "### 🤖 AI Grading Recommendation"
+                )
+
+                # ==========================================
+                # GRADE / SCORE / CONFIDENCE
+                # ==========================================
+
+                ai_col1, ai_col2, ai_col3 = (
+                    st.columns(3)
+                )
+
+                with ai_col1:
+
+                    st.metric(
+                        "Suggested Grade",
+                        ai_result.get(
+                            "suggested_grade",
+                            "—"
+                        )
+                    )
+
+                with ai_col2:
+
+                    percentage = ai_result.get(
+                        "suggested_percentage",
+                        0
+                    )
+
+                    st.metric(
+                        "Estimated Score",
+                        f"{percentage}%"
+                    )
+
+                with ai_col3:
+
+                    st.metric(
+                        "Confidence",
+                        ai_result.get(
+                            "confidence",
+                            "Unknown"
+                        )
+                    )
+
+                # ==========================================
+                # STRENGTHS
+                # ==========================================
+
+                strengths = ai_result.get(
+                    "strengths",
+                    []
+                )
+
+                if strengths:
+
+                    st.markdown(
+                        "#### ✅ Strengths"
+                    )
+
+                    for strength in strengths:
+
+                        st.write(
+                            f"• {strength}"
+                        )
+
+                # ==========================================
+                # MISTAKES
+                # ==========================================
+
+                mistakes = ai_result.get(
+                    "mistakes",
+                    []
+                )
+
+                if mistakes:
+
+                    st.markdown(
+                        "#### ⚠️ Areas to Review"
+                    )
+
+                    for mistake in mistakes:
+
+                        st.write(
+                            f"• {mistake}"
+                        )
+
+                # ==========================================
+                # AI FEEDBACK
+                # ==========================================
+
+                ai_feedback = ai_result.get(
+                    "feedback",
+                    ""
+                )
+
+                if ai_feedback:
+
+                    st.markdown(
+                        "#### 📝 Suggested Teacher Feedback"
+                    )
+
+                    st.info(
+                        ai_feedback
+                    )
+
+                # ==========================================
+                # AI REASONING
+                # ==========================================
+
+                ai_reasoning = ai_result.get(
+                    "reasoning",
+                    ""
+                )
+
+                if ai_reasoning:
+
+                    with st.expander(
+                        "🔎 View AI Grading Reasoning"
+                    ):
+
+                        st.write(
+                            ai_reasoning
+                        )
+
+                # ==========================================
+                # USE AI GRADE / FEEDBACK
+                # ==========================================
+
+                st.divider()
+
+                st.caption(
+                    "The AI recommendation is not saved "
+                    "automatically."
+                )
+
+                use_col1, use_col2 = (
+                    st.columns(2)
+                )
+
+                with use_col1:
+
+                    if st.button(
+                        "📌 Use AI Grade",
+                        key=f"use_ai_grade_{selected_id}"
+                    ):
+
+                        ai_grade = (
+                            safe_text(
+                                ai_result.get(
+                                    "suggested_grade"
+                                )
+                            )
+                        )
+
+                        valid_grades = [
+                            "",
+                            "A+",
+                            "A",
+                            "A-",
+                            "B+",
+                            "B",
+                            "B-",
+                            "C+",
+                            "C",
+                            "C-",
+                            "D",
+                            "F"
+                        ]
+
+                        if (
+                            ai_grade
+                            in valid_grades
+                        ):
+
+                            st.session_state[
+                                f"grade_select_{selected_id}"
+                            ] = ai_grade
+
+                            st.success(
+                                f"AI grade selected: "
+                                f"{ai_grade}"
+                            )
+
+                            st.rerun()
+
+                        else:
+
+                            st.warning(
+                                "AI returned an invalid "
+                                "letter grade."
+                            )
+
+                with use_col2:
+
+                    if st.button(
+                        "📝 Use AI Feedback",
+                        key=f"use_ai_feedback_{selected_id}"
+                    ):
+
+                        ai_feedback_text = (
+                            safe_text(
+                                ai_result.get(
+                                    "feedback"
+                                )
+                            )
+                        )
+
+                        st.session_state[
+                            f"feedback_{selected_id}"
+                        ] = ai_feedback_text
+
+                        st.success(
+                            "AI feedback copied into "
+                            "the Teacher Feedback field."
+                        )
+
+                        st.rerun()
                     
         # ==================================================
         # ARCHIVE HOMEWORK

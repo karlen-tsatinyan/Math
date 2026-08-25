@@ -1216,8 +1216,8 @@ def homework_management():
             # ------------------------------------------------
 
             if st.button(
-                "✨ Analyze with Gemini",
-                key=f"ai_analyze_{selected_id}",
+                "✨ Analyze Student Work with AI",
+                key=f"ai_grader_review_button_homework_{int(selected_id)}",
                 type="primary"
             ):
 
@@ -1538,7 +1538,7 @@ def homework_management():
 
                     if st.button(
                         f"Use AI Suggested Grade ({ai_grade})",
-                        key=f"use_ai_grade_{selected_id}"
+                        key=f"ai_grader_use_grade_homework_{int(selected_id)}"
                     ):
 
                         st.session_state[
@@ -1559,7 +1559,7 @@ def homework_management():
 
                     if st.button(
                         "Use AI Suggested Feedback",
-                        key=f"use_ai_feedback_{selected_id}"
+                        key=f"ai_grader_use_feedback_homework_{int(selected_id)}"
                     ):
 
                         st.session_state[
@@ -1859,7 +1859,7 @@ def homework_management():
 
                         if st.button(
                             "✅ Use AI Grade",
-                            key=f"use_ai_grade_{selected_id}"
+                            key=f"ai_grader_use_grade_homework_{int(selected_id)}"
                         ):
 
                             ai_grade = safe_text(
@@ -1892,7 +1892,7 @@ def homework_management():
 
                         if st.button(
                             "📝 Use AI Feedback",
-                            key=f"use_ai_feedback_{selected_id}"
+                            key=f"ai_grader_use_feedback_homework_{int(selected_id)}"
                         ):
 
                             st.session_state[

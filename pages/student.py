@@ -645,10 +645,17 @@ def student_page():
             "Student Dashboard"
         )
 
-        st.success(
-            f"Welcome {student['first_name']} {student['last_name']}    "
-            f"|    Grade: {student['grade']}    "
-            f"|    Subject: {student['subject']}"
+        st.markdown(
+            f"""
+            <div class="stAlert">
+            Welcome {student['first_name']} {student['last_name']}
+            &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;
+            Grade: {student['grade']}
+            &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;
+            Subject: {student['subject']}
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
         dashboard = get_dashboard_data(

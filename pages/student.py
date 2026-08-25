@@ -645,11 +645,31 @@ def student_page():
             "Student Dashboard"
         )
 
-        st.success(
-            f"Welcome {student['first_name']} "
-            f"{student['last_name']} | "
-            f"Grade: {student['grade']} | "
-            f"Subject: {student['subject']}"
+        st.markdown(
+            f"""
+            <div style="
+                padding: 10px 16px;
+                border-radius: 6px;
+                background-color: rgba(0, 128, 0, 0.08);
+                border: 1px solid rgba(0, 128, 0, 0.20);
+                font-size: 16px;
+            ">
+                <strong>Welcome {student['first_name']} {student['last_name']}</strong>
+        
+                <span style="display:inline-block; width:0.8in;"></span>
+                |
+                <span style="display:inline-block; width:0.8in;"></span>
+        
+                <strong>Grade: {student['grade']}</strong>
+        
+                <span style="display:inline-block; width:0.8in;"></span>
+                |
+                <span style="display:inline-block; width:0.8in;"></span>
+        
+                <strong>Subject: {student['subject']}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
         dashboard = get_dashboard_data(

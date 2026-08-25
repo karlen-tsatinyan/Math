@@ -23,35 +23,35 @@ from google.genai import types
 
 def get_gemini_client():
     """
-    Create Gemini client using GEMINI_API_KEY.
+    Create Gemini client.
 
-    Streamlit Cloud:
-        GEMINI_API_KEY = "your-key"
-
-    Local environment:
-        GEMINI_API_KEY=your-key
+    Priority:
+    1. Streamlit Secrets
+    2. GEMINI_API_KEY environment variable
+    3. GOOGLE_API_KEY environment variable
     """
 
     api_key = None
 
     # --------------------------------------------------------
-    # Try Streamlit Secrets first
+    # Try Streamlit Secrets
     # --------------------------------------------------------
 
     try:
 
         import streamlit as st
 
-        api_key = st.secrets.get(
-            "GEMINI_API_KEY",
-            None
-        )
+        if "GEMINI_API_KEY" in st.secrets:
+
+            api_key = st.secrets[
+                "GEMINI_API_KEY"
+            ]
 
     except Exception:
         pass
 
     # --------------------------------------------------------
-    # Fall back to environment variable
+    # Environment variable
     # --------------------------------------------------------
 
     if not api_key:
@@ -61,7 +61,17 @@ def get_gemini_client():
         )
 
     # --------------------------------------------------------
-    # Make sure key exists
+    # Google-supported alternative
+    # --------------------------------------------------------
+
+    if not api_key:
+
+        api_key = os.getenv(
+            "GOOGLE_API_KEY"
+        )
+
+    # --------------------------------------------------------
+    # Validate
     # --------------------------------------------------------
 
     if not api_key:
@@ -70,6 +80,10 @@ def get_gemini_client():
             "GEMINI_API_KEY is not configured. "
             "Please add GEMINI_API_KEY to Streamlit Secrets."
         )
+
+    # --------------------------------------------------------
+    # Create Gemini client
+    # --------------------------------------------------------
 
     return genai.Client(
         api_key=api_key

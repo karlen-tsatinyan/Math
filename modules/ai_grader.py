@@ -1,56 +1,48 @@
 """
 AI Homework Grader
 
-Analyzes a student's submitted homework directly from
-Supabase Storage and returns a teacher-facing grading
-recommendation.
+Uses Google Gemini to analyze student homework.
 
 IMPORTANT:
-- AI grade is ONLY a recommendation.
+- AI grade is only a recommendation.
 - Teacher's final grade remains the official grade.
 - This module does NOT modify the homework database.
 """
 
-import base64
 import json
 import os
 
-import streamlit as st
-from openai import OpenAI
-
-from supabase_client import get_supabase
+from google import genai
+from google.genai import types
 
 
 # ============================================================
-# CONFIGURATION
+# GEMINI CLIENT
 # ============================================================
 
-BUCKET_NAME = "homework-files"
-
-# Cost-sensitive GPT-5.6 model
-AI_MODEL = "gpt-5.6-luna"
-
-
-# ============================================================
-# OPENAI CLIENT
-# ============================================================
-
-def get_openai_client():
+def get_gemini_client():
     """
-    Create the OpenAI client using OPENAI_API_KEY
-    from Streamlit secrets or environment variables.
+    Create a Gemini client using GEMINI_API_KEY.
+
+    Streamlit Cloud:
+        Add GEMINI_API_KEY to Streamlit Secrets.
+
+    Local development:
+        Set GEMINI_API_KEY as an environment variable.
     """
 
     api_key = None
 
     # --------------------------------------------------------
-    # Streamlit Cloud Secrets
+    # Try Streamlit Secrets first
     # --------------------------------------------------------
 
     try:
 
+        import streamlit as st
+
         api_key = st.secrets.get(
-            "OPENAI_API_KEY",
+            "GEMINI_API_KEY",
             None
         )
 
@@ -58,146 +50,60 @@ def get_openai_client():
         pass
 
     # --------------------------------------------------------
-    # Environment Variable
+    # Fall back to environment variable
     # --------------------------------------------------------
 
     if not api_key:
 
         api_key = os.getenv(
-            "OPENAI_API_KEY"
+            "GEMINI_API_KEY"
         )
 
     # --------------------------------------------------------
-    # Validate
+    # No API key
     # --------------------------------------------------------
 
     if not api_key:
 
         raise ValueError(
-            "OPENAI_API_KEY is not configured. "
-            "Please add OPENAI_API_KEY to Streamlit Secrets."
+            "GEMINI_API_KEY is not configured. "
+            "Please add it to Streamlit Secrets."
         )
 
-    return OpenAI(
+    return genai.Client(
         api_key=api_key
     )
 
 
 # ============================================================
-# SUPABASE: DOWNLOAD FILE
-# ============================================================
-
-def download_student_submission(storage_path):
-    """
-    Download the student's submitted homework directly
-    from Supabase Storage.
-
-    Parameters
-    ----------
-    storage_path : str
-        Example:
-        submissions/student_12/homework_45_abc123.pdf
-
-    Returns
-    -------
-    bytes
-        PDF file bytes
-    """
-
-    if not storage_path:
-
-        raise ValueError(
-            "No student submission path was provided."
-        )
-
-    path = str(
-        storage_path
-    ).strip()
-
-    if not path:
-
-        raise ValueError(
-            "Student submission path is empty."
-        )
-
-    try:
-
-        supabase = get_supabase()
-
-        response = (
-            supabase
-            .storage
-            .from_(BUCKET_NAME)
-            .download(path)
-        )
-
-        # Supabase normally returns raw bytes.
-        if isinstance(response, bytes):
-
-            return response
-
-        # Some client versions may return an object
-        # containing the data.
-        if hasattr(response, "data"):
-
-            data = response.data
-
-            if isinstance(data, bytes):
-
-                return data
-
-        raise ValueError(
-            "Supabase returned an unexpected "
-            "file format."
-        )
-
-    except Exception as e:
-
-        raise RuntimeError(
-            "Unable to download the student's "
-            f"submission from Supabase Storage: {e}"
-        )
-
-
-# ============================================================
-# BASE64 ENCODING
-# ============================================================
-
-def bytes_to_base64(file_bytes):
-    """
-    Convert file bytes to base64.
-    """
-
-    return base64.b64encode(
-        file_bytes
-    ).decode("utf-8")
-
-
-# ============================================================
-# AI GRADING
+# AI HOMEWORK GRADER
 # ============================================================
 
 def grade_homework_with_ai(
-    student_file,
+    submission_bytes,
+    submission_filename,
     homework_title="Homework Assignment",
     curriculum_topic="",
     instructions="",
 ):
     """
-    Analyze a student's submitted homework.
+    Analyze a student's submitted homework PDF.
 
     Parameters
     ----------
-    student_file : str
-        Supabase Storage path to the student's PDF.
+    submission_bytes:
+        The actual bytes of the student's PDF.
 
-    homework_title : str
-        Homework title.
+    submission_filename:
+        Original filename / display name.
 
-    curriculum_topic : str
-        Curriculum topic.
+    homework_title:
+        Homework title from the homework table.
 
-    instructions : str
+    curriculum_topic:
+        Curriculum topic from the homework table.
+
+    instructions:
         Teacher's assignment instructions/comments.
 
     Returns
@@ -214,108 +120,134 @@ def grade_homework_with_ai(
             "feedback": "...",
             "reasoning": "..."
         }
+
+    IMPORTANT:
+    This function NEVER saves anything to the database.
     """
 
     # ========================================================
     # VALIDATE FILE
     # ========================================================
 
-    if not student_file:
+    if not submission_bytes:
 
         return {
             "success": False,
             "error": (
-                "No student submission is available."
+                "No student submission was provided."
             )
         }
 
+    # ========================================================
+    # VALIDATE FILE TYPE
+    # ========================================================
+
+    filename = (
+        str(submission_filename or "")
+        .lower()
+        .strip()
+    )
+
+    if not filename.endswith(".pdf"):
+
+        return {
+            "success": False,
+            "error": (
+                "The AI grader currently expects "
+                "the student's merged PDF submission."
+            )
+        }
+
+    # ========================================================
+    # GET GEMINI CLIENT
+    # ========================================================
+
     try:
 
-        # ====================================================
-        # DOWNLOAD STUDENT PDF
-        # ====================================================
+        client = get_gemini_client()
 
-        file_bytes = (
-            download_student_submission(
-                student_file
-            )
-        )
+    except Exception as e:
 
-        if not file_bytes:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
-            return {
-                "success": False,
-                "error": (
-                    "The student submission is empty."
-                )
-            }
+    # ========================================================
+    # GRADING INSTRUCTIONS
+    # ========================================================
 
-        # ====================================================
-        # CONVERT TO BASE64
-        # ====================================================
+    grading_prompt = f"""
+You are an expert mathematics teacher assisting another
+professional mathematics teacher.
 
-        file_base64 = (
-            bytes_to_base64(
-                file_bytes
-            )
-        )
+You are reviewing a student's submitted homework.
 
-        # ====================================================
-        # OPENAI CLIENT
-        # ====================================================
+Your job is to provide a PRELIMINARY grading recommendation.
 
-        client = get_openai_client()
+The teacher will review your recommendation before entering
+the official grade.
 
-        # ====================================================
-        # SYSTEM INSTRUCTIONS
-        # ====================================================
+============================================================
+HOMEWORK INFORMATION
+============================================================
 
-        system_prompt = """
-You are an expert mathematics teacher assisting
-another professional mathematics teacher.
+Homework Title:
+{homework_title}
 
-Your task is to REVIEW a student's submitted
-mathematics homework and provide a preliminary
-grading recommendation.
+Curriculum Topic:
+{curriculum_topic}
 
-The teacher will make the final grading decision.
+Teacher Instructions / Comments:
+{instructions}
 
-IMPORTANT RULES:
+============================================================
+GRADING RULES
+============================================================
 
-1. Carefully examine the student's actual work.
+Evaluate the student's actual mathematical work.
 
-2. Do not judge only by the final answers.
+Do NOT simply look at final answers.
 
-3. Evaluate:
-   - mathematical reasoning
-   - calculations
-   - algebraic manipulation
-   - formulas
-   - intermediate steps
-   - notation
-   - final answers
+Evaluate:
 
-4. If an answer key is not provided, independently
-   solve the mathematical problems when necessary.
+1. Mathematical correctness
+2. Mathematical reasoning
+3. Intermediate calculations
+4. Algebraic manipulation
+5. Appropriate formulas and methods
+6. Accuracy of arithmetic
+7. Final answers
+8. Completeness of the work
+9. Whether partial credit appears appropriate
+10. Whether the student's work demonstrates understanding
 
-5. Identify partial credit opportunities.
+If an answer appears incorrect:
 
-6. Distinguish between:
-   - conceptual mistakes
-   - arithmetic mistakes
-   - notation mistakes
-   - incomplete work
-   - missing answers
+- Determine the correct mathematical solution yourself.
+- Identify where the student's reasoning went wrong.
+- Explain the error clearly.
 
-7. Do not invent information that cannot be seen.
+If work is partially correct:
 
-8. If part of the student's work is unreadable,
-   explicitly state that.
+- Recognize the correct reasoning.
+- Identify the point where the solution becomes incorrect.
+- Consider appropriate partial credit.
 
-9. Consider the curriculum topic when evaluating
-   the student's understanding.
+If handwriting or part of the submission is unclear:
 
-10. The suggested grade is NOT automatically final.
+- Do NOT invent what the student wrote.
+- Explicitly identify the unclear portion.
+- Reduce confidence accordingly.
+
+There may NOT be an answer key.
+
+When an answer key is not available, independently solve the
+mathematical problems when necessary.
+
+============================================================
+GRADE SCALE
+============================================================
 
 Use this grading scale:
 
@@ -331,224 +263,198 @@ C- = 72
 D  = 65
 F  = 50
 
+The suggested percentage should correspond reasonably to the
+suggested letter grade.
+
+============================================================
+IMPORTANT
+============================================================
+
+The AI grade is ONLY a recommendation.
+
+Do NOT state that the grade is final.
+
+The teacher will make the final grading decision.
+
+============================================================
+OUTPUT
+============================================================
+
 Return ONLY valid JSON.
+
+Do not use Markdown.
 
 Use exactly this structure:
 
-{
+{{
     "suggested_grade": "B+",
     "suggested_percentage": 88,
     "confidence": "High",
     "strengths": [
-        "Strength 1",
-        "Strength 2"
+        "The student correctly ..."
     ],
     "mistakes": [
-        "Mistake 1",
-        "Mistake 2"
+        "Problem 4 contains ..."
     ],
-    "feedback": "Suggested teacher feedback.",
-    "reasoning": "Explanation of why the suggested grade was given."
-}
+    "feedback": "Good understanding of ...",
+    "reasoning": "The student demonstrates ..."
+}}
 
-The suggested percentage must be a number.
-
-The confidence must be one of:
-
-"High"
-"Medium"
-"Low"
+============================================================
 """
 
-        # ====================================================
-        # HOMEWORK CONTEXT
-        # ====================================================
-
-        context = f"""
-HOMEWORK INFORMATION
-
-Homework Title:
-{homework_title}
-
-Curriculum Topic:
-{curriculum_topic}
-
-Teacher Instructions / Comments:
-{instructions}
-
-TASK
-
-Analyze the student's submitted homework PDF.
-
-Determine:
-
-1. What the student did correctly.
-2. What the student did incorrectly.
-3. Whether the student demonstrated understanding
-   of the curriculum topic.
-4. Whether partial credit appears appropriate.
-5. A suggested letter grade.
-6. A suggested percentage.
-7. Confidence in the recommendation.
-8. Suggested teacher feedback.
-
-Remember:
-
-This is a teacher-assistance tool.
-
-Do not automatically assign the grade.
-"""
-
-        # ====================================================
-        # PDF DATA URL
-        # ====================================================
-
-        pdf_data_url = (
-            "data:application/pdf;base64,"
-            + file_base64
-        )
-
-        # ====================================================
-        # SEND TO OPENAI
-        # ====================================================
-
-        response = client.responses.create(
-
-            model=AI_MODEL,
-
-            instructions=system_prompt,
-
-            input=[
-
-                {
-                    "role": "user",
-
-                    "content": [
-
-                        {
-                            "type": "input_text",
-
-                            "text": context
-                        },
-
-                        {
-                            "type": "input_file",
-
-                            "filename": "student_homework.pdf",
-
-                            "file_data": pdf_data_url
-                        }
-
-                    ]
-                }
-            ]
-        )
-
-        # ====================================================
-        # GET RESPONSE TEXT
-        # ====================================================
-
-        result_text = (
-            response.output_text
-            .strip()
-        )
-
-        # ====================================================
-        # PARSE JSON
-        # ====================================================
-
-        try:
-
-            result = json.loads(
-                result_text
-            )
-
-        except json.JSONDecodeError:
-
-            # ------------------------------------------------
-            # Try removing markdown fences
-            # ------------------------------------------------
-
-            cleaned = (
-                result_text
-                .replace(
-                    "```json",
-                    ""
-                )
-                .replace(
-                    "```",
-                    ""
-                )
-                .strip()
-            )
-
-            try:
-
-                result = json.loads(
-                    cleaned
-                )
-
-            except json.JSONDecodeError:
-
-                return {
-                    "success": False,
-                    "error": (
-                        "The AI returned an unexpected "
-                        "response format."
-                    ),
-                    "raw_response": result_text
-                }
-
-        # ====================================================
-        # NORMALIZE RESPONSE
-        # ====================================================
-
-        result.setdefault(
-            "suggested_grade",
-            ""
-        )
-
-        result.setdefault(
-            "suggested_percentage",
-            0
-        )
-
-        result.setdefault(
-            "confidence",
-            "Unknown"
-        )
-
-        result.setdefault(
-            "strengths",
-            []
-        )
-
-        result.setdefault(
-            "mistakes",
-            []
-        )
-
-        result.setdefault(
-            "feedback",
-            ""
-        )
-
-        result.setdefault(
-            "reasoning",
-            ""
-        )
-
-        result["success"] = True
-
-        return result
-
     # ========================================================
-    # ERROR HANDLING
+    # SEND PDF TO GEMINI
     # ========================================================
+
+    try:
+
+        response = client.models.generate_content(
+
+            model="gemini-3.7-flash",
+
+            contents=[
+                types.Part.from_bytes(
+                    data=submission_bytes,
+                    mime_type="application/pdf"
+                ),
+
+                grading_prompt
+            ],
+
+            config=types.GenerateContentConfig(
+
+                temperature=0.1,
+
+                response_mime_type="application/json"
+            )
+        )
 
     except Exception as e:
 
         return {
             "success": False,
-            "error": str(e)
+            "error": (
+                "Gemini was unable to analyze the "
+                f"student submission: {e}"
+            )
         }
+
+    # ========================================================
+    # GET RESPONSE TEXT
+    # ========================================================
+
+    try:
+
+        result_text = (
+            response.text
+            .strip()
+        )
+
+    except Exception:
+
+        return {
+            "success": False,
+            "error": (
+                "Gemini returned an empty response."
+            )
+        }
+
+    if not result_text:
+
+        return {
+            "success": False,
+            "error": (
+                "Gemini returned an empty response."
+            )
+        }
+
+    # ========================================================
+    # PARSE JSON
+    # ========================================================
+
+    try:
+
+        result = json.loads(
+            result_text
+        )
+
+    except json.JSONDecodeError:
+
+        return {
+            "success": False,
+            "error": (
+                "Gemini returned an unexpected "
+                "response format."
+            ),
+            "raw_response": result_text
+        }
+
+    # ========================================================
+    # NORMALIZE RESULT
+    # ========================================================
+
+    result.setdefault(
+        "suggested_grade",
+        ""
+    )
+
+    result.setdefault(
+        "suggested_percentage",
+        0
+    )
+
+    result.setdefault(
+        "confidence",
+        "Unknown"
+    )
+
+    result.setdefault(
+        "strengths",
+        []
+    )
+
+    result.setdefault(
+        "mistakes",
+        []
+    )
+
+    result.setdefault(
+        "feedback",
+        ""
+    )
+
+    result.setdefault(
+        "reasoning",
+        ""
+    )
+
+    # ========================================================
+    # ENSURE LIST VALUES
+    # ========================================================
+
+    if not isinstance(
+        result["strengths"],
+        list
+    ):
+
+        result["strengths"] = [
+            str(result["strengths"])
+        ]
+
+    if not isinstance(
+        result["mistakes"],
+        list
+    ):
+
+        result["mistakes"] = [
+            str(result["mistakes"])
+        ]
+
+    # ========================================================
+    # FINAL RESULT
+    # ========================================================
+
+    result["success"] = True
+
+    return result

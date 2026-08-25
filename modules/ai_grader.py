@@ -1,7 +1,8 @@
-"""
-AI Homework Grader
-------------------
+# ============================================================
+# AI HOMEWORK GRADER
+# ============================================================
 
+"""
 Uses Google Gemini to analyze a student's submitted homework PDF.
 
 IMPORTANT:
@@ -12,6 +13,7 @@ IMPORTANT:
 
 import os
 import json
+import tempfile
 
 from google import genai
 from google.genai import types
@@ -21,37 +23,42 @@ from google.genai import types
 # GEMINI CLIENT
 # ============================================================
 
-def get_gemini_client():
+def get_gemini_api_key():
     """
-    Create Gemini client.
+    Find Gemini API key.
 
     Priority:
-    1. Streamlit Secrets
-    2. GEMINI_API_KEY environment variable
-    3. GOOGLE_API_KEY environment variable
+        1. Streamlit Secrets
+        2. GEMINI_API_KEY environment variable
+        3. GOOGLE_API_KEY environment variable
+
+    Returns:
+        str
+
+    Raises:
+        ValueError if no API key is configured.
     """
 
     api_key = None
 
     # --------------------------------------------------------
-    # Try Streamlit Secrets
+    # 1. STREAMLIT SECRETS
     # --------------------------------------------------------
 
     try:
 
         import streamlit as st
 
-        if "GEMINI_API_KEY" in st.secrets:
-
-            api_key = st.secrets[
-                "GEMINI_API_KEY"
-            ]
+        api_key = st.secrets.get(
+            "GEMINI_API_KEY"
+        )
 
     except Exception:
-        pass
+
+        api_key = None
 
     # --------------------------------------------------------
-    # Environment variable
+    # 2. ENVIRONMENT VARIABLE
     # --------------------------------------------------------
 
     if not api_key:
@@ -61,7 +68,7 @@ def get_gemini_client():
         )
 
     # --------------------------------------------------------
-    # Google-supported alternative
+    # 3. GOOGLE_API_KEY
     # --------------------------------------------------------
 
     if not api_key:
@@ -71,7 +78,7 @@ def get_gemini_client():
         )
 
     # --------------------------------------------------------
-    # Validate
+    # VALIDATE
     # --------------------------------------------------------
 
     if not api_key:
@@ -81,34 +88,56 @@ def get_gemini_client():
             "Please add GEMINI_API_KEY to Streamlit Secrets."
         )
 
-    # --------------------------------------------------------
-    # Create Gemini client
-    # --------------------------------------------------------
+    return str(api_key).strip()
+
+
+# ============================================================
+# GEMINI CLIENT
+# ============================================================
+
+def get_gemini_client():
+
+    api_key = get_gemini_api_key()
 
     return genai.Client(
         api_key=api_key
     )
 
 
+# ============================================================
+# GEMINI CONFIGURATION CHECK
+# ============================================================
+
 def check_gemini_secret():
     """
-    Temporary diagnostic.
-    Does NOT expose the API key.
+    Safely check whether a Gemini API key is available.
+
+    The actual API key is NEVER displayed.
     """
 
     try:
-        import streamlit as st
 
-        key = st.secrets.get("GEMINI_API_KEY")
+        api_key = get_gemini_api_key()
 
-        if key:
-            return True, f"Gemini secret found. Key length: {len(key)}"
+        if api_key:
 
-        return False, "GEMINI_API_KEY was not found in Streamlit Secrets."
+            return (
+                True,
+                "Gemini API key is configured."
+            )
 
     except Exception as e:
 
-        return False, f"Error reading Streamlit Secrets: {str(e)}"
+        return (
+            False,
+            str(e)
+        )
+
+    return (
+        False,
+        "Gemini API key is not configured."
+    )
+
 
 # ============================================================
 # AI HOMEWORK GRADING
@@ -126,7 +155,7 @@ def grade_homework_with_ai(
     Parameters
     ----------
     pdf_bytes : bytes
-        The student's merged homework PDF.
+        Student's homework PDF.
 
     homework_title : str
         Homework title.
@@ -147,15 +176,19 @@ def grade_homework_with_ai(
     """
 
     # ========================================================
-    # VALIDATE PDF
+    # VALIDATE INPUT
     # ========================================================
 
     if not pdf_bytes:
 
         return {
             "success": False,
-            "error": "No student homework PDF was provided."
+            "error": (
+                "No student homework PDF was provided."
+            )
         }
+
+    temp_path = None
 
     try:
 
@@ -166,18 +199,28 @@ def grade_homework_with_ai(
         client = get_gemini_client()
 
         # ====================================================
-        # UPLOAD PDF TO GEMINI FILES API
+        # CREATE TEMPORARY PDF
+        # ====================================================
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf",
+            delete=False
+        ) as temp_file:
+
+            temp_file.write(pdf_bytes)
+
+            temp_path = temp_file.name
+
+        # ====================================================
+        # UPLOAD PDF TO GEMINI
         # ====================================================
 
         uploaded_file = client.files.upload(
-            file=pdf_bytes,
-            config={
-                "mime_type": "application/pdf"
-            }
+            file=temp_path
         )
 
         # ====================================================
-        # GRADING INSTRUCTIONS
+        # GRADING PROMPT
         # ====================================================
 
         prompt = f"""
@@ -187,6 +230,7 @@ professional mathematics teacher with homework review.
 Analyze the student's submitted homework PDF.
 
 This is a PRELIMINARY grading recommendation only.
+
 The teacher will personally review your analysis and make
 the final grading decision.
 
@@ -236,19 +280,20 @@ GRADING RULES
 GRADE SCALE
 ------------------------------------------------------------
 
-Use this letter-grade scale:
-
 A+ = 98
 A  = 95
 A- = 92
+
 B+ = 88
 B  = 85
 B- = 82
+
 C+ = 78
 C  = 75
 C- = 72
-D  = 65
-F  = 50
+
+D = 65
+F = 50
 
 ------------------------------------------------------------
 IMPORTANT
@@ -263,7 +308,7 @@ anything to the tutoring portal.
 OUTPUT
 ------------------------------------------------------------
 
-Return ONLY valid JSON with this exact structure:
+Return ONLY valid JSON with this structure:
 
 {{
     "suggested_grade": "B+",
@@ -290,11 +335,12 @@ Return ONLY valid JSON with this exact structure:
 }}
 
 Do not include Markdown code fences.
+
 Return JSON only.
 """
 
         # ====================================================
-        # SEND PDF + PROMPT TO GEMINI
+        # GEMINI REQUEST
         # ====================================================
 
         response = client.models.generate_content(
@@ -312,6 +358,7 @@ Return JSON only.
 
                 response_schema={
                     "type": "object",
+
                     "properties": {
 
                         "suggested_grade": {
@@ -345,9 +392,13 @@ Return JSON only.
                         },
 
                         "problem_analysis": {
+
                             "type": "array",
+
                             "items": {
+
                                 "type": "object",
+
                                 "properties": {
 
                                     "problem": {
@@ -362,6 +413,7 @@ Return JSON only.
                                         "type": "string"
                                     }
                                 },
+
                                 "required": [
                                     "problem",
                                     "result",
@@ -395,7 +447,7 @@ Return JSON only.
         )
 
         # ====================================================
-        # GET RESPONSE TEXT
+        # GET RESPONSE
         # ====================================================
 
         response_text = response.text
@@ -404,7 +456,9 @@ Return JSON only.
 
             return {
                 "success": False,
-                "error": "Gemini returned an empty response."
+                "error": (
+                    "Gemini returned an empty response."
+                )
             }
 
         # ====================================================
@@ -422,8 +476,8 @@ Return JSON only.
             return {
                 "success": False,
                 "error": (
-                    "Gemini returned an unexpected response "
-                    "format."
+                    "Gemini returned an unexpected "
+                    "response format."
                 ),
                 "raw_response": response_text
             }
@@ -491,3 +545,21 @@ Return JSON only.
             "success": False,
             "error": str(e)
         }
+
+    # ========================================================
+    # CLEANUP
+    # ========================================================
+
+    finally:
+
+        if temp_path:
+
+            try:
+
+                os.remove(
+                    temp_path
+                )
+
+            except Exception:
+
+                pass

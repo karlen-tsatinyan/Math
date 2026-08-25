@@ -647,12 +647,28 @@ def student_page():
 
         st.markdown(
             f"""
-            <div class="stAlert">
-            Welcome {student['first_name']} {student['last_name']}
-            &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;
-            Grade: {student['grade']}
-            &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;
-            Subject: {student['subject']}
+            <div style="
+                padding: 10px 16px;
+                border-radius: 6px;
+                background-color: rgba(0, 128, 0, 0.08);
+                border: 1px solid rgba(0, 128, 0, 0.20);
+                font-size: 16px;
+            ">
+                <strong>
+                    Welcome {student['first_name']} {student['last_name']}
+                </strong>
+        
+                <span style="display:inline-block; width:1in;"></span>
+        
+                <strong>
+                    Grade: {student['grade']}
+                </strong>
+        
+                <span style="display:inline-block; width:1in;"></span>
+        
+                <strong>
+                    Subject: {student['subject']}
+                </strong>
             </div>
             """,
             unsafe_allow_html=True

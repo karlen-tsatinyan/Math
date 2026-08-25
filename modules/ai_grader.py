@@ -90,6 +90,26 @@ def get_gemini_client():
     )
 
 
+def check_gemini_secret():
+    """
+    Temporary diagnostic.
+    Does NOT expose the API key.
+    """
+
+    try:
+        import streamlit as st
+
+        key = st.secrets.get("GEMINI_API_KEY")
+
+        if key:
+            return True, f"Gemini secret found. Key length: {len(key)}"
+
+        return False, "GEMINI_API_KEY was not found in Streamlit Secrets."
+
+    except Exception as e:
+
+        return False, f"Error reading Streamlit Secrets: {str(e)}"
+
 # ============================================================
 # AI HOMEWORK GRADING
 # ============================================================

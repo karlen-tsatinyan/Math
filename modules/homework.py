@@ -4,6 +4,8 @@ import io
 import uuid
 import pandas as pd
 
+from modules.ai_grader import grade_homework_with_ai
+
 from datetime import date
 
 from PIL import Image

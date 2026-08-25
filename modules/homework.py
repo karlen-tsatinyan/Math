@@ -19,6 +19,9 @@ from database import execute, query_dataframe
 from supabase_client import get_supabase
 
 
+from modules.ai_grader import check_gemini_secret
+
+
 
 # ============================================================
 # HELPER: SAFE VALUE
@@ -1207,6 +1210,20 @@ def homework_management():
             "D",
             "F"
         ]
+
+
+        # ==================================================
+        # TEMPORARY GEMINI SECRET TEST
+        # ==================================================
+        
+        secret_found, secret_message = check_gemini_secret()
+        
+        if secret_found:
+            st.success("🔑 " + secret_message)
+        else:
+            st.error("🔑 " + secret_message)
+
+
         # ==================================================
         # AI HOMEWORK REVIEW
         # ==================================================

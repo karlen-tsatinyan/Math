@@ -16,6 +16,8 @@ from reportlab.lib.pagesizes import letter
 from database import execute, query_dataframe
 from supabase_client import get_supabase
 
+from modules.ai_grader import grade_homework_with_ai
+
 
 # ============================================================
 # HELPER: SAFE VALUE

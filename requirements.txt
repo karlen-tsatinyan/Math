@@ -8,4 +8,4 @@ supabase
 Pillow
 pypdf
 reportlab
-openai
+google-genai

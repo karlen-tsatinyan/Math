@@ -50,7 +50,7 @@ def get_gemini_api_key():
         import streamlit as st
 
         api_key = st.secrets.get(
-            "GEMINI_API_KEY"
+            "api_key"
         )
 
     except Exception:
@@ -64,7 +64,7 @@ def get_gemini_api_key():
     if not api_key:
 
         api_key = os.getenv(
-            "GEMINI_API_KEY"
+            "api_key"
         )
 
     # --------------------------------------------------------

@@ -2148,11 +2148,6 @@ def student_homework():
                 assignment_url
             )
 
-            st.caption(
-                "The assignment is stored securely "
-                "in Supabase Storage."
-            )
-
         else:
 
             st.error(

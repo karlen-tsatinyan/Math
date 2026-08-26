@@ -1562,16 +1562,17 @@ def homework_management():
                         f"Use AI Suggested Grade ({ai_grade})",
                         key=f"ai_grader_use_grade_homework_{int(selected_id)}"
                     ):
-
+                    
                         st.session_state[
-                            f"ai_grade_to_use_{selected_id}"
+                            f"grade_select_{int(selected_id)}"
                         ] = ai_grade
-
+                    
                         st.success(
-                            f"AI grade {ai_grade} selected. "
-                            "Please review it and save the "
-                            "final grade below."
+                            f"AI grade {ai_grade} loaded into "
+                            "the Grade field below."
                         )
+                    
+                        st.rerun()
 
                 # --------------------------------------------
                 # USE AI FEEDBACK
@@ -1583,15 +1584,17 @@ def homework_management():
                         "Use AI Suggested Feedback",
                         key=f"ai_grader_use_feedback_homework_{int(selected_id)}"
                     ):
-
+                    
                         st.session_state[
-                            f"ai_feedback_to_use_{selected_id}"
+                            f"feedback_{int(selected_id)}"
                         ] = ai_feedback
-
+                    
                         st.success(
-                            "AI feedback selected. "
-                            "Please review and edit it before saving."
+                            "AI feedback loaded into "
+                            "the Teacher Feedback field below."
                         )
+                    
+                        st.rerun()
 
         else:
 
@@ -1704,49 +1707,44 @@ def homework_management():
 
             current_grade = ""
 
-        # --------------------------------------------------
-        # USE AI SUGGESTED GRADE IF TEACHER REQUESTED IT
-        # --------------------------------------------------
-
-        ai_grade_to_use = st.session_state.get(
-            f"ai_grade_to_use_{selected_id}"
+        # ==================================================
+        # GRADE FIELD
+        # ==================================================
+        
+        current_grade = safe_text(
+            selected["grade"]
         )
-
-        if (
-            ai_grade_to_use in grade_options
-        ):
-
-            current_grade = ai_grade_to_use
-
+        
+        if current_grade not in grade_options:
+            current_grade = ""
+        
+        grade_key = f"grade_select_{int(selected_id)}"
+        
+        if grade_key not in st.session_state:
+            st.session_state[grade_key] = current_grade
+        
         grade = st.selectbox(
             "Letter Grade",
             grade_options,
-            index=grade_options.index(
-                current_grade
-            ),
-            key=f"grade_select_{selected_id}"
+            key=grade_key
         )
 
+        # ==================================================
+        # TEACHER FEEDBACK FIELD
+        # ==================================================
+        
         current_feedback = safe_text(
             selected["teacher_feedback"]
         )
-
-        # --------------------------------------------------
-        # USE AI SUGGESTED FEEDBACK IF SELECTED
-        # --------------------------------------------------
-
-        ai_feedback_to_use = st.session_state.get(
-            f"ai_feedback_to_use_{selected_id}"
-        )
-
-        if ai_feedback_to_use:
-
-            current_feedback = ai_feedback_to_use
-
+        
+        feedback_key = f"feedback_{int(selected_id)}"
+        
+        if feedback_key not in st.session_state:
+            st.session_state[feedback_key] = current_feedback
+        
         feedback = st.text_area(
             "Teacher Feedback",
-            value=current_feedback,
-            key=f"feedback_{selected_id}"
+            key=feedback_key
         )
 
         if st.button(

@@ -14,6 +14,7 @@ IMPORTANT:
 import os
 import json
 import tempfile
+import time
 
 from google import genai
 from google.genai import types
@@ -299,111 +300,171 @@ Return JSON only.
 """
 
         # ====================================================
-        # GEMINI REQUEST
+        # GEMINI REQUEST WITH RETRY + MODEL FALLBACK
         # ====================================================
 
-        response = client.models.generate_content(
+        response = None
+        last_error = None
 
-            model="gemini-3.7-flash",
+        # Primary model first, then a fallback model.
+        models_to_try = [
+            "gemini-3.7-flash",
+            "gemini-3.6-flash",
+        ]
 
-            contents=[
-                prompt,
-                uploaded_file
-            ],
+        generation_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
 
-            config=types.GenerateContentConfig(
+            response_schema={
+                "type": "object",
 
-                response_mime_type="application/json",
+                "properties": {
 
-                response_schema={
-                    "type": "object",
+                    "suggested_grade": {
+                        "type": "string"
+                    },
 
-                    "properties": {
+                    "suggested_percentage": {
+                        "type": "integer"
+                    },
 
-                        "suggested_grade": {
-                            "type": "string"
-                        },
+                    "confidence": {
+                        "type": "string"
+                    },
 
-                        "suggested_percentage": {
-                            "type": "integer"
-                        },
+                    "summary": {
+                        "type": "string"
+                    },
 
-                        "confidence": {
-                            "type": "string"
-                        },
-
-                        "summary": {
-                            "type": "string"
-                        },
-
-                        "strengths": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-
-                        "mistakes": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-
-                        "problem_analysis": {
-
-                            "type": "array",
-
-                            "items": {
-
-                                "type": "object",
-
-                                "properties": {
-
-                                    "problem": {
-                                        "type": "string"
-                                    },
-
-                                    "result": {
-                                        "type": "string"
-                                    },
-
-                                    "explanation": {
-                                        "type": "string"
-                                    }
-                                },
-
-                                "required": [
-                                    "problem",
-                                    "result",
-                                    "explanation"
-                                ]
-                            }
-                        },
-
-                        "feedback": {
-                            "type": "string"
-                        },
-
-                        "reasoning": {
+                    "strengths": {
+                        "type": "array",
+                        "items": {
                             "type": "string"
                         }
                     },
 
-                    "required": [
-                        "suggested_grade",
-                        "suggested_percentage",
-                        "confidence",
-                        "summary",
-                        "strengths",
-                        "mistakes",
-                        "problem_analysis",
-                        "feedback",
-                        "reasoning"
-                    ]
-                }
-            )
+                    "mistakes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+
+                    "problem_analysis": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+
+                            "properties": {
+
+                                "problem": {
+                                    "type": "string"
+                                },
+
+                                "result": {
+                                    "type": "string"
+                                },
+
+                                "explanation": {
+                                    "type": "string"
+                                }
+                            },
+
+                            "required": [
+                                "problem",
+                                "result",
+                                "explanation"
+                            ]
+                        }
+                    },
+
+                    "feedback": {
+                        "type": "string"
+                    },
+
+                    "reasoning": {
+                        "type": "string"
+                    }
+                },
+
+                "required": [
+                    "suggested_grade",
+                    "suggested_percentage",
+                    "confidence",
+                    "summary",
+                    "strengths",
+                    "mistakes",
+                    "problem_analysis",
+                    "feedback",
+                    "reasoning"
+                ]
+            }
         )
+
+        for model_name in models_to_try:
+
+            for attempt in range(3):
+
+                try:
+
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[
+                            prompt,
+                            uploaded_file
+                        ],
+                        config=generation_config
+                    )
+
+                    if response is not None:
+                        break
+
+                except Exception as e:
+
+                    last_error = e
+                    error_text = str(e)
+
+                    temporary_error = (
+                        "503" in error_text
+                        or "UNAVAILABLE" in error_text.upper()
+                        or "429" in error_text
+                        or "RESOURCE_EXHAUSTED"
+                        in error_text.upper()
+                    )
+
+                    if not temporary_error:
+                        raise
+
+                    # Exponential backoff:
+                    # 2 seconds, 5 seconds, 10 seconds.
+                    if attempt < 2:
+                        time.sleep(
+                            [2, 5, 10][attempt]
+                        )
+
+            if response is not None:
+                break
+
+        if response is None:
+
+            if last_error:
+
+                return {
+                    "success": False,
+                    "error": (
+                        "Gemini is temporarily unavailable "
+                        "after multiple attempts. "
+                        "Please try again in a few moments. "
+                        f"Last error: {last_error}"
+                    )
+                }
+
+            return {
+                "success": False,
+                "error": (
+                    "Gemini did not return a response."
+                )
+            }
 
         # ====================================================
         # GET RESPONSE
@@ -500,9 +561,37 @@ Return JSON only.
 
     except Exception as e:
 
+        error_text = str(e)
+
+        if (
+            "503" in error_text
+            or "UNAVAILABLE" in error_text.upper()
+        ):
+
+            friendly_error = (
+                "Gemini is temporarily unavailable because "
+                "the model is experiencing high demand. "
+                "Please try again in a few moments."
+            )
+
+        elif (
+            "429" in error_text
+            or "RESOURCE_EXHAUSTED"
+            in error_text.upper()
+        ):
+
+            friendly_error = (
+                "Gemini rate limit was reached. "
+                "Please wait a moment and try again."
+            )
+
+        else:
+
+            friendly_error = error_text
+
         return {
             "success": False,
-            "error": str(e)
+            "error": friendly_error
         }
 
     # ========================================================

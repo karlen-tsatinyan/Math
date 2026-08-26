@@ -98,42 +98,6 @@ def get_gemini_client():
         api_key=api_key
     )
 
-
-# ============================================================
-# GEMINI CONFIGURATION CHECK
-# ============================================================
-
-def check_gemini_secret():
-    """
-    Safely check whether a Gemini API key is available.
-
-    The actual API key is NEVER displayed.
-    """
-
-    try:
-
-        api_key = get_gemini_api_key()
-
-        if api_key:
-
-            return (
-                True,
-                "Gemini API key is configured."
-            )
-
-    except Exception as e:
-
-        return (
-            False,
-            str(e)
-        )
-
-    return (
-        False,
-        "Gemini API key is not configured."
-    )
-
-
 # ============================================================
 # AI HOMEWORK GRADING
 # ============================================================

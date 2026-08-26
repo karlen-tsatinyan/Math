@@ -24,20 +24,6 @@ from google.genai import types
 # ============================================================
 
 def get_gemini_api_key():
-    """
-    Find Gemini API key.
-
-    Priority:
-        1. Streamlit Secrets
-        2. GEMINI_API_KEY environment variable
-        3. GOOGLE_API_KEY environment variable
-
-    Returns:
-        str
-
-    Raises:
-        ValueError if no API key is configured.
-    """
 
     api_key = None
 
@@ -46,29 +32,38 @@ def get_gemini_api_key():
     # --------------------------------------------------------
 
     try:
-
         import streamlit as st
 
-        api_key = st.secrets.get(
-            "api_key"
+        # Your current secrets structure:
+        #
+        # [gemini]
+        # api_key = "..."
+
+        gemini_section = st.secrets.get(
+            "gemini"
         )
 
-    except Exception:
+        if gemini_section:
 
+            api_key = gemini_section.get(
+                "api_key"
+            )
+
+    except Exception:
         api_key = None
 
     # --------------------------------------------------------
-    # 2. ENVIRONMENT VARIABLE
+    # 2. ENVIRONMENT VARIABLE FALLBACK
     # --------------------------------------------------------
 
     if not api_key:
 
         api_key = os.getenv(
-            "api_key"
+            "GEMINI_API_KEY"
         )
 
     # --------------------------------------------------------
-    # 3. GOOGLE_API_KEY
+    # 3. GOOGLE API KEY FALLBACK
     # --------------------------------------------------------
 
     if not api_key:
@@ -84,12 +79,12 @@ def get_gemini_api_key():
     if not api_key:
 
         raise ValueError(
-            "GEMINI_API_KEY is not configured. "
-            "Please add GEMINI_API_KEY to Streamlit Secrets."
+            "Gemini API key was not found. "
+            "Please configure [gemini] api_key "
+            "in Streamlit Secrets."
         )
 
     return str(api_key).strip()
-
 
 # ============================================================
 # GEMINI CLIENT

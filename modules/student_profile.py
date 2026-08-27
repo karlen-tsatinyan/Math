@@ -5,6 +5,8 @@ from datetime import datetime
 from database import query_dataframe, execute
 from utils.datetime_utils import today_str
 
+from modules.performance import student_performance_view
+
 
 # ============================================================
 # CACHE SETTINGS
@@ -839,58 +841,21 @@ def student_profile():
     # ========================================================
     # TAB 5 — PERFORMANCE
     # ========================================================
-
+    
     with tab5:
-
+    
         st.subheader(
             "📈 Performance"
         )
-
-        @st.cache_data(ttl=120)
-        def get_homework_grades(student_id):
-
-            return query_dataframe(
-                """
-                SELECT
-
-                    assignment AS "Homework",
-
-                    grade AS "Grade",
-
-                    max_grade AS "Max Grade",
-
-                    percentage AS "Percentage",
-
-                    teacher_comment AS "Teacher Comments",
-
-                    grade_date AS "Grade Date"
-
-                FROM homework_grades
-
-                WHERE student_id = %s
-
-                ORDER BY
-                    grade_date DESC
-                """,
-                (
-                    student_id,
-                )
-            )
-
-        grades = get_homework_grades(
+    
+        st.caption(
+            "Official homework grades and progression for this student."
+        )
+    
+        # ----------------------------------------------------
+        # ADVANCED PROGRESSION ANALYTICS
+        # ----------------------------------------------------
+    
+        student_performance_view(
             student_id
         )
-
-        if grades.empty:
-
-            st.info(
-                "No grades recorded."
-            )
-
-        else:
-
-            st.dataframe(
-                grades,
-                hide_index=True,
-                use_container_width=True
-            )

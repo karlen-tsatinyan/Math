@@ -843,14 +843,6 @@ def student_profile():
     # ========================================================
     
     with tab5:
-
-        st.subheader(
-            "📊 Student Performance"
-        )
-    
-        st.caption(
-            "Homework performance progression for this student."
-        )
     
         from modules.performance import student_performance_view
     

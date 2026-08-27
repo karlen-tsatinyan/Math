@@ -823,33 +823,22 @@ def student_page():
             performance_section
             == "📈 Advanced Progression Analytics"
         ):
-
-            st.subheader(
-                "📈 Advanced Progression Analytics"
-            )
-
-            st.caption(
-                "Progression is based on homework due dates, "
-                "not submission dates or grading dates."
-            )
-
+        
             try:
-
+        
                 from modules.performance import (
                     student_performance_view
                 )
-
+        
                 student_performance_view(
                     int(student_id)
                 )
-
-            except Exception as e:
-
+        
+            except Exception:
+        
                 st.error(
                     "Unable to load Performance Analytics."
                 )
-
-                st.exception(e)
 
         # ====================================================
         # SESSION HISTORY

@@ -115,6 +115,10 @@ def get_student_id():
 # IMPORTANT:
 # This is intentionally NOT cached.
 # ============================================================
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
 
 def get_student_info(student_id):
 

@@ -843,19 +843,14 @@ def student_profile():
     # ========================================================
     
     with tab5:
-    
+
         st.subheader(
-            "📈 Performance"
+            "📊 Student Performance"
         )
     
         st.caption(
-            "Student performance based on reviewed homework. "
-            "Progression is plotted by homework due date."
+            "Homework performance progression for this student."
         )
-    
-        # ----------------------------------------------------
-        # USE THE EXISTING PERFORMANCE DASHBOARD
-        # ----------------------------------------------------
     
         from modules.performance import student_performance_view
     

@@ -19,9 +19,8 @@ st.set_page_config(
 
 st.set_option("client.showErrorDetails", False)
 
-import time
-
-APP_START = time.perf_counter()
+#import time
+#APP_START = time.perf_counter()
 
 # ==========================================
 # HIDE STREAMLIT RUNNING INDICATORS
@@ -201,15 +200,13 @@ def main():
     # LOAD PAGES
     # ==========================================
 
-    with st.spinner("Loading..."):
+    if user["role"] == "admin":
 
-        if user["role"] == "admin":
-
-            admin_page()
-
-        else:
-
-            student_page()
+        admin_page()
+    
+    else:
+    
+        student_page()
 
 
     # ==========================================
@@ -226,8 +223,8 @@ if __name__ == "__main__":
 
     main()
 
-    APP_END = time.perf_counter()
+    #APP_END = time.perf_counter()
 
-    st.sidebar.caption(
-        f"Page load: {APP_END - APP_START:.2f} seconds"
-    )
+    #st.sidebar.caption(
+    #    f"Page load: {APP_END - APP_START:.2f} seconds"
+    #)

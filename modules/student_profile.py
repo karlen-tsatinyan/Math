@@ -849,12 +849,15 @@ def student_profile():
         )
     
         st.caption(
-            "Official homework grades and progression for this student."
+            "Student performance based on reviewed homework. "
+            "Progression is plotted by homework due date."
         )
     
         # ----------------------------------------------------
-        # ADVANCED PROGRESSION ANALYTICS
+        # USE THE EXISTING PERFORMANCE DASHBOARD
         # ----------------------------------------------------
+    
+        from modules.performance import student_performance_view
     
         student_performance_view(
             student_id

@@ -2116,16 +2116,37 @@ def student_homework():
     
     if st.button(
         "✨ Learn This Topic",
-        key=f"learn_topic_homework_{int(selected_id)}"
+        key=f"learn_topic_homework_{int(selected_id)}",
+        type="primary"
     ):
     
         with st.spinner(
-            "🤖 Creating your learning reference..."
+            "🤖 Creating your topic reference..."
         ):
     
             from modules.ai_learning_reference import (
                 generate_learning_reference
             )
+    
+            # ------------------------------------------------
+            # GET CURRENT HOMEWORK INFORMATION
+            # ------------------------------------------------
+    
+            homework_title = safe_text(
+                selected["title"]
+            )
+    
+            curriculum_topic = safe_text(
+                selected["curriculum_topic"]
+            )
+    
+            instructions = safe_text(
+                selected["comment"]
+            )
+    
+            # ------------------------------------------------
+            # GENERATE REFERENCE
+            # ------------------------------------------------
     
             result = generate_learning_reference(
     
@@ -2135,8 +2156,14 @@ def student_homework():
     
                 instructions=instructions,
     
-                student_grade=student_grade
+                student_grade=str(
+                    student["grade"]
+                )
             )
+    
+        # ----------------------------------------------------
+        # STORE RESULT
+        # ----------------------------------------------------
     
         if result.get("success"):
     
@@ -2144,35 +2171,41 @@ def student_homework():
                 f"learning_reference_{int(selected_id)}"
             ] = result
     
+            st.success(
+                "✅ Topic reference created."
+            )
+    
         else:
     
             st.error(
                 result.get(
                     "error",
-                    "Unable to create learning reference."
+                    "Unable to create topic reference."
                 )
             )
     
     
-    # ============================================================
-    # DISPLAY SAVED REFERENCE
-    # ============================================================
+    # ==================================================
+    # DISPLAY AI TOPIC REFERENCE
+    # ==================================================
     
-    learning_result = st.session_state.get(
+    learning_reference = st.session_state.get(
         f"learning_reference_{int(selected_id)}"
     )
     
-    if learning_result:
-    
-        st.divider()
+    if learning_reference:
     
         from modules.ai_learning_reference import (
             display_learning_reference
         )
     
-        display_learning_reference(
-            learning_result
-        )
+        with st.container(
+            border=True
+        ):
+    
+            display_learning_reference(
+                learning_reference
+            )
 
     # ========================================================
     # ORIGINAL ASSIGNMENT

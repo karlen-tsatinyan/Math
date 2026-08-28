@@ -2145,6 +2145,29 @@ def student_homework():
             )
     
             # ------------------------------------------------
+            # GET STUDENT GRADE
+            # ------------------------------------------------
+    
+            student_info = query_dataframe(
+                """
+                SELECT
+                    grade
+                FROM students
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (student_id,)
+            )
+    
+            student_grade = ""
+    
+            if not student_info.empty:
+    
+                student_grade = safe_text(
+                    student_info.iloc[0]["grade"]
+                )
+    
+            # ------------------------------------------------
             # GENERATE REFERENCE
             # ------------------------------------------------
     
@@ -2156,9 +2179,7 @@ def student_homework():
     
                 instructions=instructions,
     
-                student_grade=str(
-                    student["grade"]
-                )
+                student_grade=student_grade
             )
     
         # ----------------------------------------------------

@@ -2141,7 +2141,7 @@ def student_homework():
         if result.get("success"):
     
             st.session_state[
-                f"learning_reference_{int(homework_id)}"
+                f"learning_reference_{int(selected_id)}"
             ] = result
     
         else:
@@ -2159,7 +2159,7 @@ def student_homework():
     # ============================================================
     
     learning_result = st.session_state.get(
-        f"learning_reference_{int(homework_id)}"
+        f"learning_reference_{int(selected_id)}"
     )
     
     if learning_result:

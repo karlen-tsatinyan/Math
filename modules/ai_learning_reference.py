@@ -17,7 +17,7 @@ from google.genai import types
 # SETTINGS
 # ============================================================
 
-DEFAULT_MODEL = "gemini-3.7-flash"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 FALLBACK_MODELS = [
     "gemini-3.6-flash"
@@ -368,64 +368,93 @@ Keep the entire response concise.
 
         for attempt in range(3):
 
-            try:
-
-                response = client.models.generate_content(
-
-                    model=model_name,
-
-                    contents=prompt,
-
-                    config=types.GenerateContentConfig(
-
-                        temperature=0.25,
-
-                        response_mime_type="application/json",
-
-                        response_schema=LEARNING_SCHEMA
-                    )
+                # ========================================================
+                # GEMINI REQUEST WITH RETRY + FALLBACK
+                # ========================================================
+            
+                models_to_try = [
+                    model,
+                    "gemini-3.5-flash-lite",
+                    "gemini-3.5-flash",
+                    "gemini-3.6-flash",
+                ]
+            
+                # Remove duplicates while preserving order
+                models_to_try = list(
+                    dict.fromkeys(models_to_try)
                 )
-
-                if response is not None:
-
-                    break
-
-            except Exception as e:
-
-                last_error = e
-
-                error_text = str(e)
-
-                temporary_error = (
-                    "503" in error_text
-                    or "UNAVAILABLE"
-                    in error_text.upper()
-                    or "429" in error_text
-                    or "RESOURCE_EXHAUSTED"
-                    in error_text.upper()
-                )
-
-                # --------------------------------------------
-                # NON-TEMPORARY ERROR
-                # --------------------------------------------
-
-                if not temporary_error:
-
-                    return {
-                        "success": False,
-                        "error": error_text
-                    }
-
-                # --------------------------------------------
-                # TEMPORARY ERROR
-                # RETRY WITH BACKOFF
-                # --------------------------------------------
-
-                if attempt < 2:
-
-                    time.sleep(
-                        [2, 5, 10][attempt]
+            
+                last_error = None
+            
+                for attempt_model in models_to_try:
+            
+                    for attempt in range(2):
+            
+                        try:
+            
+                            response = client.models.generate_content(
+            
+                                model=attempt_model,
+            
+                                contents=prompt,
+            
+                                config=types.GenerateContentConfig(
+            
+                                    response_mime_type="application/json",
+            
+                                    response_schema=LEARNING_SCHEMA
+                                )
+                            )
+            
+                            result = _extract_json(
+                                response.text
+                            )
+            
+                            if not result:
+            
+                                last_error = (
+                                    f"{attempt_model} returned "
+                                    "an invalid learning reference."
+                                )
+            
+                                break
+            
+                            result["success"] = True
+            
+                            return result
+            
+                        except Exception as e:
+            
+                            last_error = str(e)
+            
+                            error_text = str(e).lower()
+            
+                            # Retry temporary service-capacity errors
+                            if (
+                                "503" in error_text
+                                or "unavailable" in error_text
+                                or "service unavailable" in error_text
+                            ):
+            
+                                import time
+            
+                                time.sleep(
+                                    2 * (attempt + 1)
+                                )
+            
+                                continue
+            
+                            # Don't retry other errors unnecessarily
+                            break
+            
+                return {
+                    "success": False,
+                    "error": (
+                        "The AI learning service is temporarily "
+                        "unavailable. Please try again in a moment."
+                        f"\n\nTechnical detail: {last_error}"
                     )
+                }
 
         # ----------------------------------------------------
         # STOP IF A MODEL SUCCEEDED

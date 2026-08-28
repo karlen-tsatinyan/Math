@@ -856,33 +856,122 @@ def student_page():
             st.subheader(
                 "Session History"
             )
-
+            
             sessions_history = get_session_history(
                 student_id
             )
-
+            
             if sessions_history.empty:
-
+            
                 st.info(
                     "No session history available."
                 )
-
+            
             else:
-
-                sessions = sessions_history[
-                    [
-                        "Date",
-                        "Time",
-                        "Topic",
-                        "Attendance"
-                    ]
-                ]
-
-                st.dataframe(
-                    sessions,
-                    use_container_width=True,
-                    hide_index=True
-                )
+            
+                for index, row in sessions_history.iterrows():
+            
+                    session_date = row["Date"]
+                    session_time = row["Time"]
+                    topic = row["Topic"]
+                    attendance = row["Attendance"]
+            
+                    # ------------------------------------------------
+                    # SESSION ROW
+                    # ------------------------------------------------
+            
+                    col1, col2, col3, col4 = st.columns(
+                        [1.2, 1.1, 3, 1.3]
+                    )
+            
+                    with col1:
+            
+                        st.write(
+                            f"📅 {session_date}"
+                        )
+            
+                    with col2:
+            
+                        st.write(
+                            f"⏰ {session_time}"
+                        )
+            
+                    with col3:
+            
+                        st.write(
+                            f"📘 {topic}"
+                        )
+            
+                        st.caption(
+                            f"Attendance: {attendance}"
+                        )
+            
+                    with col4:
+            
+                        if st.button(
+                            "📖 Review Topic",
+                            key=f"review_session_topic_{student_id}_{index}"
+                        ):
+            
+                            with st.spinner(
+                                "🤖 Creating your topic reference..."
+                            ):
+            
+                                from modules.ai_learning_reference import (
+                                    generate_learning_reference
+                                )
+            
+                                result = generate_learning_reference(
+            
+                                    curriculum_topic=str(topic),
+            
+                                    homework_title="",
+            
+                                    instructions="",
+            
+                                    student_grade=str(
+                                        student["grade"]
+                                    )
+                                )
+            
+                            if result.get("success"):
+            
+                                st.session_state[
+                                    f"session_learning_{student_id}_{index}"
+                                ] = result
+            
+                            else:
+            
+                                st.error(
+                                    result.get(
+                                        "error",
+                                        "Unable to create topic reference."
+                                    )
+                                )
+            
+                    # ------------------------------------------------
+                    # DISPLAY AI TOPIC REFERENCE
+                    # ------------------------------------------------
+            
+                    session_learning = st.session_state.get(
+                        f"session_learning_{student_id}_{index}"
+                    )
+            
+                    if session_learning:
+            
+                        from modules.ai_learning_reference import (
+                            display_learning_reference
+                        )
+            
+                        with st.container(
+                            border=True
+                        ):
+            
+                            display_learning_reference(
+                                session_learning
+                            )
+            
+                    st.divider()
 
     # ========================================================
     # FINANCIAL STATEMENTS

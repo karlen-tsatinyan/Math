@@ -9,3 +9,4 @@ Pillow
 pypdf
 reportlab
 google-genai
+pydantic

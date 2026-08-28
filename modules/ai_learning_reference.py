@@ -4,6 +4,7 @@
 
 import json
 import re
+import time
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -17,6 +18,10 @@ from google.genai import types
 # ============================================================
 
 DEFAULT_MODEL = "gemini-3.7-flash"
+
+FALLBACK_MODELS = [
+    "gemini-3.6-flash"
+]
 
 
 # ============================================================
@@ -324,59 +329,209 @@ Use one of these visualization types when appropriate:
 Keep the entire response concise.
 """
 
+    # ========================================================
+    # MODEL SELECTION
+    # ========================================================
+
     try:
 
-        model = st.secrets["gemini"].get(
+        primary_model = st.secrets["gemini"].get(
             "learning_model",
             DEFAULT_MODEL
         )
 
     except Exception:
 
-        model = DEFAULT_MODEL
+        primary_model = DEFAULT_MODEL
 
-    try:
+    models_to_try = [
+        primary_model
+    ]
 
-        response = client.models.generate_content(
+    for fallback_model in FALLBACK_MODELS:
 
-            model=model,
+        if fallback_model not in models_to_try:
 
-            contents=prompt,
-
-            config=types.GenerateContentConfig(
-
-                temperature=0.25,
-
-                response_mime_type="application/json",
-
-                response_schema=LEARNING_SCHEMA
+            models_to_try.append(
+                fallback_model
             )
-        )
 
-        result = _extract_json(
-            response.text
-        )
+    # ========================================================
+    # GEMINI REQUEST
+    # RETRY + MODEL FALLBACK
+    # ========================================================
 
-        if not result:
+    response = None
+    last_error = None
+
+    for model_name in models_to_try:
+
+        for attempt in range(3):
+
+            try:
+
+                response = client.models.generate_content(
+
+                    model=model_name,
+
+                    contents=prompt,
+
+                    config=types.GenerateContentConfig(
+
+                        temperature=0.25,
+
+                        response_mime_type="application/json",
+
+                        response_schema=LEARNING_SCHEMA
+                    )
+                )
+
+                if response is not None:
+
+                    break
+
+            except Exception as e:
+
+                last_error = e
+
+                error_text = str(e)
+
+                temporary_error = (
+                    "503" in error_text
+                    or "UNAVAILABLE"
+                    in error_text.upper()
+                    or "429" in error_text
+                    or "RESOURCE_EXHAUSTED"
+                    in error_text.upper()
+                )
+
+                # --------------------------------------------
+                # NON-TEMPORARY ERROR
+                # --------------------------------------------
+
+                if not temporary_error:
+
+                    return {
+                        "success": False,
+                        "error": error_text
+                    }
+
+                # --------------------------------------------
+                # TEMPORARY ERROR
+                # RETRY WITH BACKOFF
+                # --------------------------------------------
+
+                if attempt < 2:
+
+                    time.sleep(
+                        [2, 5, 10][attempt]
+                    )
+
+        # ----------------------------------------------------
+        # STOP IF A MODEL SUCCEEDED
+        # ----------------------------------------------------
+
+        if response is not None:
+
+            break
+
+    # ========================================================
+    # NO RESPONSE AFTER ALL ATTEMPTS
+    # ========================================================
+
+    if response is None:
+
+        if last_error:
+
+            error_text = str(
+                last_error
+            )
+
+            if (
+                "503" in error_text
+                or "UNAVAILABLE"
+                in error_text.upper()
+            ):
+
+                friendly_error = (
+                    "Gemini is temporarily unavailable "
+                    "because the model is experiencing "
+                    "high demand. Please try again in a "
+                    "few moments."
+                )
+
+            elif (
+                "429" in error_text
+                or "RESOURCE_EXHAUSTED"
+                in error_text.upper()
+            ):
+
+                friendly_error = (
+                    "Gemini rate limit was reached. "
+                    "Please wait a moment and try again."
+                )
+
+            else:
+
+                friendly_error = error_text
 
             return {
                 "success": False,
-                "error": (
-                    "Gemini returned an invalid "
-                    "learning reference."
-                )
+                "error": friendly_error
             }
-
-        result["success"] = True
-
-        return result
-
-    except Exception as e:
 
         return {
             "success": False,
-            "error": str(e)
+            "error": (
+                "Gemini did not return a response."
+            )
         }
+
+    # ========================================================
+    # GET RESPONSE
+    # ========================================================
+
+    response_text = getattr(
+        response,
+        "text",
+        None
+    )
+
+    if not response_text:
+
+        return {
+            "success": False,
+            "error": (
+                "Gemini returned an empty response."
+            )
+        }
+
+    # ========================================================
+    # PARSE JSON
+    # ========================================================
+
+    result = _extract_json(
+        response_text
+    )
+
+    if not result:
+
+        return {
+            "success": False,
+            "error": (
+                "Gemini returned an invalid "
+                "learning reference."
+            ),
+            "raw_response": response_text
+        }
+
+    # ========================================================
+    # SUCCESS
+    # ========================================================
+
+    result["success"] = True
+
+    return result
 
 
 # ============================================================

@@ -3,6 +3,7 @@
 # ============================================================
 
 import json
+import math
 import re
 import time
 
@@ -20,7 +21,8 @@ from google.genai import types
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 FALLBACK_MODELS = [
-    "gemini-3.6-flash"
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
 ]
 
 
@@ -31,20 +33,25 @@ FALLBACK_MODELS = [
 def get_gemini_client():
 
     try:
+
         api_key = st.secrets["gemini"]["api_key"]
 
     except Exception:
+
         return None
 
     if not api_key:
+
         return None
 
     try:
+
         return genai.Client(
             api_key=api_key
         )
 
     except Exception:
+
         return None
 
 
@@ -53,7 +60,9 @@ def get_gemini_client():
 # ============================================================
 
 LEARNING_SCHEMA = {
+
     "type": "object",
+
     "properties": {
 
         "topic": {
@@ -102,7 +111,9 @@ LEARNING_SCHEMA = {
         },
 
         "visualization": {
+
             "type": "object",
+
             "properties": {
 
                 "recommended": {
@@ -130,7 +141,6 @@ LEARNING_SCHEMA = {
                 "description"
             ]
         }
-
     },
 
     "required": [
@@ -155,11 +165,15 @@ LEARNING_SCHEMA = {
 def _extract_json(text):
 
     if not text:
+
         return None
 
-    text = text.strip()
+    text = str(text).strip()
 
-    # Remove markdown fences if Gemini adds them
+    # --------------------------------------------------------
+    # Remove markdown fences
+    # --------------------------------------------------------
+
     text = re.sub(
         r"^```json\s*",
         "",
@@ -179,14 +193,24 @@ def _extract_json(text):
         text
     )
 
+    # --------------------------------------------------------
+    # Direct JSON parse
+    # --------------------------------------------------------
+
     try:
+
         return json.loads(text)
 
     except Exception:
+
         pass
 
-    # Try to locate the JSON object
+    # --------------------------------------------------------
+    # Locate JSON object
+    # --------------------------------------------------------
+
     start = text.find("{")
+
     end = text.rfind("}")
 
     if start >= 0 and end > start:
@@ -198,9 +222,80 @@ def _extract_json(text):
             )
 
         except Exception:
+
             pass
 
     return None
+
+
+# ============================================================
+# FRIENDLY GEMINI ERROR
+# ============================================================
+
+def _friendly_gemini_error(error):
+
+    error_text = str(
+        error or ""
+    )
+
+    lower_text = error_text.lower()
+
+    # --------------------------------------------------------
+    # 503 / unavailable
+    # --------------------------------------------------------
+
+    if (
+        "503" in lower_text
+        or "unavailable" in lower_text
+        or "service unavailable" in lower_text
+        or "high demand" in lower_text
+    ):
+
+        return (
+            "Gemini is temporarily unavailable because "
+            "the model is experiencing high demand. "
+            "Please wait a moment and try again."
+        )
+
+    # --------------------------------------------------------
+    # 429 / rate limit
+    # --------------------------------------------------------
+
+    if (
+        "429" in lower_text
+        or "resource_exhausted" in lower_text
+        or "rate limit" in lower_text
+    ):
+
+        return (
+            "Gemini rate limit was reached. "
+            "Please wait a moment and try again."
+        )
+
+    # --------------------------------------------------------
+    # Authentication
+    # --------------------------------------------------------
+
+    if (
+        "401" in lower_text
+        or "403" in lower_text
+        or "api key" in lower_text
+        or "permission" in lower_text
+    ):
+
+        return (
+            "The Gemini API could not be accessed. "
+            "Please check the Gemini API key and permissions "
+            "in Streamlit Secrets."
+        )
+
+    # --------------------------------------------------------
+    # Generic
+    # --------------------------------------------------------
+
+    return error_text or (
+        "Gemini did not return a response."
+    )
 
 
 # ============================================================
@@ -213,6 +308,10 @@ def generate_learning_reference(
     instructions="",
     student_grade=""
 ):
+
+    # ========================================================
+    # VALIDATE TOPIC
+    # ========================================================
 
     topic = str(
         curriculum_topic or ""
@@ -228,6 +327,10 @@ def generate_learning_reference(
             )
         }
 
+    # ========================================================
+    # GEMINI CLIENT
+    # ========================================================
+
     client = get_gemini_client()
 
     if client is None:
@@ -239,6 +342,10 @@ def generate_learning_reference(
                 "Please check Streamlit Secrets."
             )
         }
+
+    # ========================================================
+    # PROMPT
+    # ========================================================
 
     prompt = f"""
 You are the learning-reference assistant inside a
@@ -280,6 +387,7 @@ Keep the explanation appropriate for the student's grade.
 
 CONTENT REQUIREMENTS
 --------------------
+
 Create:
 
 1. A short title.
@@ -290,7 +398,7 @@ Create:
 
 4. A short step-by-step method when appropriate.
 
-5. The important formula/rule if one exists.
+5. The important formula or rule if one exists.
 
 6. ONE simple worked example that is DIFFERENT from
    the student's actual homework.
@@ -301,14 +409,19 @@ Create:
 
 VISUALIZATION
 -------------
+
 Decide whether an interactive mathematical visualization
 would materially help the student understand this topic.
 
 If yes:
-- recommend a visualization type.
+
+- recommend a visualization type
+- explain why it helps
 
 If no:
-- set recommended to false.
+
+- set recommended to false
+- use type "none"
 
 Only recommend a visualization if it is mathematically
 meaningful and useful for understanding the concept.
@@ -325,6 +438,24 @@ Use one of these visualization types when appropriate:
 - trigonometry
 - probability
 - none
+
+IMPORTANT VISUALIZATION RULE
+----------------------------
+
+The visualization recommendation should match the
+curriculum topic.
+
+For example:
+
+- slope → slope
+- linear equations/functions → linear_function
+- quadratics → quadratic
+- right triangles → pythagorean
+- triangle geometry → triangle
+- circle geometry → circle
+- transformations → transformations
+- trigonometry → trigonometry
+- probability → probability
 
 Keep the entire response concise.
 """
@@ -344,6 +475,14 @@ Keep the entire response concise.
 
         primary_model = DEFAULT_MODEL
 
+    primary_model = str(
+        primary_model or DEFAULT_MODEL
+    ).strip()
+
+    # --------------------------------------------------------
+    # Build unique model list
+    # --------------------------------------------------------
+
     models_to_try = [
         primary_model
     ]
@@ -358,209 +497,187 @@ Keep the entire response concise.
 
     # ========================================================
     # GEMINI REQUEST
-    # RETRY + MODEL FALLBACK
     # ========================================================
 
-    response = None
     last_error = None
 
     for model_name in models_to_try:
 
-        for attempt in range(3):
+        # ----------------------------------------------------
+        # Two attempts per model
+        # ----------------------------------------------------
 
-                # ========================================================
-                # GEMINI REQUEST WITH RETRY + FALLBACK
-                # ========================================================
-            
-                models_to_try = [
-                    model,
-                    "gemini-3.5-flash-lite",
-                    "gemini-3.5-flash",
-                    "gemini-3.6-flash",
-                ]
-            
-                # Remove duplicates while preserving order
-                models_to_try = list(
-                    dict.fromkeys(models_to_try)
-                )
-            
-                last_error = None
-            
-                for attempt_model in models_to_try:
-            
-                    for attempt in range(2):
-            
-                        try:
-            
-                            response = client.models.generate_content(
-            
-                                model=attempt_model,
-            
-                                contents=prompt,
-            
-                                config=types.GenerateContentConfig(
-            
-                                    response_mime_type="application/json",
-            
-                                    response_schema=LEARNING_SCHEMA
-                                )
-                            )
-            
-                            result = _extract_json(
-                                response.text
-                            )
-            
-                            if not result:
-            
-                                last_error = (
-                                    f"{attempt_model} returned "
-                                    "an invalid learning reference."
-                                )
-            
-                                break
-            
-                            result["success"] = True
-            
-                            return result
-            
-                        except Exception as e:
-            
-                            last_error = str(e)
-            
-                            error_text = str(e).lower()
-            
-                            # Retry temporary service-capacity errors
-                            if (
-                                "503" in error_text
-                                or "unavailable" in error_text
-                                or "service unavailable" in error_text
-                            ):
-            
-                                import time
-            
-                                time.sleep(
-                                    2 * (attempt + 1)
-                                )
-            
-                                continue
-            
-                            # Don't retry other errors unnecessarily
-                            break
-            
-                return {
-                    "success": False,
-                    "error": (
-                        "The AI learning service is temporarily "
-                        "unavailable. Please try again in a moment."
-                        f"\n\nTechnical detail: {last_error}"
+        for attempt in range(2):
+
+            try:
+
+                response = client.models.generate_content(
+
+                    model=model_name,
+
+                    contents=prompt,
+
+                    config=types.GenerateContentConfig(
+
+                        temperature=0.25,
+
+                        response_mime_type=(
+                            "application/json"
+                        ),
+
+                        response_schema=(
+                            LEARNING_SCHEMA
+                        )
                     )
-                }
-
-        # ----------------------------------------------------
-        # STOP IF A MODEL SUCCEEDED
-        # ----------------------------------------------------
-
-        if response is not None:
-
-            break
-
-    # ========================================================
-    # NO RESPONSE AFTER ALL ATTEMPTS
-    # ========================================================
-
-    if response is None:
-
-        if last_error:
-
-            error_text = str(
-                last_error
-            )
-
-            if (
-                "503" in error_text
-                or "UNAVAILABLE"
-                in error_text.upper()
-            ):
-
-                friendly_error = (
-                    "Gemini is temporarily unavailable "
-                    "because the model is experiencing "
-                    "high demand. Please try again in a "
-                    "few moments."
                 )
 
-            elif (
-                "429" in error_text
-                or "RESOURCE_EXHAUSTED"
-                in error_text.upper()
-            ):
+                # ------------------------------------------------
+                # Get response text
+                # ------------------------------------------------
 
-                friendly_error = (
-                    "Gemini rate limit was reached. "
-                    "Please wait a moment and try again."
+                response_text = getattr(
+                    response,
+                    "text",
+                    None
                 )
 
-            else:
+                if not response_text:
 
-                friendly_error = error_text
+                    last_error = (
+                        f"{model_name} returned "
+                        "an empty response."
+                    )
 
-            return {
-                "success": False,
-                "error": friendly_error
-            }
+                    break
 
-        return {
-            "success": False,
-            "error": (
-                "Gemini did not return a response."
-            )
-        }
+                # ------------------------------------------------
+                # Parse JSON
+                # ------------------------------------------------
+
+                result = _extract_json(
+                    response_text
+                )
+
+                if not result:
+
+                    last_error = (
+                        f"{model_name} returned "
+                        "an invalid learning reference."
+                    )
+
+                    break
+
+                # ------------------------------------------------
+                # Ensure visualization object exists
+                # ------------------------------------------------
+
+                if not isinstance(
+                    result.get("visualization"),
+                    dict
+                ):
+
+                    result["visualization"] = {
+
+                        "recommended": False,
+
+                        "type": "none",
+
+                        "title": "",
+
+                        "description": ""
+                    }
+
+                # ------------------------------------------------
+                # Success
+                # ------------------------------------------------
+
+                result["success"] = True
+
+                return result
+
+            except Exception as e:
+
+                last_error = e
+
+                error_text = str(
+                    e
+                ).lower()
+
+                # ------------------------------------------------
+                # Temporary service errors
+                # ------------------------------------------------
+
+                temporary_error = (
+
+                    "503" in error_text
+
+                    or "unavailable" in error_text
+
+                    or "service unavailable"
+                    in error_text
+
+                    or "high demand"
+                    in error_text
+                )
+
+                # ------------------------------------------------
+                # Rate limit
+                # ------------------------------------------------
+
+                rate_limit_error = (
+
+                    "429" in error_text
+
+                    or "resource_exhausted"
+                    in error_text
+
+                    or "rate limit"
+                    in error_text
+                )
+
+                # ------------------------------------------------
+                # Retry temporary errors
+                # ------------------------------------------------
+
+                if (
+                    temporary_error
+                    or rate_limit_error
+                ):
+
+                    if attempt == 0:
+
+                        time.sleep(
+                            2
+                        )
+
+                        continue
+
+                # ------------------------------------------------
+                # Don't retry permanent errors
+                # ------------------------------------------------
+
+                break
+
+        # --------------------------------------------------------
+        # Try next fallback model
+        # --------------------------------------------------------
+
+        continue
 
     # ========================================================
-    # GET RESPONSE
+    # ALL MODELS FAILED
     # ========================================================
 
-    response_text = getattr(
-        response,
-        "text",
-        None
+    friendly_error = _friendly_gemini_error(
+        last_error
     )
 
-    if not response_text:
+    return {
 
-        return {
-            "success": False,
-            "error": (
-                "Gemini returned an empty response."
-            )
-        }
+        "success": False,
 
-    # ========================================================
-    # PARSE JSON
-    # ========================================================
-
-    result = _extract_json(
-        response_text
-    )
-
-    if not result:
-
-        return {
-            "success": False,
-            "error": (
-                "Gemini returned an invalid "
-                "learning reference."
-            ),
-            "raw_response": response_text
-        }
-
-    # ========================================================
-    # SUCCESS
-    # ========================================================
-
-    result["success"] = True
-
-    return result
+        "error": friendly_error
+    }
 
 
 # ============================================================
@@ -573,12 +690,14 @@ def render_learning_visualization(
 ):
 
     if not visualization:
+
         return
 
     if not visualization.get(
         "recommended",
         False
     ):
+
         return
 
     visualization_type = str(
@@ -614,7 +733,9 @@ def render_learning_visualization(
 
     if visualization_type == "slope":
 
-        render_slope_visualization()
+        render_slope_visualization(
+            topic
+        )
 
     # ========================================================
     # LINEAR FUNCTION
@@ -622,7 +743,9 @@ def render_learning_visualization(
 
     elif visualization_type == "linear_function":
 
-        render_linear_visualization()
+        render_linear_visualization(
+            topic
+        )
 
     # ========================================================
     # QUADRATIC
@@ -630,7 +753,9 @@ def render_learning_visualization(
 
     elif visualization_type == "quadratic":
 
-        render_quadratic_visualization()
+        render_quadratic_visualization(
+            topic
+        )
 
     # ========================================================
     # PYTHAGOREAN
@@ -638,7 +763,9 @@ def render_learning_visualization(
 
     elif visualization_type == "pythagorean":
 
-        render_pythagorean_visualization()
+        render_pythagorean_visualization(
+            topic
+        )
 
     # ========================================================
     # TRIANGLE
@@ -646,7 +773,9 @@ def render_learning_visualization(
 
     elif visualization_type == "triangle":
 
-        render_triangle_visualization()
+        render_triangle_visualization(
+            topic
+        )
 
     # ========================================================
     # CIRCLE
@@ -654,7 +783,9 @@ def render_learning_visualization(
 
     elif visualization_type == "circle":
 
-        render_circle_visualization()
+        render_circle_visualization(
+            topic
+        )
 
     # ========================================================
     # TRANSFORMATIONS
@@ -662,7 +793,9 @@ def render_learning_visualization(
 
     elif visualization_type == "transformations":
 
-        render_transformation_visualization()
+        render_transformation_visualization(
+            topic
+        )
 
     # ========================================================
     # TRIGONOMETRY
@@ -670,7 +803,9 @@ def render_learning_visualization(
 
     elif visualization_type == "trigonometry":
 
-        render_trigonometry_visualization()
+        render_trigonometry_visualization(
+            topic
+        )
 
     # ========================================================
     # PROBABILITY
@@ -678,31 +813,54 @@ def render_learning_visualization(
 
     elif visualization_type == "probability":
 
-        render_probability_visualization()
+        render_probability_visualization(
+            topic
+        )
 
 
 # ============================================================
 # SLOPE VISUALIZATION
 # ============================================================
 
-def render_slope_visualization():
+def render_slope_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     slope = st.slider(
+
         "Slope",
+
         -5.0,
+
         5.0,
+
         1.0,
+
         0.5,
-        key="learning_slope"
+
+        key=f"learning_slope_{key_suffix}"
     )
 
     intercept = st.slider(
+
         "Y-intercept",
+
         -5.0,
+
         5.0,
+
         0.0,
+
         0.5,
-        key="learning_intercept"
+
+        key=f"learning_intercept_{key_suffix}"
     )
 
     x = [
@@ -718,10 +876,15 @@ def render_slope_visualization():
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=x,
+
             y=y,
+
             mode="lines",
+
             name="Line"
         )
     )
@@ -735,16 +898,27 @@ def render_slope_visualization():
     )
 
     fig.update_layout(
+
         height=450,
+
         xaxis_title="x",
+
         yaxis_title="y",
-        title=f"y = {slope}x + {intercept}",
+
+        title=(
+            f"y = {slope}x + {intercept}"
+        ),
+
         showlegend=False
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_slope_{key_suffix}"
     )
 
 
@@ -752,24 +926,45 @@ def render_slope_visualization():
 # LINEAR FUNCTION
 # ============================================================
 
-def render_linear_visualization():
+def render_linear_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     m = st.slider(
+
         "Slope (m)",
+
         -5.0,
+
         5.0,
+
         1.0,
+
         0.5,
-        key="learning_linear_m"
+
+        key=f"learning_linear_m_{key_suffix}"
     )
 
     b = st.slider(
+
         "Y-intercept (b)",
+
         -5.0,
+
         5.0,
+
         0.0,
+
         0.5,
-        key="learning_linear_b"
+
+        key=f"learning_linear_b_{key_suffix}"
     )
 
     x = [
@@ -785,24 +980,47 @@ def render_linear_visualization():
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=x,
+
             y=y,
+
             mode="lines",
+
             name="f(x)"
         )
     )
 
+    fig.add_hline(
+        y=0
+    )
+
+    fig.add_vline(
+        x=0
+    )
+
     fig.update_layout(
+
         height=450,
+
         xaxis_title="x",
+
         yaxis_title="f(x)",
-        title="Explore a Linear Function"
+
+        title="Explore a Linear Function",
+
+        showlegend=False
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_linear_{key_suffix}"
     )
 
 
@@ -810,33 +1028,60 @@ def render_linear_visualization():
 # QUADRATIC
 # ============================================================
 
-def render_quadratic_visualization():
+def render_quadratic_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     a = st.slider(
+
         "a",
+
         -3.0,
+
         3.0,
+
         1.0,
+
         0.5,
-        key="learning_quad_a"
+
+        key=f"learning_quad_a_{key_suffix}"
     )
 
     b = st.slider(
+
         "b",
+
         -5.0,
+
         5.0,
+
         0.0,
+
         0.5,
-        key="learning_quad_b"
+
+        key=f"learning_quad_b_{key_suffix}"
     )
 
     c = st.slider(
+
         "c",
+
         -5.0,
+
         5.0,
+
         0.0,
+
         0.5,
-        key="learning_quad_c"
+
+        key=f"learning_quad_c_{key_suffix}"
     )
 
     x = [
@@ -845,19 +1090,26 @@ def render_quadratic_visualization():
     ]
 
     y = [
+
         a * value ** 2
         + b * value
         + c
+
         for value in x
     ]
 
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=x,
+
             y=y,
+
             mode="lines",
+
             name="Quadratic"
         )
     )
@@ -871,15 +1123,25 @@ def render_quadratic_visualization():
     )
 
     fig.update_layout(
+
         height=450,
+
         title="Explore a Quadratic Function",
+
         xaxis_title="x",
-        yaxis_title="y"
+
+        yaxis_title="y",
+
+        showlegend=False
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_quadratic_{key_suffix}"
     )
 
 
@@ -887,24 +1149,45 @@ def render_quadratic_visualization():
 # PYTHAGOREAN THEOREM
 # ============================================================
 
-def render_pythagorean_visualization():
+def render_pythagorean_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     a = st.slider(
+
         "Leg a",
+
         1.0,
+
         10.0,
+
         3.0,
+
         0.5,
-        key="learning_pyth_a"
+
+        key=f"learning_pyth_a_{key_suffix}"
     )
 
     b = st.slider(
+
         "Leg b",
+
         1.0,
+
         10.0,
+
         4.0,
+
         0.5,
-        key="learning_pyth_b"
+
+        key=f"learning_pyth_b_{key_suffix}"
     )
 
     c = (
@@ -915,29 +1198,48 @@ def render_pythagorean_visualization():
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=[0, a, 0, 0],
+
             y=[0, 0, b, 0],
+
             mode="lines+markers",
+
             fill="toself",
+
             name="Right Triangle"
         )
     )
 
     fig.update_layout(
+
         height=450,
-        title=f"a² + b² = c²    |    c ≈ {c:.2f}",
+
+        title=(
+            f"a² + b² = c²   |   "
+            f"c ≈ {c:.2f}"
+        ),
+
         xaxis_title="",
+
         yaxis_title="",
+
         showlegend=False,
+
         xaxis=dict(
             scaleanchor="y"
         )
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_pythagorean_{key_suffix}"
     )
 
 
@@ -945,24 +1247,45 @@ def render_pythagorean_visualization():
 # TRIANGLE
 # ============================================================
 
-def render_triangle_visualization():
+def render_triangle_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     base = st.slider(
+
         "Base",
+
         1.0,
+
         10.0,
+
         6.0,
+
         0.5,
-        key="learning_triangle_base"
+
+        key=f"learning_triangle_base_{key_suffix}"
     )
 
     height = st.slider(
+
         "Height",
+
         1.0,
+
         10.0,
+
         4.0,
+
         0.5,
-        key="learning_triangle_height"
+
+        key=f"learning_triangle_height_{key_suffix}"
     )
 
     area = (
@@ -972,27 +1295,43 @@ def render_triangle_visualization():
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=[0, base, 0, 0],
+
             y=[0, 0, height, 0],
+
             mode="lines+markers",
+
             fill="toself",
+
             name="Triangle"
         )
     )
 
     fig.update_layout(
+
         height=450,
-        title=f"Triangle Area = {area:.2f}",
+
+        title=(
+            f"Triangle Area = {area:.2f}"
+        ),
+
         showlegend=False,
+
         xaxis=dict(
             scaleanchor="y"
         )
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_triangle_{key_suffix}"
     )
 
 
@@ -1000,61 +1339,105 @@ def render_triangle_visualization():
 # CIRCLE
 # ============================================================
 
-def render_circle_visualization():
+def render_circle_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     radius = st.slider(
+
         "Radius",
+
         1.0,
+
         10.0,
+
         5.0,
+
         0.5,
-        key="learning_circle_radius"
+
+        key=f"learning_circle_radius_{key_suffix}"
     )
 
     theta = [
-        i * 2 * 3.14159265 / 200
+
+        i * 2 * math.pi / 200
+
         for i in range(201)
     ]
 
     x = [
-        radius * __import__("math").cos(t)
+
+        radius * math.cos(t)
+
         for t in theta
     ]
 
     y = [
-        radius * __import__("math").sin(t)
+
+        radius * math.sin(t)
+
         for t in theta
     ]
 
     area = (
-        3.14159265
+        math.pi
         * radius ** 2
+    )
+
+    circumference = (
+        2
+        * math.pi
+        * radius
     )
 
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=x,
+
             y=y,
+
             mode="lines",
+
             fill="toself",
+
             name="Circle"
         )
     )
 
     fig.update_layout(
+
         height=450,
-        title=f"Circle Area ≈ {area:.2f}",
+
+        title=(
+            f"Area ≈ {area:.2f}   |   "
+            f"Circumference ≈ {circumference:.2f}"
+        ),
+
         showlegend=False,
+
         xaxis=dict(
             scaleanchor="y"
         )
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_circle_{key_suffix}"
     )
 
 
@@ -1062,72 +1445,126 @@ def render_circle_visualization():
 # TRANSFORMATIONS
 # ============================================================
 
-def render_transformation_visualization():
+def render_transformation_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     shift_x = st.slider(
+
         "Horizontal translation",
+
         -5,
+
         5,
+
         2,
-        key="learning_transform_x"
+
+        key=f"learning_transform_x_{key_suffix}"
     )
 
     shift_y = st.slider(
+
         "Vertical translation",
+
         -5,
+
         5,
+
         1,
-        key="learning_transform_y"
+
+        key=f"learning_transform_y_{key_suffix}"
     )
 
-    original_x = [1, 4, 2, 1]
-    original_y = [1, 1, 4, 1]
+    original_x = [
+        1,
+        4,
+        2,
+        1
+    ]
+
+    original_y = [
+        1,
+        1,
+        4,
+        1
+    ]
 
     transformed_x = [
+
         x + shift_x
+
         for x in original_x
     ]
 
     transformed_y = [
+
         y + shift_y
+
         for y in original_y
     ]
 
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
+
             x=original_x,
+
             y=original_y,
+
             mode="lines+markers",
+
             name="Original"
         )
     )
 
     fig.add_trace(
+
         go.Scatter(
+
             x=transformed_x,
+
             y=transformed_y,
+
             mode="lines+markers",
+
             name="Translated"
         )
     )
 
     fig.update_layout(
+
         height=450,
+
         title="Explore a Translation",
+
         xaxis=dict(
             range=[-6, 10]
         ),
+
         yaxis=dict(
+
             range=[-6, 10],
+
             scaleanchor="x"
         )
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_transform_{key_suffix}"
     )
 
 
@@ -1135,18 +1572,31 @@ def render_transformation_visualization():
 # TRIGONOMETRY
 # ============================================================
 
-def render_trigonometry_visualization():
+def render_trigonometry_visualization(
+    topic=""
+):
 
-    angle = st.slider(
-        "Angle",
-        0,
-        89,
-        30,
-        1,
-        key="learning_trig_angle"
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
     )
 
-    import math
+    angle = st.slider(
+
+        "Angle",
+
+        0,
+
+        89,
+
+        30,
+
+        1,
+
+        key=f"learning_trig_angle_{key_suffix}"
+    )
 
     radians = math.radians(
         angle
@@ -1160,33 +1610,65 @@ def render_trigonometry_visualization():
         radians
     )
 
+    tangent = math.tan(
+        radians
+    )
+
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Scatter(
-            x=[0, adjacent, 0, 0],
-            y=[0, 0, opposite, 0],
+
+            x=[
+                0,
+                adjacent,
+                0,
+                0
+            ],
+
+            y=[
+                0,
+                0,
+                opposite,
+                0
+            ],
+
             mode="lines+markers",
+
             fill="toself",
+
             name="Triangle"
         )
     )
 
     fig.update_layout(
+
         height=450,
+
         title=(
+
             f"sin({angle}°) ≈ {opposite:.3f}   |   "
-            f"cos({angle}°) ≈ {adjacent:.3f}"
+
+            f"cos({angle}°) ≈ {adjacent:.3f}   |   "
+
+            f"tan({angle}°) ≈ {tangent:.3f}"
         ),
+
         showlegend=False,
+
         xaxis=dict(
             scaleanchor="y"
         )
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_trig_{key_suffix}"
     )
 
 
@@ -1194,58 +1676,93 @@ def render_trigonometry_visualization():
 # PROBABILITY
 # ============================================================
 
-def render_probability_visualization():
+def render_probability_visualization(
+    topic=""
+):
+
+    key_suffix = (
+        str(topic)
+        .lower()
+        .replace(" ", "_")
+        [:40]
+    )
 
     favorable = st.slider(
+
         "Favorable outcomes",
+
         0,
+
         20,
+
         3,
-        key="learning_probability_favorable"
+
+        key=f"learning_probability_favorable_{key_suffix}"
     )
 
     total = st.slider(
+
         "Total outcomes",
+
         1,
+
         20,
+
         10,
-        key="learning_probability_total"
+
+        key=f"learning_probability_total_{key_suffix}"
     )
 
     if favorable > total:
+
         favorable = total
 
     probability = (
         favorable / total
     )
 
+    unfavorable = (
+        total - favorable
+    )
+
     fig = go.Figure()
 
     fig.add_trace(
+
         go.Bar(
+
             x=[
                 "Favorable",
                 "Unfavorable"
             ],
+
             y=[
                 favorable,
-                total - favorable
+                unfavorable
             ]
         )
     )
 
     fig.update_layout(
+
         height=400,
+
         title=(
+
             f"Probability = "
             f"{probability:.1%}"
         ),
+
         showlegend=False
     )
 
     st.plotly_chart(
+
         fig,
-        use_container_width=True
+
+        use_container_width=True,
+
+        key=f"chart_probability_{key_suffix}"
     )
 
 
@@ -1261,23 +1778,40 @@ def display_learning_reference(
 
         return
 
+    # ========================================================
+    # ERROR
+    # ========================================================
+
     if not result.get(
         "success",
         False
     ):
 
         st.error(
+
             result.get(
+
                 "error",
+
                 "Unable to create learning reference."
             )
         )
 
         return
 
+    # ========================================================
+    # TITLE
+    # ========================================================
+
     st.markdown(
-        f"## 📖 {result.get('title', 'Topic Reference')}"
+
+        f"## 📖 "
+        f"{result.get('title', 'Topic Reference')}"
     )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
 
     summary = result.get(
         "summary",
@@ -1316,6 +1850,7 @@ def display_learning_reference(
     # ========================================================
 
     formula = str(
+
         result.get(
             "formula",
             ""
@@ -1325,11 +1860,14 @@ def display_learning_reference(
     if formula:
 
         st.markdown(
+
             "### 📐 Important Rule / Formula"
         )
 
         st.code(
+
             formula,
+
             language="text"
         )
 
@@ -1345,15 +1883,19 @@ def display_learning_reference(
     if steps:
 
         st.markdown(
+
             "### 🪜 How to Approach It"
         )
 
         for index, step in enumerate(
+
             steps,
+
             start=1
         ):
 
             st.markdown(
+
                 f"**{index}.** {step}"
             )
 
@@ -1362,6 +1904,7 @@ def display_learning_reference(
     # ========================================================
 
     example = str(
+
         result.get(
             "worked_example",
             ""
@@ -1371,6 +1914,7 @@ def display_learning_reference(
     if example:
 
         st.markdown(
+
             "### ✏️ Worked Example"
         )
 
@@ -1383,19 +1927,23 @@ def display_learning_reference(
     # ========================================================
 
     mistakes = result.get(
+
         "common_mistakes",
+
         []
     )
 
     if mistakes:
 
         st.markdown(
+
             "### ⚠️ Common Mistakes"
         )
 
         for mistake in mistakes:
 
             st.markdown(
+
                 f"- {mistake}"
             )
 
@@ -1404,6 +1952,7 @@ def display_learning_reference(
     # ========================================================
 
     remember = str(
+
         result.get(
             "remember",
             ""
@@ -1413,6 +1962,7 @@ def display_learning_reference(
     if remember:
 
         st.success(
+
             f"🧠 **Remember:** {remember}"
         )
 
@@ -1421,13 +1971,16 @@ def display_learning_reference(
     # ========================================================
 
     visualization = result.get(
+
         "visualization"
     )
 
     if visualization:
 
         render_learning_visualization(
+
             visualization,
+
             result.get(
                 "topic",
                 ""

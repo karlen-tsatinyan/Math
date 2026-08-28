@@ -2096,6 +2096,84 @@ def student_homework():
             str(description)
         )
 
+
+
+    # ============================================================
+    # AI LEARNING REFERENCE
+    # ============================================================
+    
+    st.divider()
+    
+    st.markdown(
+        "### 📖 Need Help With This Topic?"
+    )
+    
+    st.caption(
+        "Get a short explanation, worked example, "
+        "common mistakes, and an interactive visualization "
+        "when appropriate."
+    )
+    
+    if st.button(
+        "✨ Learn This Topic",
+        key=f"learn_topic_homework_{int(homework_id)}"
+    ):
+    
+        with st.spinner(
+            "🤖 Creating your learning reference..."
+        ):
+    
+            from modules.ai_learning_reference import (
+                generate_learning_reference
+            )
+    
+            result = generate_learning_reference(
+    
+                curriculum_topic=curriculum_topic,
+    
+                homework_title=homework_title,
+    
+                instructions=instructions,
+    
+                student_grade=student_grade
+            )
+    
+        if result.get("success"):
+    
+            st.session_state[
+                f"learning_reference_{int(homework_id)}"
+            ] = result
+    
+        else:
+    
+            st.error(
+                result.get(
+                    "error",
+                    "Unable to create learning reference."
+                )
+            )
+    
+    
+    # ============================================================
+    # DISPLAY SAVED REFERENCE
+    # ============================================================
+    
+    learning_result = st.session_state.get(
+        f"learning_reference_{int(homework_id)}"
+    )
+    
+    if learning_result:
+    
+        st.divider()
+    
+        from modules.ai_learning_reference import (
+            display_learning_reference
+        )
+    
+        display_learning_reference(
+            learning_result
+        )
+
     # ========================================================
     # ORIGINAL ASSIGNMENT
     # ========================================================

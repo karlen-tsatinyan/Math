@@ -2116,7 +2116,7 @@ def student_homework():
     
     if st.button(
         "✨ Learn This Topic",
-        key=f"learn_topic_homework_{int(homework_id)}"
+        key=f"learn_topic_homework_{int(selected_id)}"
     ):
     
         with st.spinner(

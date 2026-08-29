@@ -2299,40 +2299,456 @@ def create_unit_circle_visualization(topic):
     return fig
 
 
-# ========================================================
-# VISUALIZATION
-# ========================================================
+# ============================================================
+# TOPIC-SPECIFIC VISUALIZATION DISPATCHER
+# ============================================================
 
-fig = create_topic_visualization(
-    result.get(
-        "topic",
-        ""
+def create_topic_visualization(topic):
+    """
+    Create a visualization ONLY when the curriculum topic
+    has an explicitly supported visualization category.
+
+    IMPORTANT:
+    This function does NOT guess.
+
+    The topic is first classified by detect_topic_category().
+    Only an exact supported category is allowed to produce
+    a visualization.
+
+    Unsupported or broad topics return None.
+    """
+
+    category = detect_topic_category(
+        topic
     )
-)
 
-if fig is not None:
+    # --------------------------------------------------------
+    # No specific visualization
+    # --------------------------------------------------------
 
-    st.markdown(
-        "#### 📊 Interactive Visualization"
-    )
+    if category == "general":
 
-    st.caption(
-        "This visualization is specifically related "
-        "to this curriculum topic."
-    )
+        return None
 
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key=(
-            "learning_visualization_"
-            + re.sub(
-                r"[^a-zA-Z0-9]+",
-                "_",
-                result.get("topic", "")
-            )[:60]
+    # --------------------------------------------------------
+    # LINEAR
+    # --------------------------------------------------------
+
+    if category == "linear":
+
+        return create_linear_visualization(
+            topic
         )
-    )
+
+    # --------------------------------------------------------
+    # SLOPE
+    # --------------------------------------------------------
+
+    if category == "slope":
+
+        return create_slope_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # SLOPE-INTERCEPT FORM
+    # --------------------------------------------------------
+
+    if category == "slope_intercept":
+
+        return create_slope_intercept_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # QUADRATIC
+    # --------------------------------------------------------
+
+    if category == "quadratic":
+
+        return create_quadratic_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # QUADRATIC VERTEX
+    # --------------------------------------------------------
+
+    if category == "quadratic_vertex":
+
+        return create_quadratic_vertex_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # QUADRATIC ROOTS
+    # --------------------------------------------------------
+
+    if category == "quadratic_roots":
+
+        return create_quadratic_roots_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # QUADRATIC FACTORING
+    # --------------------------------------------------------
+
+    if category == "quadratic_factoring":
+
+        return create_quadratic_factoring_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # EXPONENTIAL
+    # --------------------------------------------------------
+
+    if category == "exponential":
+
+        return create_exponential_growth_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # EXPONENTIAL GROWTH
+    # --------------------------------------------------------
+
+    if category == "exponential_growth":
+
+        return create_exponential_growth_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # EXPONENTIAL DECAY
+    # --------------------------------------------------------
+
+    if category == "exponential_decay":
+
+        return create_exponential_decay_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # LOGARITHM
+    # --------------------------------------------------------
+
+    if category == "logarithm":
+
+        return create_logarithm_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # SINE
+    # --------------------------------------------------------
+
+    if category == "sine":
+
+        return create_sine_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # COSINE
+    # --------------------------------------------------------
+
+    if category == "cosine":
+
+        return create_cosine_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # UNIT CIRCLE
+    # --------------------------------------------------------
+
+    if category == "unit_circle":
+
+        return create_unit_circle_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # PYTHAGOREAN THEOREM
+    # --------------------------------------------------------
+
+    if category == "pythagorean":
+
+        return create_pythagorean_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # CONDITIONAL PROBABILITY
+    # --------------------------------------------------------
+
+    if category == "conditional_probability":
+
+        return create_probability_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # PROBABILITY
+    # --------------------------------------------------------
+
+    if category == "probability":
+
+        return create_probability_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # CENTRAL TENDENCY
+    # --------------------------------------------------------
+
+    if category == "central_tendency":
+
+        return create_statistics_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # STANDARD DEVIATION
+    # --------------------------------------------------------
+
+    if category == "standard_deviation":
+
+        return create_statistics_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # NORMAL DISTRIBUTION
+    # --------------------------------------------------------
+
+    if category == "normal_distribution":
+
+        return create_statistics_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # ARITHMETIC SEQUENCE
+    # --------------------------------------------------------
+
+    if category == "arithmetic_sequence":
+
+        return create_sequence_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # GEOMETRIC SEQUENCE
+    # --------------------------------------------------------
+
+    if category == "geometric_sequence":
+
+        return create_sequence_visualization(
+            topic
+        )
+
+    # --------------------------------------------------------
+    # SAFETY FALLBACK
+    #
+    # If a category is added to detect_topic_category()
+    # later but a visualization has not yet been created,
+    # return None rather than showing an unrelated graph.
+    # --------------------------------------------------------
+
+    return None
+
+# ============================================================
+# TOPIC VISUALIZATION DISPATCHER
+# ============================================================
+
+def create_topic_visualization(topic):
+    """
+    Create a visualization ONLY when the curriculum topic
+    has an explicitly supported topic category.
+
+    IMPORTANT:
+    - No generic visualization is created.
+    - Broad topics return None.
+    - The visualization is selected from the locally
+      detected topic category.
+    """
+
+    category = detect_topic_category(topic)
+
+    # --------------------------------------------------------
+    # Unsupported / broad topic
+    # --------------------------------------------------------
+
+    if category == "general":
+        return None
+
+    # --------------------------------------------------------
+    # LINEAR
+    # --------------------------------------------------------
+
+    if category == "linear":
+        return create_linear_visualization(topic)
+
+    # --------------------------------------------------------
+    # SLOPE
+    # --------------------------------------------------------
+
+    if category == "slope":
+        return create_slope_visualization(topic)
+
+    # --------------------------------------------------------
+    # SLOPE-INTERCEPT FORM
+    # --------------------------------------------------------
+
+    if category == "slope_intercept":
+        return create_slope_intercept_visualization(topic)
+
+    # --------------------------------------------------------
+    # QUADRATIC
+    # --------------------------------------------------------
+
+    if category == "quadratic":
+        return create_quadratic_visualization(topic)
+
+    # --------------------------------------------------------
+    # QUADRATIC VERTEX
+    # --------------------------------------------------------
+
+    if category == "quadratic_vertex":
+        return create_quadratic_vertex_visualization(topic)
+
+    # --------------------------------------------------------
+    # QUADRATIC ROOTS
+    # --------------------------------------------------------
+
+    if category == "quadratic_roots":
+        return create_quadratic_roots_visualization(topic)
+
+    # --------------------------------------------------------
+    # QUADRATIC FACTORING
+    # --------------------------------------------------------
+
+    if category == "quadratic_factoring":
+        return create_quadratic_factoring_visualization(topic)
+
+    # --------------------------------------------------------
+    # EXPONENTIAL
+    # --------------------------------------------------------
+
+    if category == "exponential":
+        return create_exponential_growth_visualization(topic)
+
+    # --------------------------------------------------------
+    # EXPONENTIAL GROWTH
+    # --------------------------------------------------------
+
+    if category == "exponential_growth":
+        return create_exponential_growth_visualization(topic)
+
+    # --------------------------------------------------------
+    # EXPONENTIAL DECAY
+    # --------------------------------------------------------
+
+    if category == "exponential_decay":
+        return create_exponential_decay_visualization(topic)
+
+    # --------------------------------------------------------
+    # LOGARITHM
+    # --------------------------------------------------------
+
+    if category == "logarithm":
+        return create_logarithm_visualization(topic)
+
+    # --------------------------------------------------------
+    # SINE
+    # --------------------------------------------------------
+
+    if category == "sine":
+        return create_sine_visualization(topic)
+
+    # --------------------------------------------------------
+    # COSINE
+    # --------------------------------------------------------
+
+    if category == "cosine":
+        return create_cosine_visualization(topic)
+
+    # --------------------------------------------------------
+    # UNIT CIRCLE
+    # --------------------------------------------------------
+
+    if category == "unit_circle":
+        return create_unit_circle_visualization(topic)
+
+    # --------------------------------------------------------
+    # PYTHAGOREAN THEOREM
+    # --------------------------------------------------------
+
+    if category == "pythagorean":
+        return create_pythagorean_visualization(topic)
+
+    # --------------------------------------------------------
+    # PROBABILITY
+    # --------------------------------------------------------
+
+    if category == "probability":
+        return create_probability_visualization(topic)
+
+    # --------------------------------------------------------
+    # CONDITIONAL PROBABILITY
+    #
+    # No dedicated visualization function currently exists.
+    # Therefore DO NOT create a generic probability graph.
+    # --------------------------------------------------------
+
+    if category == "conditional_probability":
+        return None
+
+    # --------------------------------------------------------
+    # STATISTICS
+    # --------------------------------------------------------
+    # These topics currently do NOT have dedicated
+    # topic-specific visualizations.
+    #
+    # Do NOT use the generic box plot because it does not
+    # specifically teach mean/median/mode, standard deviation,
+    # or normal distribution.
+    # --------------------------------------------------------
+
+    if category == "central_tendency":
+        return None
+
+    if category == "standard_deviation":
+        return None
+
+    if category == "normal_distribution":
+        return None
+        
+    # --------------------------------------------------------
+    # SEQUENCES
+    # --------------------------------------------------------
+
+    if category == "arithmetic_sequence":
+        return create_sequence_visualization(topic)
+
+    # --------------------------------------------------------
+    # GEOMETRIC SEQUENCE
+    #
+    # No dedicated geometric-sequence visualization currently
+    # exists, so do NOT substitute an arithmetic sequence graph.
+    # --------------------------------------------------------
+
+    if category == "geometric_sequence":
+        return None
+
+    # --------------------------------------------------------
+    # SAFETY FALLBACK
+    # --------------------------------------------------------
+
+    return None
 
 
 # ============================================================

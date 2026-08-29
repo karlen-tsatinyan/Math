@@ -656,45 +656,55 @@ def detect_topic_category(topic):
 
 def should_visualize(topic):
     """
-    Return True only when the curriculum topic has a
-    specifically supported visualization.
+    Return True only when detect_topic_category()
+    identifies a specifically supported visualization.
 
     Broad or unsupported topics return False.
+
+    This keeps visualization decisions synchronized with
+    detect_topic_category().
     """
 
     if not topic:
         return False
 
-    topic = str(topic).strip().lower()
+    category = detect_topic_category(topic)
 
-    supported_topics = [
-        "linear function",
-        "linear equation",
-        "slope-intercept form",
-        "slope intercept form",
-        "quadratic function",
-        "quadratic equation",
-        "parabola",
-        "exponential growth",
-        "exponential decay",
-        "logarithmic function",
-        "logarithm function",
-        "sine function",
-        "cosine function",
-        "tangent function",
-        "trigonometric functions",
-        "pythagorean theorem",
-        "arithmetic sequence",
-        "probability distribution",
-        "normal distribution",
-        "box plot",
-        "box and whisker plot",
+    supported_categories = [
+        "slope",
+        "slope_intercept",
+
+        "linear",
+
+        "quadratic",
+        "quadratic_vertex",
+        "quadratic_roots",
+        "quadratic_factoring",
+
+        "exponential",
+        "exponential_growth",
+        "exponential_decay",
+
+        "logarithm",
+
+        "sine",
+        "cosine",
+        "unit_circle",
+
+        "pythagorean",
+
+        "conditional_probability",
+        "probability",
+
+        "central_tendency",
+        "standard_deviation",
+        "normal_distribution",
+
+        "arithmetic_sequence",
+        "geometric_sequence",
     ]
 
-    return any(
-        supported in topic
-        for supported in supported_topics
-    )
+    return category in supported_categories
 
 
 # ============================================================

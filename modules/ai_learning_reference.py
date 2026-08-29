@@ -271,110 +271,194 @@ def normalize_topic(topic):
 
 def detect_topic_category(topic):
     """
-    Determine which local visualization is most appropriate.
+    Determine the EXACT topic-specific visualization category.
 
-    This is intentionally local.
+    IMPORTANT:
+    A broad subject such as "geometry" or "statistics" is NOT
+    enough to trigger a visualization.
 
-    We do NOT ask Gemini a second question such as:
-        "What visualization should I use?"
+    Only topics with a specifically supported visualization
+    category will return a visualization category.
 
-    That would create another API request and slow the feature.
+    If the topic is not specifically supported, return "general".
     """
 
-    t = normalize_topic(
-        topic
-    )
+    t = normalize_topic(topic)
 
     # --------------------------------------------------------
-    # QUADRATIC
+    # PYTHAGOREAN THEOREM
+    # Check BEFORE general geometry.
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "quadratic",
-            "parabola",
-            "factoring quadratic",
-            "quadratic equation",
-            "quadratic function",
+        phrase in t
+        for phrase in [
+            "pythagorean theorem",
+            "pythagorean",
+            "right triangle theorem",
         ]
     ):
-
-        return "quadratic"
+        return "pythagorean"
 
     # --------------------------------------------------------
-    # LINEAR
+    # SLOPE
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "linear equation",
-            "linear function",
+        phrase in t
+        for phrase in [
+            "slope of a line",
+            "slope of line",
+            "finding slope",
+            "find the slope",
+            "calculate slope",
             "slope",
-            "slope intercept",
-            "y = mx",
             "rate of change",
-            "proportional relationship",
         ]
     ):
+        return "slope"
 
+    # --------------------------------------------------------
+    # SLOPE-INTERCEPT FORM
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
+            "slope intercept form",
+            "slope-intercept form",
+            "y = mx + b",
+            "y=mx+b",
+        ]
+    ):
+        return "slope_intercept"
+
+    # --------------------------------------------------------
+    # LINEAR EQUATIONS / LINEAR FUNCTIONS
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
+            "linear equation",
+            "linear equations",
+            "linear function",
+            "linear functions",
+            "graphing linear equations",
+            "graphing linear functions",
+        ]
+    ):
         return "linear"
 
     # --------------------------------------------------------
-    # SYSTEMS
+    # QUADRATIC / PARABOLA
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "system of equations",
-            "systems of equations",
-            "linear system",
-            "systems of linear equations",
+        phrase in t
+        for phrase in [
+            "quadratic function",
+            "quadratic functions",
+            "graphing quadratic",
+            "graphing quadratics",
+            "parabola",
+            "parabolas",
         ]
     ):
-
-        return "systems"
+        return "quadratic"
 
     # --------------------------------------------------------
-    # EXPONENTS / EXPONENTIAL
+    # QUADRATIC VERTEX
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "exponential",
-            "exponent",
-            "exponents",
+        phrase in t
+        for phrase in [
+            "vertex of a quadratic",
+            "vertex of a parabola",
+            "vertex form",
+            "finding the vertex",
+            "find the vertex",
+        ]
+    ):
+        return "quadratic_vertex"
+
+    # --------------------------------------------------------
+    # QUADRATIC ROOTS / X-INTERCEPTS
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
+            "roots of a quadratic",
+            "root of a quadratic",
+            "zeros of a quadratic",
+            "zero of a quadratic",
+            "x-intercepts of a quadratic",
+            "x intercepts of a quadratic",
+        ]
+    ):
+        return "quadratic_roots"
+
+    # --------------------------------------------------------
+    # FACTORING QUADRATICS
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
+            "factoring quadratic",
+            "factor quadratic",
+            "factoring quadratics",
+            "factor quadratics",
+            "quadratic factoring",
+        ]
+    ):
+        return "quadratic_factoring"
+
+    # --------------------------------------------------------
+    # EXPONENTIAL GROWTH
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
             "exponential growth",
-            "exponential decay",
+            "exponential increase",
+            "compound growth",
+            "compound interest",
         ]
     ):
+        return "exponential_growth"
 
-        if any(
-            word in t
-            for word in [
-                "growth",
-                "increase",
-                "compound",
-            ]
-        ):
+    # --------------------------------------------------------
+    # EXPONENTIAL DECAY
+    # --------------------------------------------------------
 
-            return "exponential_growth"
+    if any(
+        phrase in t
+        for phrase in [
+            "exponential decay",
+            "exponential decrease",
+            "half life",
+            "half-life",
+        ]
+    ):
+        return "exponential_decay"
 
-        if any(
-            word in t
-            for word in [
-                "decay",
-                "decrease",
-                "half life",
-                "half-life",
-            ]
-        ):
+    # --------------------------------------------------------
+    # GENERAL EXPONENTIAL FUNCTIONS
+    # --------------------------------------------------------
 
-            return "exponential_decay"
-
+    if any(
+        phrase in t
+        for phrase in [
+            "exponential function",
+            "exponential functions",
+            "exponential equation",
+            "exponential equations",
+        ]
+    ):
         return "exponential"
 
     # --------------------------------------------------------
@@ -382,154 +466,189 @@ def detect_topic_category(topic):
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
+        phrase in t
+        for phrase in [
             "logarithm",
             "logarithms",
             "log function",
+            "logarithmic function",
+            "logarithmic functions",
             "natural logarithm",
-            "ln",
+            "natural logarithms",
         ]
     ):
-
         return "logarithm"
 
     # --------------------------------------------------------
-    # TRIGONOMETRY
+    # SINE FUNCTION
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "trigonometry",
-            "trigonometric",
-            "sine",
-            "cosine",
-            "tangent",
-            "sin",
-            "cos",
-            "tan",
+        phrase in t
+        for phrase in [
+            "sine function",
+            "sine functions",
+            "graphing sine",
+            "graph sine",
+            "sin function",
+            "sinusoidal sine",
+        ]
+    ):
+        return "sine"
+
+    # --------------------------------------------------------
+    # COSINE FUNCTION
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
+            "cosine function",
+            "cosine functions",
+            "graphing cosine",
+            "graph cosine",
+            "cos function",
+        ]
+    ):
+        return "cosine"
+
+    # --------------------------------------------------------
+    # UNIT CIRCLE
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
             "unit circle",
+            "unit circle values",
+            "unit circle angles",
         ]
     ):
-
-        return "trigonometry"
+        return "unit_circle"
 
     # --------------------------------------------------------
-    # GEOMETRY
+    # GENERAL TRIGONOMETRY
+    #
+    # We intentionally DO NOT visualize generic "trigonometry".
+    # --------------------------------------------------------
+
+    # --------------------------------------------------------
+    # CONDITIONAL PROBABILITY
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "geometry",
-            "triangle",
-            "triangles",
-            "circle",
-            "circles",
-            "angle",
-            "angles",
-            "polygon",
-            "polygons",
-            "area",
-            "perimeter",
-            "volume",
-            "surface area",
+        phrase in t
+        for phrase in [
+            "conditional probability",
+            "conditional probabilities",
         ]
     ):
-
-        return "geometry"
-
-    # --------------------------------------------------------
-    # PYTHAGOREAN
-    # --------------------------------------------------------
-
-    if "pythagorean" in t:
-
-        return "pythagorean"
+        return "conditional_probability"
 
     # --------------------------------------------------------
     # PROBABILITY
+    # Only visualize if the topic explicitly involves
+    # probability distributions / outcomes.
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "probability",
-            "probabilities",
-            "conditional probability",
-            "independent events",
-            "dependent events",
+        phrase in t
+        for phrase in [
+            "probability distribution",
+            "probability distributions",
+            "theoretical probability",
+            "experimental probability",
         ]
     ):
-
         return "probability"
 
     # --------------------------------------------------------
-    # STATISTICS
+    # MEAN / MEDIAN / MODE
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "statistics",
-            "mean",
-            "median",
-            "mode",
+        phrase in t
+        for phrase in [
+            "mean median mode",
+            "mean, median, and mode",
+            "mean median and mode",
+        ]
+    ):
+        return "central_tendency"
+
+    # --------------------------------------------------------
+    # STANDARD DEVIATION
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
             "standard deviation",
-            "variance",
-            "distribution",
+            "standard deviations",
+        ]
+    ):
+        return "standard_deviation"
+
+    # --------------------------------------------------------
+    # NORMAL DISTRIBUTION
+    # --------------------------------------------------------
+
+    if any(
+        phrase in t
+        for phrase in [
             "normal distribution",
-            "z score",
-            "z-score",
+            "normal distributions",
+            "bell curve",
+            "bell-shaped distribution",
         ]
     ):
-
-        return "statistics"
+        return "normal_distribution"
 
     # --------------------------------------------------------
-    # SEQUENCES
+    # ARITHMETIC SEQUENCE
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "sequence",
-            "sequences",
+        phrase in t
+        for phrase in [
             "arithmetic sequence",
-            "geometric sequence",
-            "series",
+            "arithmetic sequences",
+            "arithmetic progression",
         ]
     ):
-
-        return "sequence"
+        return "arithmetic_sequence"
 
     # --------------------------------------------------------
-    # CALCULUS
+    # GEOMETRIC SEQUENCE
     # --------------------------------------------------------
 
     if any(
-        word in t
-        for word in [
-            "derivative",
-            "derivatives",
-            "differentiation",
-            "integral",
-            "integrals",
-            "integration",
-            "limit",
-            "limits",
+        phrase in t
+        for phrase in [
+            "geometric sequence",
+            "geometric sequences",
+            "geometric progression",
         ]
     ):
-
-        return "calculus"
+        return "geometric_sequence"
 
     # --------------------------------------------------------
-    # DEFAULT
+    # IMPORTANT:
+    #
+    # Do NOT return a broad visualization category for:
+    #
+    # geometry
+    # triangle
+    # circles
+    # angles
+    # statistics
+    # probability
+    # trigonometry
+    #
+    # unless specifically handled above.
     # --------------------------------------------------------
 
     return "general"
-
 
 # ============================================================
 # VISUALIZATION DECISION

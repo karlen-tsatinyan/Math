@@ -916,17 +916,27 @@ def parse_gemini_result(response):
     return result
 
 
+
 # ============================================================
 # NORMALIZE RESULT
 # ============================================================
 
 def normalize_learning_result(result):
     """
-    Ensure all expected fields exist.
+    Ensure all expected fields exist and have the correct type.
 
-    This prevents UI errors if Gemini returns a slightly
-    incomplete response.
+    Gemini responses can occasionally contain:
+        - missing fields
+        - null values
+        - strings where lists are expected
+        - strings/null values where dictionaries are expected
+
+    This function makes the result safe for the Streamlit UI.
     """
+
+    # ========================================================
+    # RESULT
+    # ========================================================
 
     if not isinstance(
         result,
@@ -934,6 +944,10 @@ def normalize_learning_result(result):
     ):
 
         result = {}
+
+    # ========================================================
+    # BASIC FIELDS
+    # ========================================================
 
     result.setdefault(
         "topic",
@@ -970,7 +984,57 @@ def normalize_learning_result(result):
         ""
     )
 
-    if not isinstance(
+    # ========================================================
+    # TOPIC
+    # ========================================================
+
+    if result["topic"] is None:
+
+        result["topic"] = ""
+
+    else:
+
+        result["topic"] = str(
+            result["topic"]
+        )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    if result["summary"] is None:
+
+        result["summary"] = ""
+
+    else:
+
+        result["summary"] = str(
+            result["summary"]
+        )
+
+    # ========================================================
+    # TIP
+    # ========================================================
+
+    if result["tip"] is None:
+
+        result["tip"] = ""
+
+    else:
+
+        result["tip"] = str(
+            result["tip"]
+        )
+
+    # ========================================================
+    # KEY IDEAS
+    # ========================================================
+
+    if result["key_ideas"] is None:
+
+        result["key_ideas"] = []
+
+    elif not isinstance(
         result["key_ideas"],
         list
     ):
@@ -981,7 +1045,15 @@ def normalize_learning_result(result):
             )
         ]
 
-    if not isinstance(
+    # ========================================================
+    # STEPS
+    # ========================================================
+
+    if result["steps"] is None:
+
+        result["steps"] = []
+
+    elif not isinstance(
         result["steps"],
         list
     ):
@@ -992,7 +1064,15 @@ def normalize_learning_result(result):
             )
         ]
 
-    if not isinstance(
+    # ========================================================
+    # COMMON MISTAKES
+    # ========================================================
+
+    if result["common_mistakes"] is None:
+
+        result["common_mistakes"] = []
+
+    elif not isinstance(
         result["common_mistakes"],
         list
     ):
@@ -1003,41 +1083,135 @@ def normalize_learning_result(result):
             )
         ]
 
+    # ========================================================
+    # WORKED EXAMPLE
+    #
+    # THIS IS THE IMPORTANT FIX.
+    #
+    # Gemini may return:
+    #
+    #   "worked_example": null
+    #
+    # or:
+    #
+    #   "worked_example": "..."
+    #
+    # or another unexpected type.
+    #
+    # We force it to be a dictionary before using .get()
+    # anywhere in the UI.
+    # ========================================================
+
+    worked_example = result.get(
+        "worked_example"
+    )
+
     if not isinstance(
-        result["worked_example"],
+        worked_example,
         dict
     ):
 
-        result["worked_example"] = {}
+        worked_example = {}
 
-    result["worked_example"].setdefault(
+    # --------------------------------------------------------
+    # Problem
+    # --------------------------------------------------------
+
+    worked_example.setdefault(
         "problem",
         ""
     )
 
-    result["worked_example"].setdefault(
+    if worked_example["problem"] is None:
+
+        worked_example["problem"] = ""
+
+    else:
+
+        worked_example["problem"] = str(
+            worked_example["problem"]
+        )
+
+    # --------------------------------------------------------
+    # Solution
+    # --------------------------------------------------------
+
+    worked_example.setdefault(
         "solution",
         []
     )
 
-    result["worked_example"].setdefault(
+    if worked_example["solution"] is None:
+
+        worked_example["solution"] = []
+
+    elif not isinstance(
+        worked_example["solution"],
+        list
+    ):
+
+        worked_example["solution"] = [
+            str(
+                worked_example["solution"]
+            )
+        ]
+
+    # --------------------------------------------------------
+    # Answer
+    # --------------------------------------------------------
+
+    worked_example.setdefault(
         "answer",
         ""
     )
 
-    if not isinstance(
-        result["worked_example"]["solution"],
-        list
-    ):
+    if worked_example["answer"] is None:
 
-        result["worked_example"]["solution"] = [
-            str(
-                result["worked_example"]["solution"]
-            )
-        ]
+        worked_example["answer"] = ""
+
+    else:
+
+        worked_example["answer"] = str(
+            worked_example["answer"]
+        )
+
+    # --------------------------------------------------------
+    # Put the cleaned worked_example back into result.
+    # --------------------------------------------------------
+
+    result["worked_example"] = worked_example
+
+    # ========================================================
+    # CLEAN LIST ITEMS
+    #
+    # Make sure individual items are strings and remove None.
+    # ========================================================
+
+    result["key_ideas"] = [
+        str(item)
+        for item in result["key_ideas"]
+        if item is not None
+    ]
+
+    result["steps"] = [
+        str(item)
+        for item in result["steps"]
+        if item is not None
+    ]
+
+    result["common_mistakes"] = [
+        str(item)
+        for item in result["common_mistakes"]
+        if item is not None
+    ]
+
+    result["worked_example"]["solution"] = [
+        str(item)
+        for item in result["worked_example"]["solution"]
+        if item is not None
+    ]
 
     return result
-
 
 # ============================================================
 # GENERATE LEARNING REFERENCE
@@ -2865,52 +3039,69 @@ def display_learning_reference(
     # ========================================================
     # WORKED EXAMPLE
     # ========================================================
-
+    
     worked_example = result.get(
         "worked_example",
         {}
     )
-
+    
+    # Gemini can occasionally return an unexpected type.
+    # Only treat worked_example as valid if it is a dictionary.
+    if not isinstance(
+        worked_example,
+        dict
+    ):
+        worked_example = {}
+    
     if worked_example:
-
+    
         problem = worked_example.get(
             "problem",
             ""
         )
-
+    
         solution = worked_example.get(
             "solution",
             []
         )
-
+    
         answer = worked_example.get(
             "answer",
             ""
         )
-
+    
+        # Make sure solution is always a list.
+        if not isinstance(
+            solution,
+            list
+        ):
+            solution = [
+                str(solution)
+            ]
+    
         if problem:
-
+    
             st.markdown(
                 "#### ✏️ Worked Example"
             )
-
+    
             st.markdown(
                 f"**Example:** {problem}"
             )
-
+    
         if solution:
-
+    
             for number, step in enumerate(
                 solution,
                 start=1
             ):
-
+    
                 st.markdown(
                     f"**Step {number}:** {step}"
                 )
-
+    
         if answer:
-
+    
             st.success(
                 f"**Answer:** {answer}"
             )

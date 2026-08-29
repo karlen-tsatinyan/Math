@@ -656,31 +656,45 @@ def detect_topic_category(topic):
 
 def should_visualize(topic):
     """
-    Decide locally whether the topic benefits from a
-    visualization.
+    Return True only when the curriculum topic has a
+    specifically supported visualization.
 
-    This avoids an additional Gemini request.
+    Broad or unsupported topics return False.
     """
 
-    category = detect_topic_category(
-        topic
-    )
+    if not topic:
+        return False
 
-    return category in [
-        "quadratic",
-        "linear",
-        "systems",
-        "exponential_growth",
-        "exponential_decay",
-        "exponential",
-        "logarithm",
-        "trigonometry",
-        "geometry",
-        "pythagorean",
-        "probability",
-        "statistics",
-        "sequence",
+    topic = str(topic).strip().lower()
+
+    supported_topics = [
+        "linear function",
+        "linear equation",
+        "slope-intercept form",
+        "slope intercept form",
+        "quadratic function",
+        "quadratic equation",
+        "parabola",
+        "exponential growth",
+        "exponential decay",
+        "logarithmic function",
+        "logarithm function",
+        "sine function",
+        "cosine function",
+        "tangent function",
+        "trigonometric functions",
+        "pythagorean theorem",
+        "arithmetic sequence",
+        "probability distribution",
+        "normal distribution",
+        "box plot",
+        "box and whisker plot",
     ]
+
+    return any(
+        supported in topic
+        for supported in supported_topics
+    )
 
 
 # ============================================================
@@ -1817,103 +1831,498 @@ def create_logarithm_visualization(topic):
 
     return fig
 
-
 # ============================================================
-# LOCAL VISUALIZATION ROUTER
+# SLOPE VISUALIZATION
 # ============================================================
 
-def create_topic_visualization(
-    topic
-):
+def create_slope_visualization(topic):
     """
-    Create the most relevant visualization for the topic.
+    Show a line with a clear rise/run relationship.
 
-    No Gemini request is made here.
+    y = 2x + 1
+    slope = 2 = rise/run = 2/1
     """
 
-    category = detect_topic_category(
-        topic
+    x = list(range(-5, 6))
+
+    y = [
+        2 * value + 1
+        for value in x
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines+markers",
+            name="y = 2x + 1"
+        )
     )
 
-    try:
+    # Rise/run triangle
+    fig.add_trace(
+        go.Scatter(
+            x=[0, 1, 1],
+            y=[1, 1, 3],
+            mode="lines+markers",
+            name="Rise / Run"
+        )
+    )
 
-        if category == "linear":
+    fig.update_layout(
+        title="Slope: Rise Over Run",
+        xaxis_title="x",
+        yaxis_title="y",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
 
-            return create_linear_visualization(
-                topic
-            )
+    return fig
 
-        if category == "quadratic":
 
-            return create_quadratic_visualization(
-                topic
-            )
+# ============================================================
+# SLOPE-INTERCEPT VISUALIZATION
+# ============================================================
 
-        if category == "exponential_growth":
+def create_slope_intercept_visualization(topic):
+    """
+    Illustrate y = mx + b.
+    """
 
-            return create_exponential_growth_visualization(
-                topic
-            )
+    x = list(range(-5, 6))
 
-        if category == "exponential_decay":
+    y = [
+        2 * value + 3
+        for value in x
+    ]
 
-            return create_exponential_decay_visualization(
-                topic
-            )
+    fig = go.Figure()
 
-        if category == "exponential":
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines+markers",
+            name="y = 2x + 3"
+        )
+    )
 
-            return create_exponential_growth_visualization(
-                topic
-            )
+    fig.add_trace(
+        go.Scatter(
+            x=[0],
+            y=[3],
+            mode="markers+text",
+            text=["b = 3"],
+            textposition="top right",
+            name="y-intercept"
+        )
+    )
 
-        if category == "trigonometry":
+    fig.update_layout(
+        title="Slope-Intercept Form: y = mx + b",
+        xaxis_title="x",
+        yaxis_title="y",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
 
-            return create_trigonometry_visualization(
-                topic
-            )
+    return fig
 
-        if category == "geometry":
 
-            return create_geometry_visualization(
-                topic
-            )
+# ============================================================
+# QUADRATIC VERTEX VISUALIZATION
+# ============================================================
 
-        if category == "pythagorean":
+def create_quadratic_vertex_visualization(topic):
+    """
+    Show a parabola with its vertex highlighted.
+    """
 
-            return create_pythagorean_visualization(
-                topic
-            )
+    x = [
+        -5 + i * 0.1
+        for i in range(101)
+    ]
 
-        if category == "statistics":
+    y = [
+        (value - 1) ** 2 - 4
+        for value in x
+    ]
 
-            return create_statistics_visualization(
-                topic
-            )
+    fig = go.Figure()
 
-        if category == "probability":
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            name="y = (x - 1)² - 4"
+        )
+    )
 
-            return create_probability_visualization(
-                topic
-            )
+    fig.add_trace(
+        go.Scatter(
+            x=[1],
+            y=[-4],
+            mode="markers+text",
+            text=["Vertex (1, -4)"],
+            textposition="top center",
+            name="Vertex"
+        )
+    )
 
-        if category == "sequence":
+    fig.update_layout(
+        title="Quadratic Vertex",
+        xaxis_title="x",
+        yaxis_title="y",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
 
-            return create_sequence_visualization(
-                topic
-            )
+    return fig
 
-        if category == "logarithm":
 
-            return create_logarithm_visualization(
-                topic
-            )
+# ============================================================
+# QUADRATIC ROOTS VISUALIZATION
+# ============================================================
 
-    except Exception:
+def create_quadratic_roots_visualization(topic):
+    """
+    Show a parabola and its x-intercepts.
+    """
 
-        return None
+    x = [
+        -4 + i * 0.1
+        for i in range(81)
+    ]
 
-    return None
+    y = [
+        (value - 1) ** 2 - 4
+        for value in x
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            name="Quadratic"
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[-1, 3],
+            y=[0, 0],
+            mode="markers+text",
+            text=["x = -1", "x = 3"],
+            textposition="top center",
+            name="Roots"
+        )
+    )
+
+    fig.update_layout(
+        title="Quadratic Roots / X-Intercepts",
+        xaxis_title="x",
+        yaxis_title="y",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
+
+    return fig
+
+
+# ============================================================
+# QUADRATIC FACTORING VISUALIZATION
+# ============================================================
+
+def create_quadratic_factoring_visualization(topic):
+    """
+    Connect factoring to the zeros of a quadratic.
+
+    y = (x - 2)(x + 3)
+    roots: x = 2 and x = -3
+    """
+
+    x = [
+        -5 + i * 0.1
+        for i in range(101)
+    ]
+
+    y = [
+        (value - 2) * (value + 3)
+        for value in x
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            name="(x - 2)(x + 3)"
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[-3, 2],
+            y=[0, 0],
+            mode="markers+text",
+            text=["x = -3", "x = 2"],
+            textposition="top center",
+            name="Zeros"
+        )
+    )
+
+    fig.update_layout(
+        title="Factoring a Quadratic and Its Zeros",
+        xaxis_title="x",
+        yaxis_title="y",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
+
+    return fig
+
+
+# ============================================================
+# SINE VISUALIZATION
+# ============================================================
+
+def create_sine_visualization(topic):
+
+    import math
+
+    angles = list(
+        range(
+            0,
+            361,
+            5
+        )
+    )
+
+    values = [
+        math.sin(
+            math.radians(angle)
+        )
+        for angle in angles
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=angles,
+            y=values,
+            mode="lines",
+            name="sin θ"
+        )
+    )
+
+    fig.update_layout(
+        title="Sine Function",
+        xaxis_title="Angle (degrees)",
+        yaxis_title="sin θ",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
+
+    return fig
+
+
+# ============================================================
+# COSINE VISUALIZATION
+# ============================================================
+
+def create_cosine_visualization(topic):
+
+    import math
+
+    angles = list(
+        range(
+            0,
+            361,
+            5
+        )
+    )
+
+    values = [
+        math.cos(
+            math.radians(angle)
+        )
+        for angle in angles
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=angles,
+            y=values,
+            mode="lines",
+            name="cos θ"
+        )
+    )
+
+    fig.update_layout(
+        title="Cosine Function",
+        xaxis_title="Angle (degrees)",
+        yaxis_title="cos θ",
+        height=420,
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
+
+    return fig
+
+
+# ============================================================
+# UNIT CIRCLE VISUALIZATION
+# ============================================================
+
+def create_unit_circle_visualization(topic):
+
+    import math
+
+    angles = [
+        i
+        for i in range(
+            0,
+            361,
+            2
+        )
+    ]
+
+    radians = [
+        math.radians(
+            angle
+        )
+        for angle in angles
+    ]
+
+    x = [
+        math.cos(angle)
+        for angle in radians
+    ]
+
+    y = [
+        math.sin(angle)
+        for angle in radians
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            name="Unit Circle"
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[0, 1],
+            y=[0, 0],
+            mode="lines+markers",
+            name="Radius"
+        )
+    )
+
+    fig.update_layout(
+        title="Unit Circle",
+        xaxis_title="cos θ",
+        yaxis_title="sin θ",
+        height=420,
+        yaxis=dict(
+            scaleanchor="x",
+            scaleratio=1
+        ),
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=40
+        )
+    )
+
+    return fig
+
+
+# ========================================================
+# VISUALIZATION
+# ========================================================
+
+fig = create_topic_visualization(
+    result.get(
+        "topic",
+        ""
+    )
+)
+
+if fig is not None:
+
+    st.markdown(
+        "#### 📊 Interactive Visualization"
+    )
+
+    st.caption(
+        "This visualization is specifically related "
+        "to this curriculum topic."
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=(
+            "learning_visualization_"
+            + re.sub(
+                r"[^a-zA-Z0-9]+",
+                "_",
+                result.get("topic", "")
+            )[:60]
+        )
+    )
 
 
 # ============================================================

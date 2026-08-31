@@ -16,7 +16,8 @@ COURSE_OPTIONS = [
     "Geometry",
     "Pre-Algebra",
     "Precalculus",
-    "Trigonometry"
+    "Trigonometry",
+    "Calculus"
 ]
 
 

@@ -1,11 +1,9 @@
 import streamlit as st
 
 from authentication import login
-# from pages.admin import admin_page
 from pages.student import student_page
-from supabase_client import get_supabase
-
 from pages.admin import admin_page
+
 
 # ==========================================
 # PAGE CONFIG
@@ -17,14 +15,14 @@ st.set_page_config(
     layout="wide"
 )
 
-st.set_option("client.showErrorDetails", False)
+st.set_option(
+    "client.showErrorDetails",
+    False
+)
 
-#import time
-#APP_START = time.perf_counter()
 
 # ==========================================
-# HIDE STREAMLIT RUNNING INDICATORS
-# + COMPACT SIDEBAR
+# HIDE STREAMLIT UI ELEMENTS
 # ==========================================
 
 st.markdown(
@@ -85,27 +83,44 @@ if "user" not in st.session_state:
 
 
 # ==========================================
-# LOGIN
+# LOGIN SCREEN
 # ==========================================
 
 def login_screen():
 
-    st.title("📚 Advanced Math Tutoring Portal")
+    st.title(
+        "📚 Advanced Math Tutoring Portal"
+    )
 
     with st.form("login_form"):
 
-        username = st.text_input("Username")
+        username = st.text_input(
+            "Username"
+        )
 
         password = st.text_input(
             "Password",
             type="password"
         )
 
-        submitted = st.form_submit_button("Login")
+        submitted = st.form_submit_button(
+            "Login",
+            type="primary"
+        )
 
         if submitted:
 
-            with st.spinner("Signing in..."):
+            if not username.strip() or not password:
+
+                st.error(
+                    "Please enter your username and password."
+                )
+
+                return
+
+            with st.spinner(
+                "Signing in..."
+            ):
 
                 user = login(
                     username,
@@ -114,17 +129,245 @@ def login_screen():
 
             if user:
 
+                # ------------------------------------------
+                # SAVE USER
+                # ------------------------------------------
+
                 st.session_state.user = user
 
-                st.success("Welcome!")
+                # ------------------------------------------
+                # ADMIN
+                # ------------------------------------------
 
-                st.rerun()
+                if user["role"] == "admin":
+
+                    st.success(
+                        "Welcome!"
+                    )
+
+                    st.rerun()
+
+                # ------------------------------------------
+                # STUDENT
+                # ------------------------------------------
+
+                else:
+
+                    courses = user.get(
+                        "courses",
+                        []
+                    )
+
+                    # --------------------------------------
+                    # NO COURSE ASSIGNED
+                    # --------------------------------------
+
+                    if len(courses) == 0:
+
+                        st.warning(
+                            "Your account is active, "
+                            "but no course has been assigned yet. "
+                            "Please contact your teacher."
+                        )
+
+                        return
+
+                    # --------------------------------------
+                    # ONE COURSE
+                    #
+                    # authentication.py already sets:
+                    #
+                    # selected_course = course
+                    #
+                    # So we can go directly to the portal.
+                    # --------------------------------------
+
+                    if len(courses) == 1:
+
+                        st.session_state.user[
+                            "selected_course"
+                        ] = courses[0]
+
+                        st.success(
+                            f"Welcome! "
+                            f"Opening {courses[0]}..."
+                        )
+
+                        st.rerun()
+
+                    # --------------------------------------
+                    # MULTIPLE COURSES
+                    #
+                    # Stay on the login/course screen.
+                    # --------------------------------------
+
+                    else:
+
+                        st.rerun()
 
             else:
 
                 st.error(
                     "Incorrect username or password."
                 )
+
+
+# ==========================================
+# COURSE SELECTION
+# ==========================================
+
+def course_selection():
+
+    user = st.session_state.user
+
+    courses = user.get(
+        "courses",
+        []
+    )
+
+    # ======================================================
+    # SAFETY CHECK
+    # ======================================================
+
+    if not courses:
+
+        st.error(
+            "No courses are assigned to this account."
+        )
+
+        if st.button(
+            "Logout",
+            key="course_logout_no_courses"
+        ):
+
+            st.session_state.user = None
+
+            st.rerun()
+
+        return
+
+
+    # ======================================================
+    # IF ONLY ONE COURSE
+    # ======================================================
+
+    if len(courses) == 1:
+
+        st.session_state.user[
+            "selected_course"
+        ] = courses[0]
+
+        st.rerun()
+
+        return
+
+
+    # ======================================================
+    # MULTIPLE COURSES
+    # ======================================================
+
+    st.title(
+        "📚 Choose Your Course"
+    )
+
+    st.write(
+        f"Welcome, **{user['username']}**!"
+    )
+
+    st.write(
+        "Please select the course you would like to open."
+    )
+
+    st.markdown(
+        "---"
+    )
+
+
+    # ======================================================
+    # COURSE BUTTONS
+    # ======================================================
+
+    columns = st.columns(
+        len(courses)
+    )
+
+
+    for index, course in enumerate(courses):
+
+        with columns[index]:
+
+            # ----------------------------------------------
+            # COURSE EMOJI
+            # ----------------------------------------------
+
+            course_lower = course.lower()
+
+            if "algebra" in course_lower:
+
+                icon = "📐"
+
+            elif "geometry" in course_lower:
+
+                icon = "📏"
+
+            elif "precalculus" in course_lower:
+
+                icon = "📈"
+
+            elif "trigonometry" in course_lower:
+
+                icon = "📊"
+
+            else:
+
+                icon = "📚"
+
+
+            # ----------------------------------------------
+            # COURSE BUTTON
+            # ----------------------------------------------
+
+            if st.button(
+                f"{icon} {course}",
+                use_container_width=True,
+                type="primary",
+                key=f"course_select_{index}"
+            ):
+
+                st.session_state.user[
+                    "selected_course"
+                ] = course
+
+                st.rerun()
+
+
+    st.markdown(
+        "---"
+    )
+
+
+    # ======================================================
+    # LOGOUT
+    # ======================================================
+
+    if st.button(
+        "Logout",
+        key="course_selection_logout"
+    ):
+
+        st.session_state.user = None
+
+        st.cache_data.clear()
+
+        if hasattr(
+            st,
+            "cache_resource"
+        ):
+
+            st.cache_resource.clear()
+
+        st.rerun()
+
 
 # ==========================================
 # COMPACT SIDEBAR FOOTER
@@ -134,11 +377,38 @@ def sidebar_footer(user):
 
     st.sidebar.divider()
 
+    # ======================================================
+    # USERNAME
+    # ======================================================
+
     st.sidebar.markdown(
         f"👤 **{user['username']}**"
     )
 
+
+    # ======================================================
+    # SHOW CURRENT COURSE FOR STUDENTS
+    # ======================================================
+
+    if user["role"] != "admin":
+
+        selected_course = user.get(
+            "selected_course"
+        )
+
+        if selected_course:
+
+            st.sidebar.caption(
+                f"📚 Course: {selected_course}"
+            )
+
+
+    # ======================================================
+    # REFRESH / LOGOUT
+    # ======================================================
+
     col1, col2 = st.sidebar.columns(2)
+
 
     with col1:
 
@@ -150,11 +420,14 @@ def sidebar_footer(user):
 
             st.cache_data.clear()
 
-            st.session_state["refresh_message"] = (
+            st.session_state[
+                "refresh_message"
+            ] = (
                 "✅ Data refreshed successfully."
             )
 
             st.rerun()
+
 
     with col2:
 
@@ -168,16 +441,31 @@ def sidebar_footer(user):
 
             st.cache_data.clear()
 
+            if hasattr(
+                st,
+                "cache_resource"
+            ):
+
+                st.cache_resource.clear()
+
             st.rerun()
 
+
+    # ======================================================
+    # REFRESH MESSAGE
+    # ======================================================
 
     if "refresh_message" in st.session_state:
 
         st.sidebar.success(
-            st.session_state["refresh_message"]
+            st.session_state[
+                "refresh_message"
+            ]
         )
 
-        del st.session_state["refresh_message"]
+        del st.session_state[
+            "refresh_message"
+        ]
 
 
 # ==========================================
@@ -186,6 +474,10 @@ def sidebar_footer(user):
 
 def main():
 
+    # ======================================================
+    # NOT LOGGED IN
+    # ======================================================
+
     if st.session_state.user is None:
 
         login_screen()
@@ -193,38 +485,59 @@ def main():
         return
 
 
+    # ======================================================
+    # GET USER
+    # ======================================================
+
     user = st.session_state.user
 
 
-    # ==========================================
-    # LOAD PAGES
-    # ==========================================
+    # ======================================================
+    # ADMIN
+    # ======================================================
 
     if user["role"] == "admin":
 
         admin_page()
-    
-    else:
-    
-        student_page()
+
+        sidebar_footer(user)
+
+        return
 
 
-    # ==========================================
-    # COMPACT SIDEBAR FOOTER
-    # ==========================================
+    # ======================================================
+    # STUDENT — NO COURSE SELECTED
+    # ======================================================
+
+    selected_course = user.get(
+        "selected_course"
+    )
+
+    if not selected_course:
+
+        course_selection()
+
+        return
+
+
+    # ======================================================
+    # STUDENT PORTAL
+    # ======================================================
+
+    student_page()
+
+
+    # ======================================================
+    # SIDEBAR FOOTER
+    # ======================================================
 
     sidebar_footer(user)
 
+
 # ==========================================
-# START
+# START APPLICATION
 # ==========================================
 
 if __name__ == "__main__":
 
     main()
-
-    #APP_END = time.perf_counter()
-
-    #st.sidebar.caption(
-    #    f"Page load: {APP_END - APP_START:.2f} seconds"
-    #)

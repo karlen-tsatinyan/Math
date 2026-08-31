@@ -29,7 +29,7 @@ def login(username, password):
     # INVALID LOGIN
     # ==========================================================
 
-    if len(result) != 1:
+    if result.empty:
         return None
 
     user = {
@@ -39,22 +39,18 @@ def login(username, password):
     }
 
     # ==========================================================
-    # ADMIN LOGIN
+    # ADMIN
     # ==========================================================
 
     if user["role"] == "admin":
+
         user["courses"] = []
         user["selected_course"] = None
 
         return user
 
     # ==========================================================
-    # STUDENT LOGIN
-    #
-    # Get the courses assigned to this student.
-    #
-    # For now, courses are read from the student's
-    # "subject" field.
+    # STUDENT COURSES
     # ==========================================================
 
     student_id = user["student_id"]
@@ -78,28 +74,21 @@ def login(username, password):
 
         subject = student_result.iloc[0]["subject"]
 
-        if (
-            subject is not None
-            and str(subject).strip()
-            and str(subject).strip().lower() not in [
-                "nan",
-                "none"
-            ]
-        ):
+        if subject is not None:
 
-            # --------------------------------------------------
-            # Allow multiple courses separated by commas.
-            #
-            # Example:
-            #
-            # Algebra, Geometry
-            # --------------------------------------------------
+            subject_text = str(subject).strip()
 
-            courses = [
-                course.strip()
-                for course in str(subject).split(",")
-                if course.strip()
-            ]
+            if (
+                subject_text
+                and subject_text.lower()
+                not in ["nan", "none"]
+            ):
+
+                courses = [
+                    course.strip()
+                    for course in subject_text.split(",")
+                    if course.strip()
+                ]
 
     # ==========================================================
     # REMOVE DUPLICATES
@@ -110,17 +99,10 @@ def login(username, password):
     )
 
     # ==========================================================
-    # STORE COURSES IN USER
+    # STORE COURSES
     # ==========================================================
 
     user["courses"] = courses
-
-    # ==========================================================
-    # ONE COURSE
-    #
-    # Automatically select it.
-    # No course-selection screen will be necessary.
-    # ==========================================================
 
     if len(courses) == 1:
 

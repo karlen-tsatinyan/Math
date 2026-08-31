@@ -612,6 +612,58 @@ def homework_management():
             ]["id"].iloc[0]
         )
 
+        # ========================================================
+        # SELECT COURSE
+        # ========================================================
+        
+        student_record = query_dataframe(
+            """
+            SELECT subject
+            FROM students
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (student_id,)
+        )
+        
+        student_courses = []
+        
+        if not student_record.empty:
+        
+            subject_value = student_record.iloc[0]["subject"]
+        
+            if (
+                subject_value is not None
+                and str(subject_value).strip()
+                and str(subject_value).strip().lower()
+                not in ["nan", "none"]
+            ):
+        
+                student_courses = [
+                    course.strip()
+                    for course in str(subject_value).split(",")
+                    if course.strip()
+                ]
+        
+        student_courses = list(
+            dict.fromkeys(student_courses)
+        )
+        
+        if not student_courses:
+        
+            st.warning(
+                "This student does not have any courses assigned. "
+                "Please edit the student record and add a course."
+            )
+        
+            return
+        
+        selected_course = st.selectbox(
+            "Course",
+            student_courses,
+            key="assign_homework_course"
+        )
+
         st.session_state.selected_student = (
             student_id
         )

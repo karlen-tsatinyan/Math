@@ -851,6 +851,7 @@ def homework_management():
                 INSERT INTO homework
                 (
                     student_id,
+                    course,
                     uploaded_by,
                     title,
                     curriculum_topic,
@@ -867,12 +868,13 @@ def homework_management():
                 )
                 VALUES
                 (
-                    %s,%s,%s,%s,%s,%s,%s,
+                    %s,%s,%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,%s,%s,%s,%s
                 )
                 """,
                 (
                     student_id,
+                    selected_course,
                     "admin",
                     title.strip(),
                     curriculum.strip(),
@@ -912,6 +914,7 @@ def homework_management():
         SELECT
             h.id,
             h.student_id,
+            h.course,
             s.first_name || ' ' || s.last_name
                 AS student_name,
             h.title,
@@ -958,6 +961,7 @@ def homework_management():
         display_columns = [
             "id",
             "student_name",
+            "course",
             "title",
             "curriculum_topic",
             "status",
@@ -1045,28 +1049,37 @@ def homework_management():
             f"📚 {safe_text(selected['title'])}"
         )
 
-        info1, info2, info3 = st.columns(3)
+        info1, info2, info3, info4 = st.columns(4)
 
         with info1:
-
+        
             st.write(
                 "**Student:**",
                 safe_text(
                     selected["student_name"]
                 )
             )
-
+        
         with info2:
-
+        
+            st.write(
+                "**Course:**",
+                safe_text(
+                    selected["course"]
+                )
+            )
+        
+        with info3:
+        
             st.write(
                 "**Due Date:**",
                 safe_text(
                     selected["due_date"]
                 )
             )
-
-        with info3:
-
+        
+        with info4:
+        
             st.write(
                 "**Status:**",
                 safe_text(
@@ -1846,9 +1859,20 @@ def homework_management():
 def student_homework():
 
     student_id = st.session_state.user["student_id"]
+    selected_course = st.session_state.user.get(
+        "selected_course"
+    )
+    
+    if not selected_course:
+    
+        st.warning(
+            "Please select a course before opening homework."
+        )
+    
+        return
 
     st.header(
-        "📚 My Homework"
+        f"📚 My Homework — {selected_course}"
     )
 
     # ========================================================
@@ -1861,6 +1885,7 @@ def student_homework():
             id,
             title,
             description,
+            course,
             curriculum_topic,
             assigned_date,
             due_date,
@@ -1880,6 +1905,7 @@ def student_homework():
         FROM homework
         WHERE student_id = %s
         AND archived = 0
+        AND course = %s
         ORDER BY
             CASE
                 WHEN status = 'Assigned' THEN 0
@@ -1892,6 +1918,9 @@ def student_homework():
         """,
         (
             student_id,
+            st.session_state.user.get(
+                "selected_course"
+            )
         )
     )
 

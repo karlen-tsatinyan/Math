@@ -22,7 +22,8 @@ st.set_option(
 
 
 # ==========================================
-# HIDE STREAMLIT UI ELEMENTS
+# HIDE STREAMLIT RUNNING INDICATORS
+# + COMPACT SIDEBAR
 # ==========================================
 
 st.markdown(
@@ -68,6 +69,20 @@ st.markdown(
     }
 
 
+    /* =====================================================
+       COURSE BUTTONS
+       ===================================================== */
+
+    .course-title {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .course-subtitle {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -80,6 +95,9 @@ st.markdown(
 
 if "user" not in st.session_state:
     st.session_state.user = None
+
+if "selected_course" not in st.session_state:
+    st.session_state.selected_course = None
 
 
 # ==========================================
@@ -118,9 +136,7 @@ def login_screen():
 
                 return
 
-            with st.spinner(
-                "Signing in..."
-            ):
+            with st.spinner("Signing in..."):
 
                 user = login(
                     username,
@@ -136,74 +152,21 @@ def login_screen():
                 st.session_state.user = user
 
                 # ------------------------------------------
-                # ADMIN
+                # SAVE AUTOMATICALLY SELECTED COURSE
+                #
+                # If there is only one course,
+                # authentication.py already selected it.
                 # ------------------------------------------
 
-                if user["role"] == "admin":
+                st.session_state.selected_course = (
+                    user.get("selected_course")
+                )
 
-                    st.success(
-                        "Welcome!"
-                    )
+                st.success(
+                    "Welcome!"
+                )
 
-                    st.rerun()
-
-                # ------------------------------------------
-                # STUDENT
-                # ------------------------------------------
-
-                else:
-
-                    courses = user.get(
-                        "courses",
-                        []
-                    )
-
-                    # --------------------------------------
-                    # NO COURSE ASSIGNED
-                    # --------------------------------------
-
-                    if len(courses) == 0:
-
-                        st.warning(
-                            "Your account is active, "
-                            "but no course has been assigned yet. "
-                            "Please contact your teacher."
-                        )
-
-                        return
-
-                    # --------------------------------------
-                    # ONE COURSE
-                    #
-                    # authentication.py already sets:
-                    #
-                    # selected_course = course
-                    #
-                    # So we can go directly to the portal.
-                    # --------------------------------------
-
-                    if len(courses) == 1:
-
-                        st.session_state.user[
-                            "selected_course"
-                        ] = courses[0]
-
-                        st.success(
-                            f"Welcome! "
-                            f"Opening {courses[0]}..."
-                        )
-
-                        st.rerun()
-
-                    # --------------------------------------
-                    # MULTIPLE COURSES
-                    #
-                    # Stay on the login/course screen.
-                    # --------------------------------------
-
-                    else:
-
-                        st.rerun()
+                st.rerun()
 
             else:
 
@@ -216,7 +179,7 @@ def login_screen():
 # COURSE SELECTION
 # ==========================================
 
-def course_selection():
+def course_selection_screen():
 
     user = st.session_state.user
 
@@ -226,21 +189,22 @@ def course_selection():
     )
 
     # ======================================================
-    # SAFETY CHECK
+    # SAFETY
     # ======================================================
 
     if not courses:
 
         st.error(
-            "No courses are assigned to this account."
+            "No course has been assigned to this student."
         )
 
         if st.button(
             "Logout",
-            key="course_logout_no_courses"
+            key="logout_no_course"
         ):
 
             st.session_state.user = None
+            st.session_state.selected_course = None
 
             st.rerun()
 
@@ -248,14 +212,15 @@ def course_selection():
 
 
     # ======================================================
-    # IF ONLY ONE COURSE
+    # ONE COURSE
+    #
+    # This should normally already be handled by
+    # authentication.py, but this protects the application.
     # ======================================================
 
     if len(courses) == 1:
 
-        st.session_state.user[
-            "selected_course"
-        ] = courses[0]
+        st.session_state.selected_course = courses[0]
 
         st.rerun()
 
@@ -266,20 +231,16 @@ def course_selection():
     # MULTIPLE COURSES
     # ======================================================
 
-    st.title(
-        "📚 Choose Your Course"
-    )
-
-    st.write(
-        f"Welcome, **{user['username']}**!"
-    )
-
-    st.write(
-        "Please select the course you would like to open."
+    st.markdown(
+        '<h2 class="course-title">📚 Choose Your Course</h2>',
+        unsafe_allow_html=True
     )
 
     st.markdown(
-        "---"
+        '<p class="course-subtitle">'
+        'Please select the course you would like to enter.'
+        '</p>',
+        unsafe_allow_html=True
     )
 
 
@@ -287,52 +248,34 @@ def course_selection():
     # COURSE BUTTONS
     # ======================================================
 
+    # Create up to 3 columns at a time.
+    # This keeps the layout clean if more courses are added.
+    
     columns = st.columns(
-        len(courses)
+        min(len(courses), 3)
     )
 
 
     for index, course in enumerate(courses):
 
-        with columns[index]:
+        column = columns[
+            index % len(columns)
+        ]
 
-            # ----------------------------------------------
-            # COURSE EMOJI
-            # ----------------------------------------------
-
-            course_lower = course.lower()
-
-            if "algebra" in course_lower:
-
-                icon = "📐"
-
-            elif "geometry" in course_lower:
-
-                icon = "📏"
-
-            elif "precalculus" in course_lower:
-
-                icon = "📈"
-
-            elif "trigonometry" in course_lower:
-
-                icon = "📊"
-
-            else:
-
-                icon = "📚"
-
-
-            # ----------------------------------------------
-            # COURSE BUTTON
-            # ----------------------------------------------
+        with column:
 
             if st.button(
-                f"{icon} {course}",
+                f"📘 {course}",
                 use_container_width=True,
                 type="primary",
                 key=f"course_select_{index}"
             ):
+
+                st.session_state.selected_course = course
+
+                # ------------------------------------------
+                # ALSO SAVE IT INSIDE USER
+                # ------------------------------------------
 
                 st.session_state.user[
                     "selected_course"
@@ -341,14 +284,11 @@ def course_selection():
                 st.rerun()
 
 
-    st.markdown(
-        "---"
-    )
-
-
     # ======================================================
     # LOGOUT
     # ======================================================
+
+    st.divider()
 
     if st.button(
         "Logout",
@@ -356,15 +296,7 @@ def course_selection():
     ):
 
         st.session_state.user = None
-
-        st.cache_data.clear()
-
-        if hasattr(
-            st,
-            "cache_resource"
-        ):
-
-            st.cache_resource.clear()
+        st.session_state.selected_course = None
 
         st.rerun()
 
@@ -387,24 +319,22 @@ def sidebar_footer(user):
 
 
     # ======================================================
-    # SHOW CURRENT COURSE FOR STUDENTS
+    # COURSE
     # ======================================================
 
-    if user["role"] != "admin":
+    selected_course = st.session_state.get(
+        "selected_course"
+    )
 
-        selected_course = user.get(
-            "selected_course"
+    if selected_course:
+
+        st.sidebar.caption(
+            f"📘 Course: {selected_course}"
         )
 
-        if selected_course:
-
-            st.sidebar.caption(
-                f"📚 Course: {selected_course}"
-            )
-
 
     # ======================================================
-    # REFRESH / LOGOUT
+    # BUTTONS
     # ======================================================
 
     col1, col2 = st.sidebar.columns(2)
@@ -419,6 +349,13 @@ def sidebar_footer(user):
         ):
 
             st.cache_data.clear()
+
+            if hasattr(
+                st,
+                "cache_resource"
+            ):
+
+                st.cache_resource.clear()
 
             st.session_state[
                 "refresh_message"
@@ -438,6 +375,7 @@ def sidebar_footer(user):
         ):
 
             st.session_state.user = None
+            st.session_state.selected_course = None
 
             st.cache_data.clear()
 
@@ -458,9 +396,7 @@ def sidebar_footer(user):
     if "refresh_message" in st.session_state:
 
         st.sidebar.success(
-            st.session_state[
-                "refresh_message"
-            ]
+            st.session_state["refresh_message"]
         )
 
         del st.session_state[
@@ -486,7 +422,7 @@ def main():
 
 
     # ======================================================
-    # GET USER
+    # CURRENT USER
     # ======================================================
 
     user = st.session_state.user
@@ -506,23 +442,86 @@ def main():
 
 
     # ======================================================
-    # STUDENT — NO COURSE SELECTED
+    # STUDENT
     # ======================================================
 
-    selected_course = user.get(
+    courses = user.get(
+        "courses",
+        []
+    )
+
+    selected_course = st.session_state.get(
         "selected_course"
     )
 
+
+    # ======================================================
+    # STUDENT WITH MULTIPLE COURSES
+    #
+    # Example:
+    #
+    # courses = ["Algebra", "Geometry"]
+    # selected_course = None
+    #
+    # Show course selection screen.
+    # ======================================================
+
+    if len(courses) > 1 and not selected_course:
+
+        course_selection_screen()
+
+        return
+
+
+    # ======================================================
+    # STUDENT WITH ONE COURSE
+    # ======================================================
+
+    if len(courses) == 1 and not selected_course:
+
+        st.session_state.selected_course = courses[0]
+
+        user["selected_course"] = courses[0]
+
+        st.rerun()
+
+        return
+
+
+    # ======================================================
+    # NO COURSE ASSIGNED
+    # ======================================================
+
     if not selected_course:
 
-        course_selection()
+        st.error(
+            "No course has been assigned to this student."
+        )
+
+        sidebar_footer(user)
 
         return
 
 
     # ======================================================
     # STUDENT PORTAL
+    #
+    # At this point:
+    #
+    # student_id = user["student_id"]
+    # selected_course = "Algebra"
+    #
+    # or:
+    #
+    # selected_course = "Geometry"
     # ======================================================
+
+    # Keep the selected course available to all
+    # student-page modules.
+
+    user["selected_course"] = selected_course
+
+    st.session_state.user = user
 
     student_page()
 
@@ -535,7 +534,7 @@ def main():
 
 
 # ==========================================
-# START APPLICATION
+# START
 # ==========================================
 
 if __name__ == "__main__":

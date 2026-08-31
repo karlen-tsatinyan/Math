@@ -4,20 +4,15 @@ import io
 import uuid
 import pandas as pd
 
-from modules.ai_grader import grade_homework_with_ai
-
 from datetime import date
 
 from PIL import Image
-
 from pypdf import PdfReader, PdfWriter
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 
 from database import execute, query_dataframe
 from supabase_client import get_supabase
 
+from modules.ai_grader import grade_homework_with_ai
 
 
 # ============================================================
@@ -28,6 +23,7 @@ def safe_text(value):
     """
     Safely convert database values to clean strings.
     """
+
     if value is None:
         return ""
 
@@ -38,6 +34,65 @@ def safe_text(value):
         pass
 
     return str(value).strip()
+
+
+# ============================================================
+# HELPER: GET STUDENT COURSES
+# ============================================================
+
+def get_student_courses(student_id):
+    """
+    Return the courses assigned to a student.
+
+    Courses are currently stored in:
+
+        students.subject
+
+    Example:
+
+        Algebra, Geometry
+    """
+
+    result = query_dataframe(
+        """
+        SELECT subject
+        FROM students
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (student_id,)
+    )
+
+    courses = []
+
+    if result.empty:
+        return courses
+
+    subject = result.iloc[0]["subject"]
+
+    if subject is None:
+        return courses
+
+    subject_text = str(subject).strip()
+
+    if (
+        not subject_text
+        or subject_text.lower() in ["nan", "none"]
+    ):
+        return courses
+
+    courses = [
+        course.strip()
+        for course in subject_text.split(",")
+        if course.strip()
+    ]
+
+    # Remove duplicates while preserving order
+    courses = list(
+        dict.fromkeys(courses)
+    )
+
+    return courses
 
 
 # ============================================================
@@ -55,13 +110,11 @@ def merge_homework_files(uploaded_files):
 
     pdf_writer = PdfWriter()
 
-
     for uploaded_file in uploaded_files:
 
         file_bytes = uploaded_file.getvalue()
 
         filename = uploaded_file.name.lower()
-
 
         # --------------------------------------------
         # PDF FILE
@@ -77,8 +130,6 @@ def merge_homework_files(uploaded_files):
 
                 pdf_writer.add_page(page)
 
-
-
         # --------------------------------------------
         # IMAGE FILE
         # --------------------------------------------
@@ -93,64 +144,44 @@ def merge_homework_files(uploaded_files):
 
             image = Image.open(
                 io.BytesIO(file_bytes)
-            ).convert(
-                "RGB"
-            )
-
+            ).convert("RGB")
 
             img_buffer = io.BytesIO()
-
 
             image.save(
                 img_buffer,
                 format="PDF"
             )
 
-
             img_buffer.seek(0)
-
 
             reader = PdfReader(
                 img_buffer
             )
 
-
             for page in reader.pages:
 
                 pdf_writer.add_page(page)
 
-
-
     output = io.BytesIO()
-
 
     pdf_writer.write(
         output
     )
 
-
     output.seek(0)
-
 
     return output.getvalue()
 
 
 # ============================================================
-# HELPER: NORMALIZE SUPABASE STORAGE PATH
+# NORMALIZE SUPABASE STORAGE PATH
 # ============================================================
 
 def normalize_storage_path(storage_path):
     """
-    Convert different possible stored formats into the
-    path expected by Supabase Storage.
-
-    Expected final format:
-
-        assignments/student_1/file.pdf
-
-    or
-
-        submissions/student_1/file.pdf
+    Convert different possible stored formats into
+    the path expected by Supabase Storage.
     """
 
     if storage_path is None:
@@ -166,7 +197,10 @@ def normalize_storage_path(storage_path):
     # --------------------------------------------------------
 
     if path.startswith("homework-files/"):
-        path = path[len("homework-files/"):]
+
+        path = path[
+            len("homework-files/"):
+        ]
 
     # --------------------------------------------------------
     # Handle full Supabase Storage URLs
@@ -180,16 +214,30 @@ def normalize_storage_path(storage_path):
         )[1]
 
         if path.startswith("public/"):
-            path = path[len("public/"):]
+
+            path = path[
+                len("public/"):
+            ]
 
         elif path.startswith("sign/"):
-            path = path[len("sign/"):]
+
+            path = path[
+                len("sign/"):
+            ]
 
         elif path.startswith("authenticated/"):
-            path = path[len("authenticated/"):]
 
-        if path.startswith("homework-files/"):
-            path = path[len("homework-files/"):]
+            path = path[
+                len("authenticated/"):
+            ]
+
+        if path.startswith(
+            "homework-files/"
+        ):
+
+            path = path[
+                len("homework-files/"):
+            ]
 
     # --------------------------------------------------------
     # Handle full URL containing bucket name
@@ -208,19 +256,13 @@ def normalize_storage_path(storage_path):
 
 
 # ============================================================
-# HELPER: CREATE SIGNED URL
+# CREATE SIGNED URL
 # ============================================================
 
 def get_homework_file_url(storage_path):
     """
-    Create a temporary signed URL for a private Supabase
-    Storage object.
-
-    Bucket:
-        homework-files
-
-    Signed URL lifetime:
-        1 hour
+    Create a temporary signed URL for a private
+    Supabase Storage object.
     """
 
     path = normalize_storage_path(
@@ -244,12 +286,10 @@ def get_homework_file_url(storage_path):
             )
         )
 
-        # Supabase Python client may return a dictionary
-        # or an object containing .data.
-
         data = result
 
         if hasattr(result, "data"):
+
             data = result.data
 
         if isinstance(data, dict):
@@ -262,6 +302,7 @@ def get_homework_file_url(storage_path):
             )
 
             if signed_url:
+
                 return signed_url
 
         return None
@@ -276,17 +317,17 @@ def get_homework_file_url(storage_path):
 
 
 # ============================================================
-# HELPER: DOWNLOAD SUPABASE STORAGE FILE
+# DOWNLOAD SUPABASE STORAGE FILE
 # ============================================================
 
 def download_homework_file(storage_path):
     """
-    Download a homework file from the private Supabase
+    Download a homework file from the private
     homework-files bucket.
 
     Returns:
         bytes
-        or None if the file cannot be downloaded.
+        or None
     """
 
     path = normalize_storage_path(
@@ -308,6 +349,7 @@ def download_homework_file(storage_path):
         )
 
         if response:
+
             return response
 
         return None
@@ -319,13 +361,17 @@ def download_homework_file(storage_path):
         )
 
         return None
+
+
 # ============================================================
-# HELPER: DELETE SUPABASE STORAGE FILE
+# DELETE SUPABASE STORAGE FILE
 # ============================================================
 
 def delete_homework_file(storage_path):
 
-    path = normalize_storage_path(storage_path)
+    path = normalize_storage_path(
+        storage_path
+    )
 
     if not path:
         return True
@@ -365,7 +411,9 @@ def archived_homework():
         """
         SELECT
             h.id,
-            s.first_name || ' ' || s.last_name AS student,
+            s.first_name || ' ' || s.last_name
+                AS student,
+            h.course,
             h.title,
             h.curriculum_topic,
             h.grade,
@@ -385,10 +433,6 @@ def archived_homework():
         """
     )
 
-    # ========================================================
-    # NO ARCHIVED HOMEWORK
-    # ========================================================
-
     if archived.empty:
 
         st.info(
@@ -396,10 +440,6 @@ def archived_homework():
         )
 
         return
-
-    # ========================================================
-    # ARCHIVED HOMEWORK TABLE
-    # ========================================================
 
     st.dataframe(
         archived,
@@ -416,7 +456,9 @@ def archived_homework():
     archive_options = {
         f"#{int(row['id'])} — "
         f"{safe_text(row['student'])} — "
+        f"{safe_text(row['course'])} — "
         f"{safe_text(row['title'])}":
+
         int(row["id"])
 
         for _, row in archived.iterrows()
@@ -516,6 +558,7 @@ def archived_homework():
 
             st.rerun()
 
+
 # ============================================================
 # ADMIN HOMEWORK MANAGEMENT
 # ============================================================
@@ -527,11 +570,11 @@ def homework_management():
     )
 
     tab1, tab2, tab3 = st.tabs(
-    [
-    "Assign Homework",
-    "Review & Grade Submissions",
-    "Archived Homework"
-    ]
+        [
+            "Assign Homework",
+            "Review & Grade Submissions",
+            "Archived Homework"
+        ]
     )
 
     # ========================================================
@@ -577,7 +620,6 @@ def homework_management():
 
         if not match.empty:
 
-            # Find actual position in the list
             matching_positions = [
                 i
                 for i, value in enumerate(
@@ -587,7 +629,10 @@ def homework_management():
             ]
 
             if matching_positions:
-                default_index = matching_positions[0]
+
+                default_index = (
+                    matching_positions[0]
+                )
 
     # ========================================================
     # TAB 1 — ASSIGN HOMEWORK
@@ -612,61 +657,46 @@ def homework_management():
             ]["id"].iloc[0]
         )
 
-        # ========================================================
-        # SELECT COURSE
-        # ========================================================
-        
-        student_record = query_dataframe(
-            """
-            SELECT subject
-            FROM students
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (student_id,)
-        )
-        
-        student_courses = []
-        
-        if not student_record.empty:
-        
-            subject_value = student_record.iloc[0]["subject"]
-        
-            if (
-                subject_value is not None
-                and str(subject_value).strip()
-                and str(subject_value).strip().lower()
-                not in ["nan", "none"]
-            ):
-        
-                student_courses = [
-                    course.strip()
-                    for course in str(subject_value).split(",")
-                    if course.strip()
-                ]
-        
-        student_courses = list(
-            dict.fromkeys(student_courses)
-        )
-        
-        if not student_courses:
-        
-            st.warning(
-                "This student does not have any courses assigned. "
-                "Please edit the student record and add a course."
-            )
-        
-            return
-        
-        selected_course = st.selectbox(
-            "Course",
-            student_courses,
-            key="assign_homework_course"
-        )
-
         st.session_state.selected_student = (
             student_id
         )
+
+        # ====================================================
+        # COURSE SELECTION
+        # ====================================================
+
+        student_courses = get_student_courses(
+            student_id
+        )
+
+        if not student_courses:
+
+            st.warning(
+                "This student does not have any "
+                "courses assigned."
+            )
+
+            st.info(
+                "Please open Edit Student and add "
+                "the student's courses first."
+            )
+
+            return
+
+        selected_course = st.selectbox(
+            "Course",
+            student_courses,
+            key=f"assign_homework_course_{student_id}"
+        )
+
+        st.caption(
+            f"Homework will be assigned to: "
+            f"**{student_name} → {selected_course}**"
+        )
+
+        # ====================================================
+        # HOMEWORK DETAILS
+        # ====================================================
 
         title = st.text_input(
             "Homework Title",
@@ -721,43 +751,46 @@ def homework_management():
 
         st.divider()
 
+        # ====================================================
+        # ASSIGN HOMEWORK
+        # ====================================================
+
         if st.button(
             "➕ Assign Homework",
             key="assign_homework_button",
             type="primary"
         ):
-        
+
             if not title.strip():
-        
+
                 st.error(
                     "Please enter a Homework Title."
                 )
-        
+
                 return
-        
-        
+
             if (
                 not uploaded_file
                 and not drive_link.strip()
             ):
-        
+
                 st.error(
                     "Please upload an assignment "
                     "PDF/image or provide a Google Drive link."
                 )
-        
+
                 return
-        
-        
+
             # ==================================================
-            # PREVENT DUPLICATE HOMEWORK ASSIGNMENT
+            # PREVENT DUPLICATE
             # ==================================================
-        
+
             duplicate = query_dataframe(
                 """
                 SELECT id
                 FROM homework
                 WHERE student_id = %s
+                AND course = %s
                 AND title = %s
                 AND assigned_date = %s
                 AND due_date = %s
@@ -765,23 +798,22 @@ def homework_management():
                 """,
                 (
                     student_id,
+                    selected_course,
                     title.strip(),
                     str(assigned_date),
                     str(due_date)
                 )
             )
-        
-        
+
             if not duplicate.empty:
-        
+
                 st.warning(
                     "⚠️ This homework already exists "
-                    "for this student."
+                    "for this student and course."
                 )
-        
+
                 st.stop()
-        
-        
+
             file_path = None
 
             # ==================================================
@@ -894,7 +926,8 @@ def homework_management():
             st.cache_data.clear()
 
             st.success(
-                "✅ Homework assigned successfully."
+                f"✅ Homework assigned successfully "
+                f"to {student_name} for {selected_course}."
             )
 
             st.rerun()
@@ -910,40 +943,42 @@ def homework_management():
         )
 
         submissions = query_dataframe(
-        """
-        SELECT
-            h.id,
-            h.student_id,
-            h.course,
-            s.first_name || ' ' || s.last_name
-                AS student_name,
-            h.title,
-            h.curriculum_topic,
-            h.assigned_date,
-            h.due_date,
-            h.priority,
-            h.assignment_file,
-            h.student_file,
-            h.file_link,
-            h.status,
-            h.comment,
-            h.teacher_feedback,
-            h.grade,
-            h.deleted_assignment_file,
-            h.deleted_student_file,
-            h.submitted_at,
-            h.reviewed_at,
-            h.created_at
-        
-        FROM homework h
-        
-        JOIN students s
-        ON h.student_id = s.id
-        
-        WHERE h.archived = 0
-        
-        ORDER BY h.created_at DESC
-        """
+            """
+            SELECT
+                h.id,
+                h.student_id,
+                h.course,
+
+                s.first_name || ' ' || s.last_name
+                    AS student_name,
+
+                h.title,
+                h.curriculum_topic,
+                h.assigned_date,
+                h.due_date,
+                h.priority,
+                h.assignment_file,
+                h.student_file,
+                h.file_link,
+                h.status,
+                h.comment,
+                h.teacher_feedback,
+                h.grade,
+                h.deleted_assignment_file,
+                h.deleted_student_file,
+                h.submitted_at,
+                h.reviewed_at,
+                h.created_at
+
+            FROM homework h
+
+            JOIN students s
+                ON h.student_id = s.id
+
+            WHERE h.archived = 0
+
+            ORDER BY h.created_at DESC
+            """
         )
 
         if submissions.empty:
@@ -971,13 +1006,13 @@ def homework_management():
         ]
 
         st.dataframe(
-
             submissions[
                 display_columns
             ].rename(
                 columns={
                     "id": "Homework ID",
                     "student_name": "Student",
+                    "course": "Course",
                     "title": "Homework",
                     "curriculum_topic": "Curriculum Topic",
                     "status": "Status",
@@ -986,9 +1021,7 @@ def homework_management():
                     "submitted_at": "Submitted"
                 }
             ),
-
             use_container_width=True,
-
             hide_index=True
         )
 
@@ -1005,6 +1038,7 @@ def homework_management():
             label = (
                 f"#{int(row['id'])} — "
                 f"{safe_text(row['student_name'])} — "
+                f"{safe_text(row['course'])} — "
                 f"{safe_text(row['title'])} — "
                 f"{safe_text(row['status'])}"
             )
@@ -1052,34 +1086,34 @@ def homework_management():
         info1, info2, info3, info4 = st.columns(4)
 
         with info1:
-        
+
             st.write(
                 "**Student:**",
                 safe_text(
                     selected["student_name"]
                 )
             )
-        
+
         with info2:
-        
+
             st.write(
                 "**Course:**",
                 safe_text(
                     selected["course"]
                 )
             )
-        
+
         with info3:
-        
+
             st.write(
                 "**Due Date:**",
                 safe_text(
                     selected["due_date"]
                 )
             )
-        
+
         with info4:
-        
+
             st.write(
                 "**Status:**",
                 safe_text(
@@ -1192,7 +1226,9 @@ def homework_management():
             "📝 Student Submission"
         )
 
-        student_file = selected["student_file"]
+        student_file = selected[
+            "student_file"
+        ]
 
         student_deleted = selected[
             "deleted_student_file"
@@ -1253,11 +1289,10 @@ def homework_management():
                 "No student submission is available."
             )
 
-
         # ==================================================
         # GRADE OPTIONS
         # ==================================================
-        
+
         grade_options = [
             "",
             "A+",
@@ -1272,7 +1307,6 @@ def homework_management():
             "D",
             "F"
         ]
-        
 
         # ==================================================
         # AI HOMEWORK REVIEW
@@ -1289,18 +1323,14 @@ def homework_management():
             "The teacher remains responsible for the final grade."
         )
 
-        # --------------------------------------------------
-        # CHECK WHETHER STUDENT SUBMISSION EXISTS
-        # --------------------------------------------------
+        # ==================================================
+        # CHECK STUDENT SUBMISSION
+        # ==================================================
 
         if (
             deleted_student == 0
             and safe_text(student_file)
         ):
-
-            # ------------------------------------------------
-            # ANALYZE BUTTON
-            # ------------------------------------------------
 
             if st.button(
                 "✨ Analyze Student Work with AI",
@@ -1330,7 +1360,7 @@ def homework_management():
                         st.stop()
 
                     # ----------------------------------------
-                    # GET HOMEWORK INFORMATION
+                    # HOMEWORK INFORMATION
                     # ----------------------------------------
 
                     homework_title = safe_text(
@@ -1350,18 +1380,14 @@ def homework_management():
                     # ----------------------------------------
 
                     result = grade_homework_with_ai(
-
                         pdf_bytes=pdf_bytes,
-
                         homework_title=homework_title,
-
                         curriculum_topic=curriculum_topic,
-
                         instructions=instructions
                     )
 
                     # ----------------------------------------
-                    # STORE RESULT IN SESSION STATE
+                    # STORE RESULT
                     # ----------------------------------------
 
                     if result.get("success"):
@@ -1388,9 +1414,9 @@ def homework_management():
                             )
                         )
 
-            # ------------------------------------------------
-            # DISPLAY PREVIOUS AI RESULT
-            # ------------------------------------------------
+            # =================================================
+            # DISPLAY AI RESULT
+            # =================================================
 
             ai_result = st.session_state.get(
                 f"ai_result_{selected_id}"
@@ -1404,9 +1430,9 @@ def homework_management():
                     "🤖 Gemini Recommendation"
                 )
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # GRADE / SCORE / CONFIDENCE
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 ai_grade = safe_text(
                     ai_result.get(
@@ -1452,9 +1478,9 @@ def homework_management():
                         else "Unknown"
                     )
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # SUMMARY
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 ai_summary = safe_text(
                     ai_result.get(
@@ -1472,9 +1498,9 @@ def homework_management():
                         ai_summary
                     )
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # STRENGTHS
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 strengths = ai_result.get(
                     "strengths",
@@ -1493,9 +1519,9 @@ def homework_management():
                             f"• {strength}"
                         )
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # MISTAKES
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 mistakes = ai_result.get(
                     "mistakes",
@@ -1514,9 +1540,9 @@ def homework_management():
                             f"• {mistake}"
                         )
 
-                # --------------------------------------------
-                # PROBLEM-BY-PROBLEM ANALYSIS
-                # --------------------------------------------
+                # ---------------------------------------------
+                # PROBLEM ANALYSIS
+                # ---------------------------------------------
 
                 problem_analysis = ai_result.get(
                     "problem_analysis",
@@ -1558,9 +1584,9 @@ def homework_management():
                                 explanation
                             )
 
-                # --------------------------------------------
-                # SUGGESTED TEACHER FEEDBACK
-                # --------------------------------------------
+                # ---------------------------------------------
+                # SUGGESTED FEEDBACK
+                # ---------------------------------------------
 
                 ai_feedback = safe_text(
                     ai_result.get(
@@ -1578,9 +1604,9 @@ def homework_management():
                         ai_feedback
                     )
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # AI REASONING
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 ai_reasoning = safe_text(
                     ai_result.get(
@@ -1598,9 +1624,9 @@ def homework_management():
                             ai_reasoning
                         )
 
-                # --------------------------------------------
-                # OPTIONAL: USE AI GRADE
-                # --------------------------------------------
+                # ---------------------------------------------
+                # USE AI GRADE
+                # ---------------------------------------------
 
                 st.divider()
 
@@ -1609,39 +1635,27 @@ def homework_management():
                     "change the official grade."
                 )
 
-                if ai_grade in [
-                    "A+",
-                    "A",
-                    "A-",
-                    "B+",
-                    "B",
-                    "B-",
-                    "C+",
-                    "C",
-                    "C-",
-                    "D",
-                    "F"
-                ]:
+                if ai_grade in grade_options:
 
                     if st.button(
                         f"Use AI Suggested Grade ({ai_grade})",
                         key=f"ai_grader_use_grade_homework_{int(selected_id)}"
                     ):
-                    
+
                         st.session_state[
                             f"grade_select_{int(selected_id)}"
                         ] = ai_grade
-                    
+
                         st.success(
                             f"AI grade {ai_grade} loaded into "
                             "the Grade field below."
                         )
-                    
+
                         st.rerun()
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # USE AI FEEDBACK
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 if ai_feedback:
 
@@ -1649,16 +1663,16 @@ def homework_management():
                         "Use AI Suggested Feedback",
                         key=f"ai_grader_use_feedback_homework_{int(selected_id)}"
                     ):
-                    
+
                         st.session_state[
                             f"feedback_{int(selected_id)}"
                         ] = ai_feedback
-                    
+
                         st.success(
                             "AI feedback loaded into "
                             "the Teacher Feedback field below."
                         )
-                    
+
                         st.rerun()
 
         else:
@@ -1667,96 +1681,97 @@ def homework_management():
                 "AI review is available after the student "
                 "has submitted a homework file."
             )
-        
-        
+
         # ==================================================
         # ARCHIVE HOMEWORK
         # ==================================================
-        
+
         st.divider()
-        
-        
+
         if st.button(
             "📦 Archive Homework",
             key=f"archive_homework_{selected_id}"
         ):
-        
-        
-            assignment_file = selected["assignment_file"]
-        
-            student_file = selected["student_file"]
-        
-        
-            # Remove assignment storage file
-        
+
+            assignment_file = selected[
+                "assignment_file"
+            ]
+
+            student_file = selected[
+                "student_file"
+            ]
+
+            # ----------------------------------------------
+            # DELETE ASSIGNMENT FILE
+            # ----------------------------------------------
+
             if safe_text(assignment_file):
-        
+
                 delete_homework_file(
                     assignment_file
                 )
-        
-        
-            # Remove student submission
-        
+
+            # ----------------------------------------------
+            # DELETE STUDENT SUBMISSION
+            # ----------------------------------------------
+
             if safe_text(student_file):
-        
+
                 delete_homework_file(
                     student_file
                 )
-        
-        
+
+            # ----------------------------------------------
+            # ARCHIVE DATABASE RECORD
+            # ----------------------------------------------
+
             execute(
                 """
                 UPDATE homework
-        
+
                 SET
-        
                     archived = 1,
-        
                     assignment_file = NULL,
-        
                     student_file = NULL,
-        
                     deleted_assignment_file = 1,
-        
                     deleted_student_file = 1,
-        
                     status = 'Archived',
-        
                     archived_at = CURRENT_TIMESTAMP
-        
-        
-                WHERE id=%s
+
+                WHERE id = %s
                 """,
                 (
                     int(selected_id),
                 )
             )
-        
-        
+
             st.cache_data.clear()
-        
-        
+
             st.success(
                 "📦 Homework archived. "
                 "Academic record preserved."
             )
-        
-        
+
             st.rerun()
 
-        
-        # ====================================================
-        # GRADE & FEEDBACK SAVE CONFIRMATION
-        # ====================================================
-        
-        if st.session_state.get("grade_feedback_saved") == int(selected_id):
-        
+        # ==================================================
+        # GRADE SAVE CONFIRMATION
+        # ==================================================
+
+        if (
+            st.session_state.get(
+                "grade_feedback_saved"
+            )
+            == int(selected_id)
+        ):
+
             st.success(
                 "✅ Grade and teacher feedback saved successfully."
             )
-        
-            del st.session_state["grade_feedback_saved"]
+
+            del st.session_state[
+                "grade_feedback_saved"
+            ]
 
         st.divider()
 
@@ -1764,6 +1779,10 @@ def homework_management():
             "📝 Grade & Teacher Feedback"
         )
 
+        # ==================================================
+        # GRADE
+        # ==================================================
+
         current_grade = safe_text(
             selected["grade"]
         )
@@ -1772,22 +1791,16 @@ def homework_management():
 
             current_grade = ""
 
-        # ==================================================
-        # GRADE FIELD
-        # ==================================================
-        
-        current_grade = safe_text(
-            selected["grade"]
+        grade_key = (
+            f"grade_select_{int(selected_id)}"
         )
-        
-        if current_grade not in grade_options:
-            current_grade = ""
-        
-        grade_key = f"grade_select_{int(selected_id)}"
-        
+
         if grade_key not in st.session_state:
-            st.session_state[grade_key] = current_grade
-        
+
+            st.session_state[
+                grade_key
+            ] = current_grade
+
         grade = st.selectbox(
             "Letter Grade",
             grade_options,
@@ -1795,36 +1808,47 @@ def homework_management():
         )
 
         # ==================================================
-        # TEACHER FEEDBACK FIELD
+        # FEEDBACK
         # ==================================================
-        
+
         current_feedback = safe_text(
             selected["teacher_feedback"]
         )
-        
-        feedback_key = f"feedback_{int(selected_id)}"
-        
+
+        feedback_key = (
+            f"feedback_{int(selected_id)}"
+        )
+
         if feedback_key not in st.session_state:
-            st.session_state[feedback_key] = current_feedback
-        
+
+            st.session_state[
+                feedback_key
+            ] = current_feedback
+
         feedback = st.text_area(
             "Teacher Feedback",
             key=feedback_key
         )
 
+        # ==================================================
+        # SAVE GRADE
+        # ==================================================
+
         if st.button(
             "💾 Save Grade & Feedback",
             key=f"save_grade_{selected_id}"
         ):
-        
+
             execute(
                 """
                 UPDATE homework
+
                 SET
                     teacher_feedback = %s,
                     grade = %s,
                     status = 'Reviewed',
                     reviewed_at = CURRENT_TIMESTAMP
+
                 WHERE id = %s
                 """,
                 (
@@ -1833,24 +1857,23 @@ def homework_management():
                     int(selected_id)
                 )
             )
-        
-            # Clear cached database results
+
             st.cache_data.clear()
-        
-            # Remember which homework was successfully saved
-            st.session_state["grade_feedback_saved"] = int(selected_id)
-        
-            # Reload the page so the updated grade/status appears
+
+            st.session_state[
+                "grade_feedback_saved"
+            ] = int(selected_id)
+
             st.rerun()
-    
 
     # ========================================================
     # TAB 3 — ARCHIVED HOMEWORK
     # ========================================================
-    
+
     with tab3:
-    
+
         archived_homework()
+
 
 # ============================================================
 # STUDENT HOMEWORK PORTAL
@@ -1858,21 +1881,42 @@ def homework_management():
 
 def student_homework():
 
-    student_id = st.session_state.user["student_id"]
-    selected_course = st.session_state.user.get(
-        "selected_course"
+    # ========================================================
+    # STUDENT ID
+    # ========================================================
+
+    student_id = st.session_state.user[
+        "student_id"
+    ]
+
+    # ========================================================
+    # SELECTED COURSE
+    # ========================================================
+
+    selected_course = (
+        st.session_state.user.get(
+            "selected_course"
+        )
     )
-    
+
     if not selected_course:
-    
+
         st.warning(
             "Please select a course before opening homework."
         )
-    
+
         return
+
+    # ========================================================
+    # PAGE HEADER
+    # ========================================================
 
     st.header(
         f"📚 My Homework — {selected_course}"
+    )
+
+    st.caption(
+        f"Showing homework for **{selected_course}** only."
     )
 
     # ========================================================
@@ -1902,10 +1946,13 @@ def student_homework():
             reviewed_at,
             deleted_assignment_file,
             deleted_student_file
+
         FROM homework
+
         WHERE student_id = %s
-        AND archived = 0
         AND course = %s
+        AND archived = 0
+
         ORDER BY
             CASE
                 WHEN status = 'Assigned' THEN 0
@@ -1913,14 +1960,13 @@ def student_homework():
                 WHEN status = 'Reviewed' THEN 2
                 ELSE 3
             END,
+
             due_date ASC NULLS LAST,
             created_at DESC
         """,
         (
             student_id,
-            st.session_state.user.get(
-                "selected_course"
-            )
+            selected_course
         )
     )
 
@@ -1931,7 +1977,8 @@ def student_homework():
     if homework.empty:
 
         st.info(
-            "🎉 You currently have no homework assignments."
+            f"🎉 You currently have no "
+            f"{selected_course} homework assignments."
         )
 
         return
@@ -1974,7 +2021,7 @@ def student_homework():
     selected_option = st.selectbox(
         "Homework Assignment",
         homework_options,
-        key="student_homework_selector"
+        key=f"student_homework_selector_{selected_course}"
     )
 
     selected_index = (
@@ -1992,13 +2039,14 @@ def student_homework():
     )
 
     # ========================================================
-    # SUBMISSION SUCCESS MESSAGE
+    # SUBMISSION SUCCESS
     # ========================================================
 
     if (
         st.session_state.get(
             "homework_submission_success"
-        ) == selected_id
+        )
+        == selected_id
     ):
 
         st.success(
@@ -2010,7 +2058,7 @@ def student_homework():
         ]
 
     # ========================================================
-    # SELECTED HOMEWORK DETAILS
+    # SELECTED HOMEWORK
     # ========================================================
 
     title = (
@@ -2022,6 +2070,14 @@ def student_homework():
 
     st.title(
         f"📘 {title}"
+    )
+
+    # ========================================================
+    # COURSE BADGE
+    # ========================================================
+
+    st.info(
+        f"📚 Course: **{selected_course}**"
     )
 
     # ========================================================
@@ -2177,58 +2233,56 @@ def student_homework():
             str(description)
         )
 
-
-
-    # ============================================================
+    # ========================================================
     # AI LEARNING REFERENCE
-    # ============================================================
-    
+    # ========================================================
+
     st.divider()
-    
+
     st.markdown(
         "### 📖 Need Help With This Topic?"
     )
-    
+
     st.caption(
         "Get a short explanation, worked example, "
         "common mistakes, and an interactive visualization "
         "when appropriate."
     )
-    
+
     if st.button(
         "✨ Learn This Topic",
         key=f"learn_topic_homework_{int(selected_id)}",
         type="primary"
     ):
-    
+
         with st.spinner(
             "🤖 Creating your topic reference..."
         ):
-    
+
             from modules.ai_learning_reference import (
                 generate_learning_reference
             )
-    
-            # ------------------------------------------------
-            # GET CURRENT HOMEWORK INFORMATION
-            # ------------------------------------------------
-    
+
+            # ----------------------------------------------
+            # HOMEWORK INFORMATION
+            # ----------------------------------------------
+
             homework_title = safe_text(
                 selected["title"]
             )
-    
+
             curriculum_topic = safe_text(
                 selected["curriculum_topic"]
             )
-    
+
             instructions = safe_text(
                 selected["comment"]
             )
-    
-            # ------------------------------------------------
-            # GET STUDENT GRADE
-            # ------------------------------------------------
-    
+
+            # ----------------------------------------------
+            # GET STUDENT GRADE LEVEL
+            # ----------------------------------------------
+
             student_info = query_dataframe(
                 """
                 SELECT
@@ -2239,72 +2293,71 @@ def student_homework():
                 """,
                 (student_id,)
             )
-    
+
             student_grade = ""
-    
+
             if not student_info.empty:
-    
+
                 student_grade = safe_text(
                     student_info.iloc[0]["grade"]
                 )
-    
-            # ------------------------------------------------
+
+            # ----------------------------------------------
             # GENERATE REFERENCE
-            # ------------------------------------------------
-    
+            # ----------------------------------------------
+
             result = generate_learning_reference(
-    
+
                 curriculum_topic=curriculum_topic,
-    
+
                 homework_title=homework_title,
-    
+
                 instructions=instructions,
-    
+
                 student_grade=student_grade
             )
-    
-        # ----------------------------------------------------
+
+        # ----------------------------------------------
         # STORE RESULT
-        # ----------------------------------------------------
-    
+        # ----------------------------------------------
+
         if result.get("success"):
-    
+
             st.session_state[
                 f"learning_reference_{int(selected_id)}"
             ] = result
-    
+
             st.success(
                 "✅ Topic reference created."
             )
-    
+
         else:
-    
+
             st.error(
                 result.get(
                     "error",
                     "Unable to create topic reference."
                 )
             )
-    
-    
-    # ==================================================
+
+    # ========================================================
     # DISPLAY AI TOPIC REFERENCE
-    # ==================================================
-    
+    # ========================================================
+
     learning_reference = st.session_state.get(
         f"learning_reference_{int(selected_id)}"
     )
-    
+
     if learning_reference:
-    
+
         from modules.ai_learning_reference import (
             display_learning_reference
         )
-    
+
         with st.container(
             border=True
         ):
-    
+
             display_learning_reference(
                 learning_reference
             )
@@ -2362,7 +2415,7 @@ def student_homework():
         else:
 
             st.error(
-                "Unable to create the Supabase "
+                "Unable to create a Supabase "
                 "Storage link."
             )
 
@@ -2484,146 +2537,152 @@ def student_homework():
         existing_submission = safe_text(
             selected["student_file"]
         )
-        
-        
+
         if existing_submission:
-        
+
             st.warning(
                 "⚠️ You already submitted this homework. "
                 "Uploading again will replace your previous submission."
             )
-        
+
             confirm_replace = st.checkbox(
                 "I want to replace my previous submission.",
                 key=f"confirm_replace_{selected_id}"
             )
-        
+
         else:
-        
+
             confirm_replace = True
-        
-        
-        
+
         if st.button(
             "Submit Homework",
             key=f"submit_homework_{selected_id}"
         ):
-            if existing_submission and not confirm_replace:
-        
+
+            if (
+                existing_submission
+                and not confirm_replace
+            ):
+
                 st.error(
                     "Please confirm replacement before uploading."
                 )
-        
+
                 st.stop()
 
             if not uploads:
-            
+
                 st.warning(
                     "Please select at least one file."
                 )
-            
-            
+
             else:
-            
+
                 with st.spinner(
                     "Combining files and uploading PDF..."
                 ):
-            
+
+                    # ----------------------------------------
+                    # MERGE FILES
+                    # ----------------------------------------
+
                     merged_pdf = merge_homework_files(
                         uploads
                     )
-            
-                    # ==================================================
+
+                    # ----------------------------------------
                     # REMOVE OLD SUBMISSION
-                    # ==================================================
-                    
+                    # ----------------------------------------
+
                     if existing_submission:
-                    
+
                         delete_homework_file(
                             existing_submission
                         )
-                    
-                    
-                    # ==================================================
+
+                    # ----------------------------------------
                     # UPLOAD NEW PDF
-                    # ==================================================
-                    
+                    # ----------------------------------------
+
                     supabase = get_supabase()
-                    
-                    bucket_name = "homework-files"
-            
-                    unique_id = uuid.uuid4().hex[:10]
-                    
+
+                    bucket_name = (
+                        "homework-files"
+                    )
+
+                    unique_id = (
+                        uuid.uuid4().hex[:10]
+                    )
+
                     storage_path = (
                         f"submissions/"
                         f"student_{student_id}/"
                         f"homework_{selected_id}_"
                         f"{unique_id}.pdf"
                     )
-            
+
                     try:
-            
+
                         supabase.storage.from_(
                             bucket_name
                         ).upload(
-            
+
                             path=storage_path,
-            
+
                             file=merged_pdf,
-            
+
                             file_options={
                                 "content-type":
                                     "application/pdf"
                             }
                         )
-            
-            
+
                     except Exception as e:
-            
+
                         st.error(
                             "❌ Upload failed."
                         )
-            
+
                         st.exception(e)
-            
+
                         return
-            
-            
-            
+
+                    # ----------------------------------------
+                    # UPDATE HOMEWORK
+                    # ----------------------------------------
+
                     execute(
                         """
                         UPDATE homework
+
                         SET
                             student_file = %s,
                             status = 'Submitted',
                             submitted_at = CURRENT_TIMESTAMP,
                             deleted_student_file = 0
-            
+
                         WHERE id = %s
                         AND student_id = %s
+                        AND course = %s
                         """,
-            
                         (
                             storage_path,
                             selected_id,
-                            student_id
+                            student_id,
+                            selected_course
                         )
                     )
-            
-            
+
                     st.cache_data.clear()
-            
-            
+
                     st.session_state[
                         "homework_submission_success"
                     ] = int(selected_id)
-            
-            
+
                     st.success(
                         "✅ Homework uploaded successfully."
                     )
-            
-            
+
                     st.rerun()
 
     # ========================================================

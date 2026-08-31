@@ -7,151 +7,74 @@ from database import (
 )
 
 
-# ============================================================
-# COURSE CONFIGURATION
-# ============================================================
+# ==========================================================
+# COURSE OPTIONS
+# ==========================================================
 
 COURSE_OPTIONS = [
     "Algebra",
     "Geometry",
     "Pre-Algebra",
     "Precalculus",
-    "Trigonometry",
-    "Calculus"
+    "Trigonometry"
 ]
 
 
-# ============================================================
-# ENSURE COURSE TABLE EXISTS
-# ============================================================
+# ==========================================================
+# COURSE HELPER
+# ==========================================================
 
-def ensure_student_courses_table():
+def parse_courses(subject):
 
     """
-    Create the student_courses table if it does not already exist.
-
-    One student can have multiple courses.
+    Convert the existing subject field into a list of courses.
 
     Example:
 
-        student_id    course
-        ----------    -------
-        15            Algebra
-        15            Geometry
+        "Algebra, Geometry"
+
+    becomes:
+
+        ["Algebra", "Geometry"]
     """
 
-    execute(
-        """
-        CREATE TABLE IF NOT EXISTS student_courses
-        (
-            student_id INTEGER NOT NULL,
-            course TEXT NOT NULL,
-            PRIMARY KEY (student_id, course)
-        )
-        """
-    )
-
-
-# ============================================================
-# GET STUDENT COURSES
-# ============================================================
-
-def get_student_courses(student_id):
-
-    ensure_student_courses_table()
-
-    courses = query_dataframe(
-        """
-        SELECT course
-        FROM student_courses
-        WHERE student_id = %s
-        ORDER BY course
-        """,
-        (student_id,)
-    )
-
-    if courses.empty:
+    if subject is None:
         return []
 
-    return (
-        courses["course"]
-        .dropna()
-        .astype(str)
-        .tolist()
-    )
+    text = str(subject).strip()
+
+    if not text:
+        return []
+
+    if text.lower() in ["nan", "none"]:
+        return []
+
+    courses = [
+        course.strip()
+        for course in text.split(",")
+        if course.strip()
+    ]
+
+    return courses
 
 
-# ============================================================
-# SAVE STUDENT COURSES
-# ============================================================
+def courses_to_subject(courses):
 
-def save_student_courses(student_id, selected_courses):
+    """
+    Convert selected courses back into the format stored
+    in the existing students.subject field.
+    """
 
-    ensure_student_courses_table()
-
-    # --------------------------------------------------------
-    # Remove current assignments
-    # --------------------------------------------------------
-
-    execute(
-        """
-        DELETE FROM student_courses
-        WHERE student_id = %s
-        """,
-        (student_id,)
-    )
-
-    # --------------------------------------------------------
-    # Add selected assignments
-    # --------------------------------------------------------
-
-    for course in selected_courses:
-
-        execute(
-            """
-            INSERT INTO student_courses
-            (
-                student_id,
-                course
-            )
-            VALUES
-            (
-                %s,
-                %s
-            )
-            """,
-            (
-                student_id,
-                course
-            )
-        )
+    return ", ".join(courses)
 
 
-# ============================================================
-# MAIN STUDENT MANAGEMENT
-# ============================================================
+# ==========================================================
+# STUDENT MANAGEMENT
+# ==========================================================
 
 def student_management():
 
-    # --------------------------------------------------------
-    # Make sure course table exists
-    # --------------------------------------------------------
-
-    try:
-
-        ensure_student_courses_table()
-
-    except Exception as e:
-
-        st.error(
-            f"Unable to initialize student course assignments: {e}"
-        )
-
-        return
-
-
     st.header("Student Management")
-
 
     # ==========================================================
     # TABS
@@ -175,24 +98,20 @@ def student_management():
 
         st.subheader("Create Student Record")
 
-
         code = st.text_input(
             "Student ID Code",
             key="add_code"
         )
-
 
         first = st.text_input(
             "First Name",
             key="add_first"
         )
 
-
         last = st.text_input(
             "Last Name",
             key="add_last"
         )
-
 
         grade = st.text_input(
             "Grade",
@@ -200,10 +119,70 @@ def student_management():
         )
 
 
-        subject = st.text_input(
-            "Subject",
-            key="add_subject"
+        # ------------------------------------------------------
+        # COURSES
+        # ------------------------------------------------------
+
+        st.markdown("---")
+
+        st.markdown(
+            "**Courses**"
         )
+
+        st.caption(
+            "Select all courses this student is enrolled in."
+        )
+
+        add_course_columns = st.columns(2)
+
+        add_courses = []
+
+        for index, course in enumerate(COURSE_OPTIONS):
+
+            with add_course_columns[index % 2]:
+
+                selected = st.checkbox(
+                    course,
+                    key=f"add_course_{course}"
+                )
+
+                if selected:
+                    add_courses.append(course)
+
+
+        # ------------------------------------------------------
+        # OTHER / CUSTOM SUBJECT
+        # ------------------------------------------------------
+
+        add_other_course = st.text_input(
+            "Other Course (optional)",
+            key="add_other_course",
+            placeholder="Example: Statistics"
+        )
+
+        if add_other_course.strip():
+
+            add_courses.append(
+                add_other_course.strip()
+            )
+
+
+        # ------------------------------------------------------
+        # DISPLAY SELECTED COURSES
+        # ------------------------------------------------------
+
+        if add_courses:
+
+            st.info(
+                "Assigned courses: "
+                + ", ".join(add_courses)
+            )
+
+        else:
+
+            st.warning(
+                "No course has been selected yet."
+            )
 
 
         email = st.text_input(
@@ -211,41 +190,10 @@ def student_management():
             key="add_email"
         )
 
-
         phone = st.text_input(
             "Phone",
             key="add_phone"
         )
-
-
-        # ------------------------------------------------------
-        # COURSE ASSIGNMENT
-        # ------------------------------------------------------
-
-        st.markdown("---")
-
-        st.markdown(
-            "**Courses Assigned to Student**"
-        )
-
-        st.caption(
-            "Select all courses this student should have access to."
-        )
-
-        add_course_columns = st.columns(2)
-
-        add_selected_courses = []
-
-        for index, course in enumerate(COURSE_OPTIONS):
-
-            with add_course_columns[index % 2]:
-
-                if st.checkbox(
-                    course,
-                    key=f"add_course_{course}"
-                ):
-
-                    add_selected_courses.append(course)
 
 
         # ------------------------------------------------------
@@ -258,12 +206,10 @@ def student_management():
             "**Zoom Classroom Information**"
         )
 
-
         zoom_link = st.text_input(
             "Zoom Link",
             key="add_zoom_link"
         )
-
 
         meeting_id = st.text_input(
             "Meeting ID",
@@ -281,13 +227,11 @@ def student_management():
             "**Portal Login Credentials**"
         )
 
-
         username = st.text_input(
             "Username for Login",
             value=email.split("@")[0] if email else "",
             key="add_username"
         )
-
 
         password = st.text_input(
             "Initial Password",
@@ -336,11 +280,10 @@ def student_management():
                     "for portal login."
                 )
 
-            elif not add_selected_courses:
+            elif not add_courses:
 
                 st.error(
-                    "Please assign at least one course "
-                    "to the student."
+                    "Please select at least one course."
                 )
 
             else:
@@ -350,15 +293,27 @@ def student_management():
                 # ==================================================
 
                 clean_code = code.strip()
+
                 clean_first = first.strip()
+
                 clean_last = last.strip()
+
                 clean_email = email.strip().lower()
+
                 clean_username = username.strip().lower()
+
                 clean_grade = grade.strip()
-                clean_subject = subject.strip()
+
+                clean_subject = courses_to_subject(
+                    add_courses
+                )
+
                 clean_phone = phone.strip()
+
                 clean_zoom = zoom_link.strip()
+
                 clean_meeting = meeting_id.strip()
+
                 clean_parent_pin = parent_pin.strip()
 
 
@@ -390,6 +345,9 @@ def student_management():
 
                 # ==================================================
                 # USERNAME + EMAIL DUPLICATE CHECK
+                #
+                # Both must match the SAME existing account
+                # before we block the new student.
                 # ==================================================
 
                 if clean_email:
@@ -418,6 +376,30 @@ def student_management():
                         )
 
                         return
+
+
+                # ==================================================
+                # USERNAME DUPLICATE CHECK
+                # ==================================================
+
+                existing_username = query_dataframe(
+                    """
+                    SELECT id
+                    FROM users
+                    WHERE LOWER(TRIM(username)) = %s
+                    LIMIT 1
+                    """,
+                    (clean_username,)
+                )
+
+                if not existing_username.empty:
+
+                    st.warning(
+                        f"The username '{clean_username}' "
+                        "is already in use."
+                    )
+
+                    return
 
 
                 # ==================================================
@@ -472,7 +454,6 @@ def student_management():
                         )
                     )
 
-
                     new_student_id = int(row[0])
 
 
@@ -506,16 +487,6 @@ def student_management():
 
 
                     # ==================================================
-                    # SAVE COURSES
-                    # ==================================================
-
-                    save_student_courses(
-                        new_student_id,
-                        add_selected_courses
-                    )
-
-
-                    # ==================================================
                     # CLEAR CACHE
                     # ==================================================
 
@@ -529,7 +500,6 @@ def student_management():
                         f"Student added successfully! "
                         f"Linked Student ID is {new_student_id}."
                     )
-
 
                     st.rerun()
 
@@ -548,7 +518,6 @@ def student_management():
     with tab2:
 
         st.subheader("Active Students")
-
 
         students = query_dataframe(
             """
@@ -592,7 +561,7 @@ def student_management():
                     "id": "ID",
                     "student_code": "Student Code",
                     "grade": "Grade",
-                    "subject": "Subject",
+                    "subject": "Courses",
                     "email": "Email",
                     "phone": "Phone"
                 }
@@ -614,7 +583,6 @@ def student_management():
             # --------------------------------------------------
 
             st.subheader("Archive Student")
-
 
             student_options = students["id"].tolist()
 
@@ -664,7 +632,6 @@ def student_management():
 
                     st.cache_data.clear()
 
-
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
 
@@ -673,7 +640,6 @@ def student_management():
                         f"{selected_archive_row['Student Name']} "
                         "has been archived."
                     )
-
 
                     st.rerun()
 
@@ -699,7 +665,6 @@ def student_management():
     with tab3:
 
         st.subheader("Archived Students")
-
 
         archived_students = query_dataframe(
             """
@@ -743,7 +708,7 @@ def student_management():
                     "id": "ID",
                     "student_code": "Student Code",
                     "grade": "Grade",
-                    "subject": "Subject",
+                    "subject": "Courses",
                     "email": "Email",
                     "phone": "Phone"
                 }
@@ -765,7 +730,6 @@ def student_management():
             # --------------------------------------------------
 
             st.subheader("Restore Student")
-
 
             archived_options = archived_students["id"].tolist()
 
@@ -806,7 +770,6 @@ def student_management():
 
                     st.cache_data.clear()
 
-
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
 
@@ -815,7 +778,6 @@ def student_management():
                         f"{selected_restore_row['Student Name']} "
                         "has been restored."
                     )
-
 
                     st.rerun()
 
@@ -840,7 +802,9 @@ def student_management():
 
     with tab4:
 
-        st.subheader("Edit Student Information")
+        st.subheader(
+            "Edit Student Information"
+        )
 
 
         edit_students = query_dataframe(
@@ -894,31 +858,23 @@ def student_management():
             ].iloc[0]
 
 
-            student_id = int(student_row["id"])
+            student_id = int(
+                student_row["id"]
+            )
 
 
-            # --------------------------------------------------
-            # CURRENT COURSES
-            # --------------------------------------------------
+            # ==================================================
+            # EXISTING COURSES
+            # ==================================================
 
-            try:
-
-                current_courses = get_student_courses(
-                    student_id
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"Unable to load student courses: {e}"
-                )
-
-                current_courses = []
+            existing_courses = parse_courses(
+                student_row["subject"]
+            )
 
 
-            # --------------------------------------------------
+            # ==================================================
             # EDIT FORM
-            # --------------------------------------------------
+            # ==================================================
 
             with st.form(
                 f"edit_student_form_{student_id}"
@@ -964,13 +920,123 @@ def student_management():
                 )
 
 
-                e_subject = st.text_input(
-                    "Subject",
-                    value=(
-                        str(student_row["subject"])
-                        if student_row["subject"]
-                        else ""
+                # --------------------------------------------------
+                # COURSES
+                # --------------------------------------------------
+
+                st.markdown("---")
+
+                st.markdown(
+                    "**Courses**"
+                )
+
+                st.caption(
+                    "Select all courses assigned to this student."
+                )
+
+
+                edit_courses = []
+
+
+                edit_course_columns = st.columns(2)
+
+
+                for index, course in enumerate(
+                    COURSE_OPTIONS
+                ):
+
+                    with edit_course_columns[
+                        index % 2
+                    ]:
+
+                        selected = st.checkbox(
+                            course,
+                            value=(
+                                course in existing_courses
+                            ),
+                            key=(
+                                f"edit_course_"
+                                f"{student_id}_"
+                                f"{course}"
+                            )
+                        )
+
+
+                        if selected:
+
+                            edit_courses.append(
+                                course
+                            )
+
+
+                # --------------------------------------------------
+                # OTHER EXISTING COURSES
+                # --------------------------------------------------
+
+                known_courses_lower = {
+                    course.lower()
+                    for course in COURSE_OPTIONS
+                }
+
+
+                other_existing_courses = [
+                    course
+                    for course in existing_courses
+                    if course.lower()
+                    not in known_courses_lower
+                ]
+
+
+                default_other = ", ".join(
+                    other_existing_courses
+                )
+
+
+                e_other_course = st.text_input(
+                    "Other Course (optional)",
+                    value=default_other,
+                    key=f"edit_other_course_{student_id}",
+                    placeholder="Example: Statistics"
+                )
+
+
+                if e_other_course.strip():
+
+                    other_courses = [
+                        course.strip()
+                        for course in e_other_course.split(",")
+                        if course.strip()
+                    ]
+
+                    edit_courses.extend(
+                        other_courses
                     )
+
+
+                # --------------------------------------------------
+                # CURRENT COURSE SUMMARY
+                # --------------------------------------------------
+
+                if edit_courses:
+
+                    st.info(
+                        "Assigned courses: "
+                        + ", ".join(edit_courses)
+                    )
+
+                else:
+
+                    st.warning(
+                        "No course has been selected."
+                    )
+
+
+                # --------------------------------------------------
+                # CONTACT
+                # --------------------------------------------------
+
+                e_subject_display = courses_to_subject(
+                    edit_courses
                 )
 
 
@@ -992,40 +1058,6 @@ def student_management():
                         else ""
                     )
                 )
-
-
-                # --------------------------------------------------
-                # COURSE ASSIGNMENT
-                # --------------------------------------------------
-
-                st.markdown("---")
-
-                st.markdown(
-                    "**Courses Assigned to Student**"
-                )
-
-                st.caption(
-                    "Select all courses this student should "
-                    "be able to access."
-                )
-
-
-                edit_course_columns = st.columns(2)
-
-                edit_selected_courses = []
-
-
-                for index, course in enumerate(COURSE_OPTIONS):
-
-                    with edit_course_columns[index % 2]:
-
-                        if st.checkbox(
-                            course,
-                            value=course in current_courses,
-                            key=f"edit_course_{student_id}_{course}"
-                        ):
-
-                            edit_selected_courses.append(course)
 
 
                 # --------------------------------------------------
@@ -1072,6 +1104,38 @@ def student_management():
                 )
 
 
+                # ----------------------------------------------
+                # CURRENT USERNAME
+                # ----------------------------------------------
+
+                current_username_result = query_dataframe(
+                    """
+                    SELECT username
+                    FROM users
+                    WHERE student_id = %s
+                    ORDER BY username
+                    LIMIT 1
+                    """,
+                    (student_id,)
+                )
+
+
+                current_username = ""
+
+                if not current_username_result.empty:
+
+                    current_username = str(
+                        current_username_result.iloc[0]["username"]
+                    )
+
+
+                e_username = st.text_input(
+                    "Username",
+                    value=current_username,
+                    key=f"edit_username_{student_id}"
+                )
+
+
                 e_password = st.text_input(
                     "New Password "
                     "(leave blank to keep current)",
@@ -1104,14 +1168,15 @@ def student_management():
                 )
 
 
+                # --------------------------------------------------
+                # SUBMIT
+                # --------------------------------------------------
+
                 submit_edit = st.form_submit_button(
-                    "Update Student Record"
+                    "Update Student Record",
+                    type="primary"
                 )
 
-
-                # ==================================================
-                # SAVE EDIT
-                # ==================================================
 
                 if submit_edit:
 
@@ -1124,16 +1189,89 @@ def student_management():
                             "First name and last name are required."
                         )
 
-                    elif not edit_selected_courses:
+                    elif not edit_courses:
 
                         st.error(
-                            "Please assign at least one course "
-                            "to the student."
+                            "Please select at least one course."
+                        )
+
+                    elif not e_username.strip():
+
+                        st.error(
+                            "Username is required."
                         )
 
                     else:
 
                         try:
+
+                            clean_username = (
+                                e_username.strip().lower()
+                            )
+
+
+                            # ======================================
+                            # CHECK USERNAME
+                            #
+                            # Make sure another account isn't
+                            # already using this username.
+                            # ======================================
+
+                            duplicate_username = query_dataframe(
+                                """
+                                SELECT id
+                                FROM users
+                                WHERE LOWER(TRIM(username)) = %s
+                                  AND student_id <> %s
+                                LIMIT 1
+                                """,
+                                (
+                                    clean_username,
+                                    student_id
+                                )
+                            )
+
+
+                            if not duplicate_username.empty:
+
+                                st.error(
+                                    f"The username "
+                                    f"'{clean_username}' "
+                                    "is already being used by "
+                                    "another account."
+                                )
+
+                                return
+
+
+                            # ======================================
+                            # CLEAN COURSE LIST
+                            # ======================================
+
+                            final_courses = []
+
+                            for course in edit_courses:
+
+                                clean_course = course.strip()
+
+                                if not clean_course:
+                                    continue
+
+                                if clean_course.lower() in [
+                                    existing.lower()
+                                    for existing in final_courses
+                                ]:
+                                    continue
+
+                                final_courses.append(
+                                    clean_course
+                                )
+
+
+                            clean_subject = courses_to_subject(
+                                final_courses
+                            )
+
 
                             # ======================================
                             # UPDATE STUDENT INFORMATION
@@ -1160,12 +1298,29 @@ def student_management():
                                     e_first.strip(),
                                     e_last.strip(),
                                     e_grade.strip(),
-                                    e_subject.strip(),
+                                    clean_subject,
                                     e_email.strip().lower(),
                                     e_phone.strip(),
                                     e_zoom.strip(),
                                     e_meeting.strip(),
                                     e_parent_pin.strip(),
+                                    student_id
+                                )
+                            )
+
+
+                            # ======================================
+                            # UPDATE USERNAME
+                            # ======================================
+
+                            execute(
+                                """
+                                UPDATE users
+                                SET username = %s
+                                WHERE student_id = %s
+                                """,
+                                (
+                                    clean_username,
                                     student_id
                                 )
                             )
@@ -1191,16 +1346,6 @@ def student_management():
 
 
                             # ======================================
-                            # UPDATE COURSE ASSIGNMENTS
-                            # ======================================
-
-                            save_student_courses(
-                                student_id,
-                                edit_selected_courses
-                            )
-
-
-                            # ======================================
                             # CLEAR CACHE
                             # ======================================
 
@@ -1211,10 +1356,8 @@ def student_management():
 
 
                             st.success(
-                                "Student information and course "
-                                "assignments updated successfully!"
+                                "Student information updated successfully!"
                             )
-
 
                             st.rerun()
 

@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 
@@ -1476,4 +1475,3 @@ def student_page():
                                 f"Zoom Meeting ID: "
                                 f"{meeting_id}"
                             )
-```

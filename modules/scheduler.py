@@ -8,27 +8,83 @@ from streamlit_calendar import calendar
 from database import execute, query_dataframe
 
 
-# =====================================================
+# ============================================================
+# COURSE OPTIONS
+# ============================================================
+
+COURSE_OPTIONS = [
+    "Algebra",
+    "Geometry",
+    "Pre-Algebra",
+    "Precalculus",
+    "Trigonometry",
+    "Calculus",
+    "Algebra II"
+]
+
+
+# ============================================================
+# SESSION SCHEMA
+# ============================================================
+
+def ensure_scheduler_schema():
+    """
+    Ensure the sessions table contains the course column.
+
+    Existing sessions are preserved. Their course will be blank
+    until the administrator assigns one by editing the session.
+    """
+
+    try:
+
+        execute(
+            """
+            ALTER TABLE sessions
+            ADD COLUMN IF NOT EXISTS course TEXT
+            """
+        )
+
+    except Exception as e:
+
+        st.warning(
+            f"Unable to verify the session course field: {e}"
+        )
+
+
+# ============================================================
 # TIME SLOT HELPERS
-# =====================================================
+# ============================================================
 
 def generate_time_slots():
     """
     Generate 15-minute time slots from 6:45 AM through 9:00 PM.
     """
+
     slots = []
 
-    start = datetime.strptime("6:45 AM", "%I:%M %p")
-    end = datetime.strptime("09:00 PM", "%I:%M %p")
+    start = datetime.strptime(
+        "6:45 AM",
+        "%I:%M %p"
+    )
+
+    end = datetime.strptime(
+        "09:00 PM",
+        "%I:%M %p"
+    )
 
     current = start
 
     while current <= end:
+
         slots.append(
-            current.strftime("%I:%M %p").lstrip("0")
+            current.strftime(
+                "%I:%M %p"
+            ).lstrip("0")
         )
 
-        current += timedelta(minutes=15)
+        current += timedelta(
+            minutes=15
+        )
 
     return slots
 
@@ -36,9 +92,9 @@ def generate_time_slots():
 TIME_SLOTS = generate_time_slots()
 
 
-# =====================================================
+# ============================================================
 # TIME CONVERSION
-# =====================================================
+# ============================================================
 
 def convert_time(time_value):
     """
@@ -53,18 +109,28 @@ def convert_time(time_value):
     """
 
     if time_value is None:
+
         return "00:00:00"
 
     # PostgreSQL time / Python datetime.time
     if hasattr(time_value, "strftime"):
+
         try:
-            return time_value.strftime("%H:%M:%S")
+
+            return time_value.strftime(
+                "%H:%M:%S"
+            )
+
         except Exception:
+
             pass
 
-    time_str = str(time_value).strip()
+    time_str = str(
+        time_value
+    ).strip()
 
     if not time_str:
+
         return "00:00:00"
 
     # Already 24-hour time
@@ -74,21 +140,26 @@ def convert_time(time_value):
         "%I:%M %p",
         "%I:%M:%S %p",
     ):
+
         try:
+
             return datetime.strptime(
                 time_str,
                 fmt
-            ).strftime("%H:%M:%S")
+            ).strftime(
+                "%H:%M:%S"
+            )
 
         except ValueError:
+
             continue
 
     return time_str
 
 
-# =====================================================
+# ============================================================
 # DISPLAY TIME
-# =====================================================
+# ============================================================
 
 def display_time(time_value):
     """
@@ -96,29 +167,40 @@ def display_time(time_value):
     4:15 PM
     """
 
-    converted = convert_time(time_value)
+    converted = convert_time(
+        time_value
+    )
 
     try:
+
         return datetime.strptime(
             converted,
             "%H:%M:%S"
-        ).strftime("%-I:%M %p")
+        ).strftime(
+            "%-I:%M %p"
+        )
 
     except Exception:
 
         try:
+
             return datetime.strptime(
                 converted,
                 "%H:%M:%S"
-            ).strftime("%I:%M %p").lstrip("0")
+            ).strftime(
+                "%I:%M %p"
+            ).lstrip("0")
 
         except Exception:
-            return str(time_value)
+
+            return str(
+                time_value
+            )
 
 
-# =====================================================
+# ============================================================
 # END TIME
-# =====================================================
+# ============================================================
 
 def calculate_end_time(
     date_str,
@@ -144,7 +226,9 @@ def calculate_end_time(
 
         end_dt = (
             start_dt
-            + timedelta(minutes=duration)
+            + timedelta(
+                minutes=duration
+            )
         )
 
         return end_dt.strftime(
@@ -153,12 +237,100 @@ def calculate_end_time(
 
     except Exception:
 
-        return f"{date_str}T23:59:59"
+        return (
+            f"{date_str}T23:59:59"
+        )
 
 
-# =====================================================
+# ============================================================
+# COURSE HELPERS
+# ============================================================
+
+def parse_courses(subject):
+    """
+    Convert a student's subject field into a clean list.
+
+    Example:
+
+        Algebra, Geometry
+
+    becomes:
+
+        ["Algebra", "Geometry"]
+    """
+
+    if subject is None:
+
+        return []
+
+    text = str(
+        subject
+    ).strip()
+
+    if not text:
+
+        return []
+
+    if text.lower() in [
+        "nan",
+        "none"
+    ]:
+
+        return []
+
+    courses = []
+
+    for course in text.split(","):
+
+        clean_course = course.strip()
+
+        if not clean_course:
+
+            continue
+
+        if any(
+            clean_course.lower()
+            == existing.lower()
+            for existing in courses
+        ):
+
+            continue
+
+        courses.append(
+            clean_course
+        )
+
+    return courses
+
+
+def clean_course_value(course):
+    """
+    Normalize a course value coming from the database.
+    """
+
+    if course is None:
+
+        return ""
+
+    value = str(
+        course
+    ).strip()
+
+    if value.lower() in [
+        "",
+        "nan",
+        "none",
+        "null"
+    ]:
+
+        return ""
+
+    return value
+
+
+# ============================================================
 # CACHED STUDENT LIST
-# =====================================================
+# ============================================================
 
 @st.cache_data(ttl=600)
 def get_scheduler_students():
@@ -168,16 +340,18 @@ def get_scheduler_students():
         SELECT
             id,
             first_name,
-            last_name
+            last_name,
+            COALESCE(subject, '') AS subject
         FROM students
+        WHERE COALESCE(archived, 0) = 0
         ORDER BY last_name, first_name
         """
     )
 
 
-# =====================================================
+# ============================================================
 # CACHED SESSION LIST
-# =====================================================
+# ============================================================
 
 @st.cache_data(ttl=600)
 def get_scheduler_sessions():
@@ -188,7 +362,8 @@ def get_scheduler_sessions():
             ss.id,
             ss.student_id,
 
-            ss.session_date::text AS session_date,
+            ss.session_date::text
+                AS session_date,
 
             ss.session_time,
 
@@ -204,7 +379,13 @@ def get_scheduler_sessions():
 
             ss.recurring_group,
 
-            ss.not_after::text AS not_after,
+            ss.not_after::text
+                AS not_after,
+
+            COALESCE(
+                ss.course,
+                ''
+            ) AS course,
 
             COALESCE(
                 ss.topic,
@@ -236,25 +417,27 @@ def get_scheduler_sessions():
     )
 
 
-# =====================================================
+# ============================================================
 # CLEAR ONLY SCHEDULER CACHE
-# =====================================================
+# ============================================================
 
 def refresh_scheduler_data():
 
     get_scheduler_students.clear()
+
     get_scheduler_sessions.clear()
 
 
-# =====================================================
+# ============================================================
 # CREATE CALENDAR EVENTS
-# =====================================================
+# ============================================================
 
 def build_calendar_events(sessions):
 
     events = []
 
     if sessions.empty:
+
         return events
 
     for _, row in sessions.iterrows():
@@ -272,13 +455,17 @@ def build_calendar_events(sessions):
                 "",
                 "nan",
                 "None",
-                "none"
+                "none",
+                "null"
             ]
         )
 
         if is_recurring:
+
             color = "#2E7D32"
+
         else:
+
             color = "#1E88E5"
 
         session_date = str(
@@ -296,17 +483,45 @@ def build_calendar_events(sessions):
         end_time = calculate_end_time(
             session_date,
             session_time,
-            row.get("duration", 60)
+            row.get(
+                "duration",
+                60
+            )
         )
+
+        course = clean_course_value(
+            row.get(
+                "course",
+                ""
+            )
+        )
+
+        # ----------------------------------------------------
+        # Calendar title
+        # ----------------------------------------------------
+
+        if course:
+
+            title = (
+                f"{display_time(session_time)} "
+                f"- {row['student']} "
+                f"({course})"
+            )
+
+        else:
+
+            title = (
+                f"{display_time(session_time)} "
+                f"- {row['student']}"
+            )
 
         events.append(
             {
-                "id": str(row["id"]),
-
-                "title": (
-                    f"{display_time(session_time)} "
-                    f"- {row['student']}"
+                "id": str(
+                    row["id"]
                 ),
+
+                "title": title,
 
                 "start": (
                     f"{session_date}T"
@@ -322,9 +537,12 @@ def build_calendar_events(sessions):
                 "borderColor": color,
 
                 "extendedProps": {
+
                     "student": str(
                         row["student"]
                     ),
+
+                    "course": course,
 
                     "topic": str(
                         row["topic"]
@@ -339,7 +557,9 @@ def build_calendar_events(sessions):
                     ),
 
                     "group": (
-                        str(recurring_group)
+                        str(
+                            recurring_group
+                        )
                         if is_recurring
                         else ""
                     )
@@ -350,9 +570,9 @@ def build_calendar_events(sessions):
     return events
 
 
-# =====================================================
+# ============================================================
 # SESSION SCHEDULER
-# =====================================================
+# ============================================================
 
 def scheduler_management():
 
@@ -360,9 +580,15 @@ def scheduler_management():
         "📅 Interactive Session Scheduler"
     )
 
-    # =================================================
+    # ========================================================
+    # ENSURE SESSION COURSE FIELD
+    # ========================================================
+
+    ensure_scheduler_schema()
+
+    # ========================================================
     # REFRESH BUTTON
-    # =================================================
+    # ========================================================
 
     refresh_col, info_col = st.columns(
         [1, 4]
@@ -398,9 +624,9 @@ def scheduler_management():
             "Use Refresh Schedule after changes made elsewhere."
         )
 
-    # =================================================
+    # ========================================================
     # COMPACT CALENDAR CSS
-    # =================================================
+    # ========================================================
 
     st.markdown(
         """
@@ -420,9 +646,9 @@ def scheduler_management():
         unsafe_allow_html=True
     )
 
-    # =================================================
+    # ========================================================
     # LOAD STUDENTS
-    # =================================================
+    # ========================================================
 
     students = get_scheduler_students()
 
@@ -449,32 +675,50 @@ def scheduler_management():
         )
     )
 
-    # =================================================
+    # --------------------------------------------------------
+    # Student -> Courses mapping
+    # --------------------------------------------------------
+
+    student_courses = {}
+
+    for _, row in students.iterrows():
+
+        student_id = int(
+            row["id"]
+        )
+
+        student_courses[
+            student_id
+        ] = parse_courses(
+            row["subject"]
+        )
+
+    # ========================================================
     # LOAD SESSIONS
-    # =================================================
+    # ========================================================
 
     sessions = get_scheduler_sessions()
 
-    # =================================================
+    # ========================================================
     # BUILD CALENDAR EVENTS
-    # =================================================
+    # ========================================================
 
     calendar_events = build_calendar_events(
         sessions
     )
 
-    # =================================================
+    # ========================================================
     # TWO COLUMN LAYOUT
-    # =================================================
+    # ========================================================
 
     col_calendar, col_control = st.columns(
         [1.35, 1],
         gap="large"
     )
 
-    # =================================================
+    # ========================================================
     # CALENDAR
-    # =================================================
+    # ========================================================
 
     with col_calendar:
 
@@ -521,9 +765,9 @@ def scheduler_management():
             key="scheduler_matrix"
         )
 
-    # =================================================
+    # ========================================================
     # HANDLE CALENDAR CALLBACK
-    # =================================================
+    # ========================================================
 
     if state and state.get("callback"):
 
@@ -531,9 +775,9 @@ def scheduler_management():
             "callback"
         )
 
-        # ---------------------------------------------
+        # ----------------------------------------------------
         # EXISTING SESSION CLICKED
-        # ---------------------------------------------
+        # ----------------------------------------------------
 
         if callback == "eventClick":
 
@@ -569,9 +813,9 @@ def scheduler_management():
                     "eventClick"
                 )
 
-        # ---------------------------------------------
+        # ----------------------------------------------------
         # EMPTY DATE CLICKED
-        # ---------------------------------------------
+        # ----------------------------------------------------
 
         elif callback == "dateClick":
 
@@ -612,22 +856,25 @@ def scheduler_management():
         "active_action"
     )
 
-    # =================================================
+    # ========================================================
     # RIGHT CONTROL PANEL
-    # =================================================
+    # ========================================================
 
     with col_control:
 
-        # =================================================
+        # ====================================================
         # EDIT EXISTING SESSION
-        # =================================================
+        # ====================================================
 
         if (
             active_action == "eventClick"
-            and "selected_session_id" in st.session_state
+            and "selected_session_id"
+            in st.session_state
         ):
 
-            selected_id = st.session_state.selected_session_id
+            selected_id = (
+                st.session_state.selected_session_id
+            )
 
             selected_rows = sessions[
                 sessions["id"].astype(str)
@@ -644,13 +891,19 @@ def scheduler_management():
 
             event = selected_rows.iloc[0]
 
-            recurring_group = event["recurring_group"]
+            recurring_group = (
+                event["recurring_group"]
+            )
 
-            st.session_state.selected_group = recurring_group
+            st.session_state.selected_group = (
+                recurring_group
+            )
 
             is_recurring = (
                 recurring_group is not None
-                and str(recurring_group).strip()
+                and str(
+                    recurring_group
+                ).strip()
                 not in [
                     "",
                     "nan",
@@ -660,20 +913,35 @@ def scheduler_management():
                 ]
             )
 
-            st.subheader("✏️ Edit Session")
+            st.subheader(
+                "✏️ Edit Session"
+            )
 
             st.info(
                 f"Student: **{event['student']}**"
             )
 
-            # =================================================
+            # ------------------------------------------------
+            # CURRENT COURSE
+            # ------------------------------------------------
+
+            current_course = clean_course_value(
+                event.get(
+                    "course",
+                    ""
+                )
+            )
+
+            # ------------------------------------------------
             # CURRENT SESSION INFORMATION
-            # =================================================
+            # ------------------------------------------------
 
             try:
 
                 current_date = datetime.strptime(
-                    str(event["session_date"]),
+                    str(
+                        event["session_date"]
+                    ),
                     "%Y-%m-%d"
                 ).date()
 
@@ -687,8 +955,10 @@ def scheduler_management():
 
             try:
 
-                current_time_index = TIME_SLOTS.index(
-                    current_time
+                current_time_index = (
+                    TIME_SLOTS.index(
+                        current_time
+                    )
                 )
 
             except ValueError:
@@ -714,7 +984,10 @@ def scheduler_management():
                 120
             ]
 
-            if current_duration not in duration_options:
+            if (
+                current_duration
+                not in duration_options
+            ):
 
                 duration_options.append(
                     current_duration
@@ -724,7 +997,6 @@ def scheduler_management():
 
             # =================================================
             # RECURRING SERIES CONTROLS
-            # OUTSIDE FORM SO THEY UPDATE IMMEDIATELY
             # =================================================
 
             if is_recurring:
@@ -737,15 +1009,15 @@ def scheduler_management():
                     "This session belongs to a weekly recurring series."
                 )
 
-                # ---------------------------------------------
-                # CURRENT REPEAT-UNTIL DATE
-                # ---------------------------------------------
-
-                existing_not_after = event["not_after"]
+                existing_not_after = (
+                    event["not_after"]
+                )
 
                 if (
                     existing_not_after
-                    and str(existing_not_after).strip()
+                    and str(
+                        existing_not_after
+                    ).strip()
                     not in [
                         "",
                         "None",
@@ -756,33 +1028,36 @@ def scheduler_management():
 
                     try:
 
-                        current_not_after = datetime.strptime(
-                            str(existing_not_after),
-                            "%Y-%m-%d"
-                        ).date()
+                        current_not_after = (
+                            datetime.strptime(
+                                str(
+                                    existing_not_after
+                                ),
+                                "%Y-%m-%d"
+                            ).date()
+                        )
 
                     except Exception:
 
-                        current_not_after = current_date
+                        current_not_after = (
+                            current_date
+                        )
 
                 else:
 
-                    current_not_after = current_date
-
-                # ---------------------------------------------
-                # REPEAT UNTIL
-                # ---------------------------------------------
+                    current_not_after = (
+                        current_date
+                    )
 
                 edit_not_after = st.date_input(
                     "Repeat Until",
                     value=current_not_after,
                     min_value=current_date,
-                    key=f"edit_repeat_until_{selected_id}"
+                    key=(
+                        f"edit_repeat_until_"
+                        f"{selected_id}"
+                    )
                 )
-
-                # ---------------------------------------------
-                # APPLY CHANGES
-                # ---------------------------------------------
 
                 edit_scope = st.radio(
                     "Apply changes to",
@@ -790,7 +1065,10 @@ def scheduler_management():
                         "This session only",
                         "Entire recurring series"
                     ],
-                    key=f"edit_scope_{selected_id}"
+                    key=(
+                        f"edit_scope_"
+                        f"{selected_id}"
+                    )
                 )
 
                 st.caption(
@@ -807,6 +1085,43 @@ def scheduler_management():
                 )
 
             # =================================================
+            # COURSES FOR CURRENT STUDENT
+            # =================================================
+
+            try:
+
+                current_student_id = int(
+                    event["student_id"]
+                )
+
+            except Exception:
+
+                current_student_id = None
+
+            available_edit_courses = (
+                student_courses.get(
+                    current_student_id,
+                    []
+                )
+            )
+
+            # Make sure a legacy course still appears
+            # if it is no longer in the student's current list.
+            if (
+                current_course
+                and not any(
+                    current_course.lower()
+                    == c.lower()
+                    for c in available_edit_courses
+                )
+            ):
+
+                available_edit_courses = (
+                    available_edit_courses
+                    + [current_course]
+                )
+
+            # =================================================
             # EDIT SESSION FORM
             # =================================================
 
@@ -816,7 +1131,9 @@ def scheduler_management():
 
                 edit_student = st.selectbox(
                     "Student",
-                    list(student_map.keys()),
+                    list(
+                        student_map.keys()
+                    ),
                     index=(
                         list(
                             student_map.values()
@@ -824,20 +1141,100 @@ def scheduler_management():
                             event["student_id"]
                         )
                     ),
-                    key=f"edit_student_{selected_id}"
+                    key=(
+                        f"edit_student_"
+                        f"{selected_id}"
+                    )
                 )
+
+                # ------------------------------------------------
+                # Determine courses for selected student
+                # ------------------------------------------------
+
+                selected_edit_student_id = int(
+                    student_map[
+                        edit_student
+                    ]
+                )
+
+                selected_edit_courses = (
+                    student_courses.get(
+                        selected_edit_student_id,
+                        []
+                    )
+                )
+
+                if not selected_edit_courses:
+
+                    selected_edit_courses = (
+                        available_edit_courses
+                    )
+
+                # Add current course if needed
+                if (
+                    current_course
+                    and not any(
+                        current_course.lower()
+                        == c.lower()
+                        for c in selected_edit_courses
+                    )
+                ):
+
+                    selected_edit_courses = (
+                        selected_edit_courses
+                        + [current_course]
+                    )
+
+                if selected_edit_courses:
+
+                    if current_course in selected_edit_courses:
+
+                        course_index = (
+                            selected_edit_courses.index(
+                                current_course
+                            )
+                        )
+
+                    else:
+
+                        course_index = 0
+
+                    edit_course = st.selectbox(
+                        "Course",
+                        selected_edit_courses,
+                        index=course_index,
+                        key=(
+                            f"edit_course_"
+                            f"{selected_id}"
+                        )
+                    )
+
+                else:
+
+                    st.warning(
+                        "This student does not currently have "
+                        "any courses assigned."
+                    )
+
+                    edit_course = ""
 
                 edit_date = st.date_input(
                     "Session Date",
                     value=current_date,
-                    key=f"edit_date_{selected_id}"
+                    key=(
+                        f"edit_date_"
+                        f"{selected_id}"
+                    )
                 )
 
                 edit_time = st.selectbox(
                     "Start Time",
                     TIME_SLOTS,
                     index=current_time_index,
-                    key=f"edit_time_{selected_id}"
+                    key=(
+                        f"edit_time_"
+                        f"{selected_id}"
+                    )
                 )
 
                 edit_duration = st.selectbox(
@@ -846,27 +1243,44 @@ def scheduler_management():
                     index=duration_options.index(
                         current_duration
                     ),
-                    key=f"edit_duration_{selected_id}"
+                    key=(
+                        f"edit_duration_"
+                        f"{selected_id}"
+                    )
                 )
 
                 edit_topic = st.text_input(
                     "Lesson Topic",
                     value=(
-                        str(event["topic"])
-                        if pd.notna(event["topic"])
+                        str(
+                            event["topic"]
+                        )
+                        if pd.notna(
+                            event["topic"]
+                        )
                         else ""
                     ),
-                    key=f"edit_topic_{selected_id}"
+                    key=(
+                        f"edit_topic_"
+                        f"{selected_id}"
+                    )
                 )
 
                 edit_notes = st.text_area(
                     "Notes",
                     value=(
-                        str(event["notes"])
-                        if pd.notna(event["notes"])
+                        str(
+                            event["notes"]
+                        )
+                        if pd.notna(
+                            event["notes"]
+                        )
                         else ""
                     ),
-                    key=f"edit_notes_{selected_id}"
+                    key=(
+                        f"edit_notes_"
+                        f"{selected_id}"
+                    )
                 )
 
                 status_options = [
@@ -880,7 +1294,10 @@ def scheduler_management():
                     event["status"]
                 )
 
-                if current_status not in status_options:
+                if (
+                    current_status
+                    not in status_options
+                ):
 
                     status_options.append(
                         current_status
@@ -892,12 +1309,11 @@ def scheduler_management():
                     index=status_options.index(
                         current_status
                     ),
-                    key=f"edit_status_{selected_id}"
+                    key=(
+                        f"edit_status_"
+                        f"{selected_id}"
+                    )
                 )
-
-                # ---------------------------------------------
-                # SAVE
-                # ---------------------------------------------
 
                 save_edit = st.form_submit_button(
                     "💾 Save Changes",
@@ -911,10 +1327,6 @@ def scheduler_management():
 
             if save_edit:
 
-                # ---------------------------------------------
-                # VALIDATE REPEAT DATE
-                # ---------------------------------------------
-
                 if (
                     is_recurring
                     and edit_not_after
@@ -926,13 +1338,19 @@ def scheduler_management():
                         "than the session date."
                     )
 
+                elif not edit_course:
+
+                    st.error(
+                        "Please select a course for this session."
+                    )
+
                 else:
 
                     try:
 
-                        # =================================================
+                        # =========================================
                         # ENTIRE RECURRING SERIES
-                        # =================================================
+                        # =========================================
 
                         if (
                             is_recurring
@@ -945,6 +1363,7 @@ def scheduler_management():
                                 UPDATE sessions
                                 SET
                                     student_id = %s,
+                                    course = %s,
                                     session_time = %s,
                                     duration = %s,
                                     topic = %s,
@@ -959,6 +1378,8 @@ def scheduler_management():
                                             edit_student
                                         ]
                                     ),
+
+                                    edit_course,
 
                                     edit_time,
 
@@ -983,9 +1404,9 @@ def scheduler_management():
                                 "updated successfully."
                             )
 
-                        # =================================================
+                        # =========================================
                         # ONLY THIS SESSION
-                        # =================================================
+                        # =========================================
 
                         else:
 
@@ -994,6 +1415,7 @@ def scheduler_management():
                                 UPDATE sessions
                                 SET
                                     student_id = %s,
+                                    course = %s,
                                     session_date = %s,
                                     session_time = %s,
                                     duration = %s,
@@ -1009,6 +1431,8 @@ def scheduler_management():
                                             edit_student
                                         ]
                                     ),
+
+                                    edit_course,
 
                                     edit_date,
 
@@ -1026,7 +1450,9 @@ def scheduler_management():
 
                                     edit_not_after,
 
-                                    int(selected_id)
+                                    int(
+                                        selected_id
+                                    )
                                 )
                             )
 
@@ -1034,9 +1460,9 @@ def scheduler_management():
                                 "✅ Session updated successfully."
                             )
 
-                        # =================================================
+                        # =========================================
                         # REFRESH SCHEDULER
-                        # =================================================
+                        # =========================================
 
                         refresh_scheduler_data()
 
@@ -1052,7 +1478,9 @@ def scheduler_management():
 
                         st.session_state.active_action = None
 
-                        st.success(message)
+                        st.success(
+                            message
+                        )
 
                         st.rerun()
 
@@ -1062,41 +1490,46 @@ def scheduler_management():
                             f"Unable to update session: {e}"
                         )
 
-        # =================================================
+        # ====================================================
         # CREATE NEW SESSION
-        # =================================================
+        # ====================================================
 
         elif (
             active_action == "dateClick"
-            and "calendar_date" in st.session_state
+            and "calendar_date"
+            in st.session_state
         ):
 
-            clicked_date = st.session_state.calendar_date
+            clicked_date = (
+                st.session_state.calendar_date
+            )
 
             try:
-                selected_date = datetime.strptime(
-                    clicked_date,
-                    "%Y-%m-%d"
-                ).date()
+
+                selected_date = (
+                    datetime.strptime(
+                        clicked_date,
+                        "%Y-%m-%d"
+                    ).date()
+                )
 
             except Exception:
-                selected_date = datetime.today().date()
 
-            st.subheader("➕ Create New Session")
+                selected_date = (
+                    datetime.today().date()
+                )
+
+            st.subheader(
+                "➕ Create New Session"
+            )
 
             st.info(
                 f"Selected Date: **{clicked_date}**"
             )
 
             # =================================================
-            # REPEAT OPTION — OUTSIDE THE FORM
+            # REPEAT OPTION
             # =================================================
-            #
-            # IMPORTANT:
-            # These widgets MUST be outside st.form()
-            # so Streamlit reruns immediately when the
-            # checkbox is clicked.
-            #
 
             recurring = st.checkbox(
                 "🔄 Repeat this session weekly?",
@@ -1109,7 +1542,9 @@ def scheduler_management():
                     "Repeat Until",
                     value=(
                         selected_date
-                        + timedelta(weeks=4)
+                        + timedelta(
+                            weeks=4
+                        )
                     ),
                     min_value=selected_date,
                     key="new_session_repeat_until"
@@ -1130,13 +1565,47 @@ def scheduler_management():
             # SESSION DETAILS FORM
             # =================================================
 
-            with st.form("new_session_form"):
+            with st.form(
+                "new_session_form"
+            ):
 
                 selected_student = st.selectbox(
                     "Student",
-                    list(student_map.keys()),
+                    list(
+                        student_map.keys()
+                    ),
                     key="new_session_student"
                 )
+
+                selected_student_id = int(
+                    student_map[
+                        selected_student
+                    ]
+                )
+
+                available_courses = (
+                    student_courses.get(
+                        selected_student_id,
+                        []
+                    )
+                )
+
+                if available_courses:
+
+                    selected_course = st.selectbox(
+                        "Course",
+                        available_courses,
+                        key="new_session_course"
+                    )
+
+                else:
+
+                    st.warning(
+                        "This student does not have any courses "
+                        "assigned in Student Management."
+                    )
+
+                    selected_course = ""
 
                 selected_time = st.selectbox(
                     "Start Time",
@@ -1180,10 +1649,6 @@ def scheduler_management():
 
             if save:
 
-                # ---------------------------------------------
-                # VALIDATE REPEAT DATE
-                # ---------------------------------------------
-
                 if (
                     recurring
                     and repeat_until
@@ -1195,29 +1660,43 @@ def scheduler_management():
                         "the first session date."
                     )
 
+                elif not selected_course:
+
+                    st.error(
+                        "Please select a course for this session."
+                    )
+
                 else:
 
                     try:
 
-                        # =================================================
+                        # =========================================
                         # REPEATING SESSION
-                        # =================================================
+                        # =========================================
 
                         if recurring:
 
-                            group_id = str(uuid.uuid4())
+                            group_id = str(
+                                uuid.uuid4()
+                            )
 
-                            current_date = selected_date
+                            current_date = (
+                                selected_date
+                            )
 
                             session_count = 0
 
-                            while current_date <= repeat_until:
+                            while (
+                                current_date
+                                <= repeat_until
+                            ):
 
                                 execute(
                                     """
                                     INSERT INTO sessions
                                     (
                                         student_id,
+                                        course,
                                         session_date,
                                         session_time,
                                         duration,
@@ -1239,6 +1718,7 @@ def scheduler_management():
                                         %s,
                                         %s,
                                         %s,
+                                        %s,
                                         %s
                                     )
                                     """,
@@ -1249,11 +1729,15 @@ def scheduler_management():
                                             ]
                                         ),
 
+                                        selected_course,
+
                                         current_date,
 
                                         selected_time,
 
-                                        int(duration),
+                                        int(
+                                            duration
+                                        ),
 
                                         "Weekly",
 
@@ -1271,8 +1755,10 @@ def scheduler_management():
 
                                 session_count += 1
 
-                                current_date += timedelta(
-                                    weeks=1
+                                current_date += (
+                                    timedelta(
+                                        weeks=1
+                                    )
                                 )
 
                             message = (
@@ -1280,9 +1766,9 @@ def scheduler_management():
                                 f"session(s) reserved successfully."
                             )
 
-                        # =================================================
+                        # =========================================
                         # SINGLE SESSION
-                        # =================================================
+                        # =========================================
 
                         else:
 
@@ -1291,6 +1777,7 @@ def scheduler_management():
                                 INSERT INTO sessions
                                 (
                                     student_id,
+                                    course,
                                     session_date,
                                     session_time,
                                     duration,
@@ -1312,6 +1799,7 @@ def scheduler_management():
                                     %s,
                                     %s,
                                     %s,
+                                    %s,
                                     %s
                                 )
                                 """,
@@ -1322,11 +1810,15 @@ def scheduler_management():
                                         ]
                                     ),
 
+                                    selected_course,
+
                                     selected_date,
 
                                     selected_time,
 
-                                    int(duration),
+                                    int(
+                                        duration
+                                    ),
 
                                     "None",
 
@@ -1346,13 +1838,12 @@ def scheduler_management():
                                 "✅ Session reserved successfully."
                             )
 
-                        # =================================================
+                        # =========================================
                         # REFRESH SCHEDULER
-                        # =================================================
+                        # =========================================
 
                         refresh_scheduler_data()
 
-                        # Clear form/session state
                         st.session_state.active_action = None
 
                         st.session_state.pop(
@@ -1376,6 +1867,11 @@ def scheduler_management():
                         )
 
                         st.session_state.pop(
+                            "new_session_course",
+                            None
+                        )
+
+                        st.session_state.pop(
                             "new_session_time",
                             None
                         )
@@ -1395,7 +1891,9 @@ def scheduler_management():
                             None
                         )
 
-                        st.success(message)
+                        st.success(
+                            message
+                        )
 
                         st.rerun()
 
@@ -1405,10 +1903,9 @@ def scheduler_management():
                             f"Unable to create session: {e}"
                         )
 
-
-        # =================================================
+        # ====================================================
         # DEFAULT
-        # =================================================
+        # ====================================================
 
         else:
 
@@ -1422,17 +1919,23 @@ def scheduler_management():
 
                 **✏️ Edit:** Click an existing session.
 
-                **🔄 Recurring:** Green sessions belong to a weekly series.
+                **📚 Course:** Every new session is assigned to
+                a specific course.
 
-                **🔵 Single:** Blue sessions are individual sessions.
+                **🔄 Recurring:** Green sessions belong to a
+                weekly series.
 
-                **🗑️ Delete:** Select an existing session to access deletion controls.
+                **🔵 Single:** Blue sessions are individual
+                sessions.
+
+                **🗑️ Delete:** Select an existing session to
+                access deletion controls.
                 """
             )
 
-    # =====================================================
+    # =========================================================
     # DELETE SECTION
-    # =====================================================
+    # =========================================================
 
     if (
         active_action == "eventClick"
@@ -1466,7 +1969,8 @@ def scheduler_management():
                     "",
                     "nan",
                     "None",
-                    "none"
+                    "none",
+                    "null"
                 ]
             )
 
@@ -1484,7 +1988,10 @@ def scheduler_management():
                         "Delete only this session",
                         "Delete entire recurring series"
                     ],
-                    key=f"delete_option_{selected_id}"
+                    key=(
+                        f"delete_option_"
+                        f"{selected_id}"
+                    )
                 )
 
             else:
@@ -1496,7 +2003,10 @@ def scheduler_management():
             if st.button(
                 "🗑️ Confirm Delete",
                 type="primary",
-                key=f"delete_session_{selected_id}"
+                key=(
+                    f"delete_session_"
+                    f"{selected_id}"
+                )
             ):
 
                 try:
@@ -1538,7 +2048,7 @@ def scheduler_management():
                         )
 
                     # -----------------------------------------
-                    # Refresh ONLY scheduler cache
+                    # Refresh scheduler
                     # -----------------------------------------
 
                     refresh_scheduler_data()
@@ -1553,9 +2063,7 @@ def scheduler_management():
                         None
                     )
 
-                    st.session_state.active_action = (
-                        None
-                    )
+                    st.session_state.active_action = None
 
                     st.success(
                         delete_message

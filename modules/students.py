@@ -17,26 +17,28 @@ COURSE_OPTIONS = [
     "Pre-Algebra",
     "Precalculus",
     "Trigonometry",
-    "Calculus"
+    "Calculus",
+    "Algebra II"
 ]
 
 
 # ==========================================================
-# COURSE HELPER
+# COURSE HELPERS
 # ==========================================================
 
 def parse_courses(subject):
-
     """
-    Convert the existing subject field into a list of courses.
+    Convert the existing subject field into a clean list.
 
     Example:
 
-        "Algebra, Geometry"
+        "Algebra, Geometry, Algebra II"
 
     becomes:
 
-        ["Algebra", "Geometry"]
+        ["Algebra", "Geometry", "Algebra II"]
+
+    Duplicate courses are removed while preserving order.
     """
 
     if subject is None:
@@ -50,23 +52,56 @@ def parse_courses(subject):
     if text.lower() in ["nan", "none"]:
         return []
 
-    courses = [
-        course.strip()
-        for course in text.split(",")
-        if course.strip()
-    ]
+    raw_courses = text.split(",")
+
+    courses = []
+
+    for course in raw_courses:
+
+        clean_course = course.strip()
+
+        if not clean_course:
+            continue
+
+        # Remove duplicate courses case-insensitively
+        if any(
+            clean_course.lower() == existing.lower()
+            for existing in courses
+        ):
+            continue
+
+        courses.append(clean_course)
 
     return courses
 
 
 def courses_to_subject(courses):
-
     """
-    Convert selected courses back into the format stored
-    in the existing students.subject field.
+    Convert selected courses into the existing
+    students.subject database format.
     """
 
-    return ", ".join(courses)
+    cleaned = []
+
+    for course in courses:
+
+        if course is None:
+            continue
+
+        clean_course = str(course).strip()
+
+        if not clean_course:
+            continue
+
+        if any(
+            clean_course.lower() == existing.lower()
+            for existing in cleaned
+        ):
+            continue
+
+        cleaned.append(clean_course)
+
+    return ", ".join(cleaned)
 
 
 # ==========================================================
@@ -89,7 +124,6 @@ def student_management():
             "Edit Student"
         ]
     )
-
 
     # ==========================================================
     # TAB 1 — ADD STUDENT
@@ -119,16 +153,13 @@ def student_management():
             key="add_grade"
         )
 
-
         # ------------------------------------------------------
         # COURSES
         # ------------------------------------------------------
 
         st.markdown("---")
 
-        st.markdown(
-            "**Courses**"
-        )
+        st.markdown("**Courses**")
 
         st.caption(
             "Select all courses this student is enrolled in."
@@ -150,9 +181,8 @@ def student_management():
                 if selected:
                     add_courses.append(course)
 
-
         # ------------------------------------------------------
-        # OTHER / CUSTOM SUBJECT
+        # OTHER / CUSTOM COURSE
         # ------------------------------------------------------
 
         add_other_course = st.text_input(
@@ -163,10 +193,18 @@ def student_management():
 
         if add_other_course.strip():
 
-            add_courses.append(
-                add_other_course.strip()
-            )
+            for course in add_other_course.split(","):
 
+                clean_course = course.strip()
+
+                if not clean_course:
+                    continue
+
+                if not any(
+                    clean_course.lower() == existing.lower()
+                    for existing in add_courses
+                ):
+                    add_courses.append(clean_course)
 
         # ------------------------------------------------------
         # DISPLAY SELECTED COURSES
@@ -185,6 +223,9 @@ def student_management():
                 "No course has been selected yet."
             )
 
+        # ------------------------------------------------------
+        # CONTACT
+        # ------------------------------------------------------
 
         email = st.text_input(
             "Email",
@@ -195,7 +236,6 @@ def student_management():
             "Phone",
             key="add_phone"
         )
-
 
         # ------------------------------------------------------
         # ZOOM
@@ -216,7 +256,6 @@ def student_management():
             "Meeting ID",
             key="add_meeting_id"
         )
-
 
         # ------------------------------------------------------
         # LOGIN
@@ -241,7 +280,6 @@ def student_management():
             key="add_password"
         )
 
-
         # ------------------------------------------------------
         # PARENT PIN
         # ------------------------------------------------------
@@ -256,7 +294,6 @@ def student_management():
                 "confidential financial information."
             )
         )
-
 
         # ------------------------------------------------------
         # ADD STUDENT
@@ -289,20 +326,11 @@ def student_management():
 
             else:
 
-                # ==================================================
-                # CLEAN INPUT
-                # ==================================================
-
                 clean_code = code.strip()
-
                 clean_first = first.strip()
-
                 clean_last = last.strip()
-
                 clean_email = email.strip().lower()
-
                 clean_username = username.strip().lower()
-
                 clean_grade = grade.strip()
 
                 clean_subject = courses_to_subject(
@@ -310,13 +338,9 @@ def student_management():
                 )
 
                 clean_phone = phone.strip()
-
                 clean_zoom = zoom_link.strip()
-
                 clean_meeting = meeting_id.strip()
-
                 clean_parent_pin = parent_pin.strip()
-
 
                 # ==================================================
                 # STUDENT CODE DUPLICATE CHECK
@@ -343,12 +367,8 @@ def student_management():
 
                         return
 
-
                 # ==================================================
                 # USERNAME + EMAIL DUPLICATE CHECK
-                #
-                # Both must match the SAME existing account
-                # before we block the new student.
                 # ==================================================
 
                 if clean_email:
@@ -378,7 +398,6 @@ def student_management():
 
                         return
 
-
                 # ==================================================
                 # USERNAME DUPLICATE CHECK
                 # ==================================================
@@ -401,7 +420,6 @@ def student_management():
                     )
 
                     return
-
 
                 # ==================================================
                 # INSERT STUDENT
@@ -457,7 +475,6 @@ def student_management():
 
                     new_student_id = int(row[0])
 
-
                     # ==================================================
                     # CREATE STUDENT LOGIN
                     # ==================================================
@@ -486,7 +503,6 @@ def student_management():
                         )
                     )
 
-
                     # ==================================================
                     # CLEAR CACHE
                     # ==================================================
@@ -496,7 +512,6 @@ def student_management():
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
 
-
                     st.success(
                         f"Student added successfully! "
                         f"Linked Student ID is {new_student_id}."
@@ -504,13 +519,11 @@ def student_management():
 
                     st.rerun()
 
-
                 except Exception as e:
 
                     st.error(
                         f"Error adding student: {e}"
                     )
-
 
     # ==========================================================
     # TAB 2 — ACTIVE STUDENTS
@@ -537,7 +550,6 @@ def student_management():
             """
         )
 
-
         if not students.empty:
 
             students["Student Name"] = (
@@ -545,7 +557,6 @@ def student_management():
                 + " "
                 + students["last_name"].fillna("")
             ).str.strip()
-
 
             display_df = students[
                 [
@@ -568,16 +579,13 @@ def student_management():
                 }
             )
 
-
             st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True
             )
 
-
             st.divider()
-
 
             # --------------------------------------------------
             # ARCHIVE STUDENT
@@ -586,7 +594,6 @@ def student_management():
             st.subheader("Archive Student")
 
             student_options = students["id"].tolist()
-
 
             selected_archive_id = st.selectbox(
                 "Select Student to Archive",
@@ -598,11 +605,9 @@ def student_management():
                 key="archive_student_select"
             )
 
-
             selected_archive_row = students[
                 students["id"] == selected_archive_id
             ].iloc[0]
-
 
             st.info(
                 f"You are about to archive "
@@ -611,7 +616,6 @@ def student_management():
                 "payments, login, and other history will remain "
                 "in the database."
             )
-
 
             if st.button(
                 "📦 Archive Student",
@@ -630,12 +634,10 @@ def student_management():
                         (int(selected_archive_id),)
                     )
 
-
                     st.cache_data.clear()
 
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
-
 
                     st.success(
                         f"{selected_archive_row['Student Name']} "
@@ -644,20 +646,17 @@ def student_management():
 
                     st.rerun()
 
-
                 except Exception as e:
 
                     st.error(
                         f"Error archiving student: {e}"
                     )
 
-
         else:
 
             st.info(
                 "No active students found."
             )
-
 
     # ==========================================================
     # TAB 3 — ARCHIVED STUDENTS
@@ -684,7 +683,6 @@ def student_management():
             """
         )
 
-
         if not archived_students.empty:
 
             archived_students["Student Name"] = (
@@ -692,7 +690,6 @@ def student_management():
                 + " "
                 + archived_students["last_name"].fillna("")
             ).str.strip()
-
 
             display_archived = archived_students[
                 [
@@ -715,16 +712,13 @@ def student_management():
                 }
             )
 
-
             st.dataframe(
                 display_archived,
                 use_container_width=True,
                 hide_index=True
             )
 
-
             st.divider()
-
 
             # --------------------------------------------------
             # RESTORE STUDENT
@@ -733,7 +727,6 @@ def student_management():
             st.subheader("Restore Student")
 
             archived_options = archived_students["id"].tolist()
-
 
             selected_restore_id = st.selectbox(
                 "Select Student to Restore",
@@ -745,11 +738,9 @@ def student_management():
                 key="restore_student_select"
             )
 
-
             selected_restore_row = archived_students[
                 archived_students["id"] == selected_restore_id
             ].iloc[0]
-
 
             if st.button(
                 "♻️ Restore Student",
@@ -768,12 +759,10 @@ def student_management():
                         (int(selected_restore_id),)
                     )
 
-
                     st.cache_data.clear()
 
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
-
 
                     st.success(
                         f"{selected_restore_row['Student Name']} "
@@ -782,20 +771,17 @@ def student_management():
 
                     st.rerun()
 
-
                 except Exception as e:
 
                     st.error(
                         f"Error restoring student: {e}"
                     )
 
-
         else:
 
             st.info(
                 "There are currently no archived students."
             )
-
 
     # ==========================================================
     # TAB 4 — EDIT STUDENT
@@ -806,7 +792,6 @@ def student_management():
         st.subheader(
             "Edit Student Information"
         )
-
 
         edit_students = query_dataframe(
             """
@@ -828,7 +813,6 @@ def student_management():
             """
         )
 
-
         if not edit_students.empty:
 
             edit_students["display_name"] = (
@@ -839,7 +823,6 @@ def student_management():
                 + edit_students["student_code"].fillna("N/A")
                 + ")"
             )
-
 
             selected_edit_id = st.selectbox(
                 "Select Student to Edit",
@@ -853,16 +836,13 @@ def student_management():
                 key="edit_student_selectbox"
             )
 
-
             student_row = edit_students[
                 edit_students["id"] == selected_edit_id
             ].iloc[0]
 
-
             student_id = int(
                 student_row["id"]
             )
-
 
             # ==================================================
             # EXISTING COURSES
@@ -871,7 +851,6 @@ def student_management():
             existing_courses = parse_courses(
                 student_row["subject"]
             )
-
 
             # ==================================================
             # EDIT FORM
@@ -890,7 +869,6 @@ def student_management():
                     )
                 )
 
-
                 e_first = st.text_input(
                     "First Name",
                     value=(
@@ -899,7 +877,6 @@ def student_management():
                         else ""
                     )
                 )
-
 
                 e_last = st.text_input(
                     "Last Name",
@@ -910,7 +887,6 @@ def student_management():
                     )
                 )
 
-
                 e_grade = st.text_input(
                     "Grade",
                     value=(
@@ -919,7 +895,6 @@ def student_management():
                         else ""
                     )
                 )
-
 
                 # --------------------------------------------------
                 # COURSES
@@ -935,12 +910,9 @@ def student_management():
                     "Select all courses assigned to this student."
                 )
 
-
                 edit_courses = []
 
-
                 edit_course_columns = st.columns(2)
-
 
                 for index, course in enumerate(
                     COURSE_OPTIONS
@@ -952,8 +924,9 @@ def student_management():
 
                         selected = st.checkbox(
                             course,
-                            value=(
-                                course in existing_courses
+                            value=any(
+                                course.lower() == existing.lower()
+                                for existing in existing_courses
                             ),
                             key=(
                                 f"edit_course_"
@@ -962,13 +935,11 @@ def student_management():
                             )
                         )
 
-
                         if selected:
 
                             edit_courses.append(
                                 course
                             )
-
 
                 # --------------------------------------------------
                 # OTHER EXISTING COURSES
@@ -979,7 +950,6 @@ def student_management():
                     for course in COURSE_OPTIONS
                 }
 
-
                 other_existing_courses = [
                     course
                     for course in existing_courses
@@ -987,11 +957,9 @@ def student_management():
                     not in known_courses_lower
                 ]
 
-
                 default_other = ", ".join(
                     other_existing_courses
                 )
-
 
                 e_other_course = st.text_input(
                     "Other Course (optional)",
@@ -999,7 +967,6 @@ def student_management():
                     key=f"edit_other_course_{student_id}",
                     placeholder="Example: Statistics"
                 )
-
 
                 if e_other_course.strip():
 
@@ -1009,10 +976,13 @@ def student_management():
                         if course.strip()
                     ]
 
-                    edit_courses.extend(
-                        other_courses
-                    )
+                    for course in other_courses:
 
+                        if not any(
+                            course.lower() == existing.lower()
+                            for existing in edit_courses
+                        ):
+                            edit_courses.append(course)
 
                 # --------------------------------------------------
                 # CURRENT COURSE SUMMARY
@@ -1031,15 +1001,9 @@ def student_management():
                         "No course has been selected."
                     )
 
-
                 # --------------------------------------------------
                 # CONTACT
                 # --------------------------------------------------
-
-                e_subject_display = courses_to_subject(
-                    edit_courses
-                )
-
 
                 e_email = st.text_input(
                     "Email",
@@ -1050,7 +1014,6 @@ def student_management():
                     )
                 )
 
-
                 e_phone = st.text_input(
                     "Phone",
                     value=(
@@ -1059,7 +1022,6 @@ def student_management():
                         else ""
                     )
                 )
-
 
                 # --------------------------------------------------
                 # ZOOM
@@ -1071,7 +1033,6 @@ def student_management():
                     "**Zoom Classroom Information**"
                 )
 
-
                 e_zoom = st.text_input(
                     "Zoom Link",
                     value=(
@@ -1081,7 +1042,6 @@ def student_management():
                         else ""
                     )
                 )
-
 
                 e_meeting = st.text_input(
                     "Meeting ID",
@@ -1093,7 +1053,6 @@ def student_management():
                     )
                 )
 
-
                 # --------------------------------------------------
                 # LOGIN
                 # --------------------------------------------------
@@ -1103,11 +1062,6 @@ def student_management():
                 st.markdown(
                     "**Portal Login Credentials**"
                 )
-
-
-                # ----------------------------------------------
-                # CURRENT USERNAME
-                # ----------------------------------------------
 
                 current_username_result = query_dataframe(
                     """
@@ -1120,7 +1074,6 @@ def student_management():
                     (student_id,)
                 )
 
-
                 current_username = ""
 
                 if not current_username_result.empty:
@@ -1129,13 +1082,11 @@ def student_management():
                         current_username_result.iloc[0]["username"]
                     )
 
-
                 e_username = st.text_input(
                     "Username",
                     value=current_username,
                     key=f"edit_username_{student_id}"
                 )
-
 
                 e_password = st.text_input(
                     "New Password "
@@ -1146,7 +1097,6 @@ def student_management():
                         "Enter new password if changing"
                     )
                 )
-
 
                 # --------------------------------------------------
                 # PARENT PIN
@@ -1168,7 +1118,6 @@ def student_management():
                     )
                 )
 
-
                 # --------------------------------------------------
                 # SUBMIT
                 # --------------------------------------------------
@@ -1177,7 +1126,6 @@ def student_management():
                     "Update Student Record",
                     type="primary"
                 )
-
 
                 if submit_edit:
 
@@ -1210,12 +1158,8 @@ def student_management():
                                 e_username.strip().lower()
                             )
 
-
                             # ======================================
-                            # CHECK USERNAME
-                            #
-                            # Make sure another account isn't
-                            # already using this username.
+                            # USERNAME DUPLICATE CHECK
                             # ======================================
 
                             duplicate_username = query_dataframe(
@@ -1232,7 +1176,6 @@ def student_management():
                                 )
                             )
 
-
                             if not duplicate_username.empty:
 
                                 st.error(
@@ -1244,7 +1187,6 @@ def student_management():
 
                                 return
 
-
                             # ======================================
                             # CLEAN COURSE LIST
                             # ======================================
@@ -1253,29 +1195,30 @@ def student_management():
 
                             for course in edit_courses:
 
-                                clean_course = course.strip()
+                                clean_course = (
+                                    str(course).strip()
+                                )
 
                                 if not clean_course:
                                     continue
 
-                                if clean_course.lower() in [
-                                    existing.lower()
+                                if any(
+                                    clean_course.lower()
+                                    == existing.lower()
                                     for existing in final_courses
-                                ]:
+                                ):
                                     continue
 
                                 final_courses.append(
                                     clean_course
                                 )
 
-
                             clean_subject = courses_to_subject(
                                 final_courses
                             )
 
-
                             # ======================================
-                            # UPDATE STUDENT INFORMATION
+                            # UPDATE STUDENT
                             # ======================================
 
                             execute(
@@ -1309,7 +1252,6 @@ def student_management():
                                 )
                             )
 
-
                             # ======================================
                             # UPDATE USERNAME
                             # ======================================
@@ -1326,9 +1268,8 @@ def student_management():
                                 )
                             )
 
-
                             # ======================================
-                            # UPDATE PASSWORD ONLY IF ENTERED
+                            # UPDATE PASSWORD IF PROVIDED
                             # ======================================
 
                             if e_password.strip():
@@ -1345,7 +1286,6 @@ def student_management():
                                     )
                                 )
 
-
                             # ======================================
                             # CLEAR CACHE
                             # ======================================
@@ -1355,20 +1295,17 @@ def student_management():
                             if hasattr(st, "cache_resource"):
                                 st.cache_resource.clear()
 
-
                             st.success(
                                 "Student information updated successfully!"
                             )
 
                             st.rerun()
 
-
                         except Exception as e:
 
                             st.error(
                                 f"Error updating student: {e}"
                             )
-
 
         else:
 

@@ -470,6 +470,7 @@ def get_homework_history(student_id):
     ttl=60,
     show_spinner=False
 )
+
 def get_sessions_with_attendance(student_id):
 
     return query_dataframe(
@@ -478,9 +479,9 @@ def get_sessions_with_attendance(student_id):
 
             s.id AS session_id,
 
-            s.session_date,
+            s.session_date::text AS session_date,
 
-            s.session_time,
+            s.session_time::text AS session_time,
 
             COALESCE(
                 s.topic,
@@ -492,32 +493,9 @@ def get_sessions_with_attendance(student_id):
                 ''
             ) AS notes,
 
-            s.duration,
-
-            COALESCE(
-                s.repeat_type,
-                ''
-            ) AS repeat_type,
-
-            s.repeat_until,
-
-            COALESCE(
-                s.recurring_group,
-                ''
-            ) AS recurring_group,
-
-            COALESCE(
-                s.status,
-                'Scheduled'
-            ) AS session_status,
-
-            COALESCE(
-                s.color,
-                ''
-            ) AS color,
-
             CASE
                 WHEN a.id IS NOT NULL
+                     AND a.status = 'Present'
                 THEN 1
                 ELSE 0
             END AS attendance_marked,
@@ -525,20 +503,16 @@ def get_sessions_with_attendance(student_id):
             COALESCE(
                 a.status,
                 'Pending'
-            ) AS attendance_status,
-
-            a.marked_at
+            ) AS attendance_status
 
         FROM sessions s
 
         LEFT JOIN attendance a
             ON a.student_id = s.student_id
 
-            AND a.session_date =
-                s.session_date
+            AND a.session_date = s.session_date
 
-            AND a.session_time =
-                s.session_time
+            AND a.session_time = s.session_time
 
         WHERE s.student_id = %s
 

@@ -98,10 +98,6 @@ def get_student_courses(student_id):
 # GRADE QUERY
 # ============================================================
 
-# ============================================================
-# GRADE QUERY
-# ============================================================
-
 def get_student_grades(
     student_id,
     selected_course
@@ -109,23 +105,33 @@ def get_student_grades(
     """
     Load graded homework for one student/course.
 
-    Course matching is tolerant of:
+    We intentionally do NOT filter by homework status.
+
+    A homework record is considered graded when it has:
+        - a grade
+        - a due date
+
+    Course matching is normalized in Python so that values such as:
+
         Algebra 2
         Algebra II
-        ALGEBRA 2
-        algebra   2
+        algebra 2
+        Algebra   2
 
-    Status matching is tolerant of:
-        Reviewed
-        Graded
-        Completed
-
-    Progression uses homework due_date.
+    are treated as the same course.
     """
 
-    return query_dataframe(
+    # --------------------------------------------------------
+    # GET ALL GRADED HOMEWORK FOR THIS STUDENT
+    # --------------------------------------------------------
+
+    grades = query_dataframe(
         """
         SELECT
+
+            id,
+
+            course,
 
             due_date::text AS lesson_date,
 
@@ -136,8 +142,6 @@ def get_student_grades(
             ) AS topic,
 
             title AS homework_title,
-
-            100 AS max_score,
 
             CASE
                 WHEN UPPER(TRIM(grade)) = 'A+' THEN 98
@@ -169,67 +173,9 @@ def get_student_grades(
 
         WHERE student_id = %s
 
-          -- ==================================================
-          -- NORMALIZED COURSE MATCH
-          -- ==================================================
-          --
-          -- Converts Roman numeral II to 2.
-          --
-          -- Therefore:
-          --
-          -- Algebra II
-          -- Algebra 2
-          --
-          -- will match.
-          --
-          -- Also removes repeated spaces and ignores case.
-          --
-          AND REGEXP_REPLACE(
-                REGEXP_REPLACE(
-                    LOWER(TRIM(course)),
-                    '\\bii\\b',
-                    '2',
-                    'g'
-                ),
-                '\\s+',
-                ' ',
-                'g'
-              )
-              =
-              REGEXP_REPLACE(
-                REGEXP_REPLACE(
-                    LOWER(TRIM(%s)),
-                    '\\bii\\b',
-                    '2',
-                    'g'
-                ),
-                '\\s+',
-                ' ',
-                'g'
-              )
-
-          -- ==================================================
-          -- GRADED HOMEWORK
-          -- ==================================================
-
-          AND LOWER(TRIM(COALESCE(status, '')))
-              IN (
-                  'reviewed',
-                  'graded',
-                  'completed'
-              )
-
-          -- ==================================================
-          -- MUST HAVE A GRADE
-          -- ==================================================
-
           AND grade IS NOT NULL
 
           AND TRIM(grade) <> ''
-
-          -- ==================================================
-          -- MUST HAVE DUE DATE
-          -- ==================================================
 
           AND due_date IS NOT NULL
 
@@ -237,11 +183,100 @@ def get_student_grades(
             due_date ASC,
             id ASC
         """,
-        (
-            student_id,
-            selected_course
-        )
+        (student_id,)
     )
+
+    # --------------------------------------------------------
+    # NOTHING GRADED FOR THIS STUDENT
+    # --------------------------------------------------------
+
+    if grades.empty:
+        return grades
+
+    # --------------------------------------------------------
+    # COURSE NORMALIZATION
+    # --------------------------------------------------------
+
+    def normalize_course(value):
+
+        if value is None:
+            return ""
+
+        text = str(value).strip().lower()
+
+        # Normalize repeated spaces
+        text = " ".join(text.split())
+
+        # Normalize common Roman numerals
+        replacements = {
+            "iii": "3",
+            "ii": "2",
+            "iv": "4",
+            "i": "1"
+        }
+
+        words = text.split()
+
+        normalized_words = []
+
+        for word in words:
+
+            if word in replacements:
+                word = replacements[word]
+
+            normalized_words.append(word)
+
+        text = " ".join(normalized_words)
+
+        return text.strip()
+
+    # --------------------------------------------------------
+    # NORMALIZE SELECTED COURSE
+    # --------------------------------------------------------
+
+    target_course = normalize_course(
+        selected_course
+    )
+
+    # --------------------------------------------------------
+    # FILTER HOMEWORK BY NORMALIZED COURSE
+    # --------------------------------------------------------
+
+    grades["_normalized_course"] = (
+        grades["course"]
+        .apply(normalize_course)
+    )
+
+    grades = grades[
+        grades["_normalized_course"]
+        == target_course
+    ].copy()
+
+    # --------------------------------------------------------
+    # REMOVE HELPER COLUMN
+    # --------------------------------------------------------
+
+    if "_normalized_course" in grades.columns:
+
+        grades.drop(
+            columns=["_normalized_course"],
+            inplace=True
+        )
+
+    # --------------------------------------------------------
+    # SORT
+    # --------------------------------------------------------
+
+    if not grades.empty:
+
+        grades = grades.sort_values(
+            by=["lesson_date", "id"],
+            ascending=True
+        ).reset_index(
+            drop=True
+        )
+
+    return grades
 
 # ============================================================
 # CLEAN GRADES

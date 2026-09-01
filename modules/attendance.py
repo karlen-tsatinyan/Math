@@ -24,7 +24,18 @@ from database import execute, query_dataframe
 
 def ensure_attendance_schema():
 
-    """Ensure attendance table exists."""
+    """
+    Ensure the attendance table exists and has the
+    unique session constraint required by the portal.
+
+    A tutoring session is identified by:
+
+        student_id
+        session_date
+        session_time
+
+    This matches the scheduler and student profile.
+    """
 
     try:
 
@@ -45,14 +56,112 @@ def ensure_attendance_schema():
                 status TEXT NOT NULL,
 
                 marked_at TIMESTAMP
-                    DEFAULT CURRENT_TIMESTAMP
+                    DEFAULT CURRENT_TIMESTAMP,
+
+                CONSTRAINT attendance_session_unique
+                    UNIQUE (
+                        student_id,
+                        session_date,
+                        session_time
+                    )
             );
             """
         )
 
-    except Exception:
+    except Exception as e:
 
-        pass
+        # The table may already exist.
+        # Try to add the unique constraint separately.
+        try:
+
+            execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                attendance_student_session_unique
+                ON attendance (
+                    student_id,
+                    session_date,
+                    session_time
+                );
+                """
+            )
+
+        except Exception:
+
+            # Do not prevent the application from loading
+            # if the database already contains an equivalent
+            # constraint/index.
+            pass
+
+
+# ============================================================
+# ATTENDANCE STATUS OPTIONS
+# ============================================================
+
+ATTENDANCE_STATUSES = [
+    "Present",
+    "Late",
+    "Absent - Excused",
+    "Absent - Unexcused"
+]
+
+
+# ============================================================
+# NORMALIZE TIME
+# ============================================================
+
+def normalize_time(value):
+
+    """
+    Normalize database/session time values into HH:MM AM/PM.
+
+    Handles values such as:
+
+        09:00:00
+        09:00:00.000000
+        09:00 AM
+        9:00 AM
+    """
+
+    if value is None:
+
+        return ""
+
+    text = str(value).strip()
+
+    if not text:
+
+        return ""
+
+    # Remove microseconds
+    if "." in text:
+
+        text = text.split(".")[0]
+
+    # Try database TIME format
+    for fmt in [
+        "%H:%M:%S",
+        "%H:%M",
+        "%I:%M %p",
+        "%I:%M:%S %p"
+    ]:
+
+        try:
+
+            parsed = pd.to_datetime(
+                text,
+                format=fmt
+            )
+
+            return parsed.strftime(
+                "%I:%M %p"
+            ).lstrip("0")
+
+        except Exception:
+
+            continue
+
+    return text
 
 
 # ============================================================
@@ -61,19 +170,20 @@ def ensure_attendance_schema():
 
 def attendance_management():
 
-    st.header("📋 Attendance History & Analytics")
-
-    st.caption(
-        "View and export student attendance logs across tutoring sessions."
+    st.header(
+        "📋 Attendance History & Analytics"
     )
 
+    st.caption(
+        "View and export student attendance logs "
+        "across tutoring sessions."
+    )
 
     # ========================================================
     # ENSURE DATABASE
     # ========================================================
 
     ensure_attendance_schema()
-
 
     # ========================================================
     # FILTERS
@@ -82,7 +192,6 @@ def attendance_management():
     col_f1, col_f2, col_f3 = st.columns(
         [2, 2, 2]
     )
-
 
     # ========================================================
     # STUDENT FILTER
@@ -94,8 +203,8 @@ def attendance_management():
             """
             SELECT
                 id,
-                first_name || ' ' || last_name
-                    AS student_name
+                first_name,
+                last_name
 
             FROM students
 
@@ -105,21 +214,33 @@ def attendance_management():
             """
         )
 
-
         student_options = {
             "All Students": None
         }
-
 
         if not students.empty:
 
             for _, row in students.iterrows():
 
-                student_options[
-                    f"{row['student_name']} "
-                    f"(ID: {row['id']})"
-                ] = row["id"]
+                first = (
+                    str(row["first_name"])
+                    if pd.notna(row["first_name"])
+                    else ""
+                )
 
+                last = (
+                    str(row["last_name"])
+                    if pd.notna(row["last_name"])
+                    else ""
+                )
+
+                name = (
+                    f"{first} {last}"
+                ).strip()
+
+                student_options[
+                    f"{name} (ID: {row['id']})"
+                ] = int(row["id"])
 
         selected_student_label = st.selectbox(
             "Filter by Student",
@@ -127,13 +248,9 @@ def attendance_management():
             key="attendance_student_filter"
         )
 
-
-        selected_student_id = (
-            student_options[
-                selected_student_label
-            ]
-        )
-
+        selected_student_id = student_options[
+            selected_student_label
+        ]
 
     # ========================================================
     # DATE FILTER
@@ -150,9 +267,15 @@ def attendance_management():
             key="attendance_date_filter"
         )
 
-
         if (
             isinstance(date_range, tuple)
+            and len(date_range) == 2
+        ):
+
+            start_date, end_date = date_range
+
+        elif (
+            isinstance(date_range, list)
             and len(date_range) == 2
         ):
 
@@ -167,7 +290,6 @@ def attendance_management():
 
             end_date = date.today()
 
-
     # ========================================================
     # STATUS FILTER
     # ========================================================
@@ -177,25 +299,21 @@ def attendance_management():
         status_filter = st.selectbox(
             "Filter Status",
             [
-                "All Statuses",
-                "Present",
-                "Late",
-                "Absent - Excused",
-                "Absent - Unexcused"
-            ],
+                "All Statuses"
+            ] + ATTENDANCE_STATUSES,
             key="attendance_status_filter"
         )
-
 
     # ========================================================
     # BUILD QUERY
     # ========================================================
 
     query = """
-
         SELECT
 
             a.id AS record_id,
+
+            a.student_id,
 
             s.first_name || ' ' || s.last_name
                 AS student,
@@ -222,48 +340,35 @@ def attendance_management():
         FROM attendance a
 
         JOIN students s
-
             ON a.student_id = s.id
 
         LEFT JOIN sessions se
-
             ON se.student_id = a.student_id
-
-            AND se.session_date =
-                a.session_date
-
-            AND se.session_time =
-                a.session_time
+            AND se.session_date = a.session_date
+            AND se.session_time = a.session_time
 
         WHERE
-            a.session_date
-            BETWEEN %s AND %s
-
+            a.session_date BETWEEN %s AND %s
     """
-
 
     params = [
         start_date.isoformat(),
         end_date.isoformat()
     ]
 
-
     # ========================================================
     # STUDENT FILTER
     # ========================================================
 
-    if selected_student_id:
+    if selected_student_id is not None:
 
         query += """
-
             AND a.student_id = %s
-
         """
 
         params.append(
             selected_student_id
         )
-
 
     # ========================================================
     # STATUS FILTER
@@ -272,30 +377,22 @@ def attendance_management():
     if status_filter != "All Statuses":
 
         query += """
-
             AND a.status = %s
-
         """
 
         params.append(
             status_filter
         )
 
-
     # ========================================================
     # ORDER
     # ========================================================
 
     query += """
-
         ORDER BY
-
             a.session_date DESC,
-
             a.session_time DESC
-
     """
-
 
     # ========================================================
     # LOAD DATA
@@ -305,7 +402,6 @@ def attendance_management():
         query,
         tuple(params)
     )
-
 
     # ========================================================
     # NO RESULTS
@@ -320,19 +416,24 @@ def attendance_management():
 
         return
 
+    # ========================================================
+    # NORMALIZE TIME FOR DISPLAY
+    # ========================================================
+
+    history["session_time"] = (
+        history["session_time"]
+        .apply(normalize_time)
+    )
 
     # ========================================================
     # ATTENDANCE METRICS
     # ========================================================
 
-    status_col = "status"
-
     total_sessions = len(history)
-
 
     presents = len(
         history[
-            history[status_col].isin(
+            history["status"].isin(
                 [
                     "Present",
                     "Late"
@@ -341,37 +442,37 @@ def attendance_management():
         ]
     )
 
+    lates = len(
+        history[
+            history["status"] == "Late"
+        ]
+    )
 
     unexcused = len(
         history[
-            history[status_col]
+            history["status"]
             == "Absent - Unexcused"
         ]
     )
 
-
-    lates = len(
+    excused = len(
         history[
-            history[status_col]
-            == "Late"
+            history["status"]
+            == "Absent - Excused"
         ]
     )
-
 
     pct_present = (
 
         round(
-            (presents / total_sessions)
-            * 100,
+            (presents / total_sessions) * 100,
             1
         )
 
         if total_sessions > 0
 
         else 0
-
     )
-
 
     # ========================================================
     # KPI DISPLAY
@@ -379,33 +480,53 @@ def attendance_management():
 
     m1, m2, m3, m4 = st.columns(4)
 
-
     m1.metric(
         "Total Logged Sessions",
         total_sessions
     )
-
 
     m2.metric(
         "Attendance Rate",
         f"{pct_present}%"
     )
 
-
     m3.metric(
         "Late Arrivals",
         lates
     )
-
 
     m4.metric(
         "Unexcused Absences",
         unexcused
     )
 
+    # ========================================================
+    # ADDITIONAL SUMMARY
+    # ========================================================
+
+    with st.expander(
+        "📊 Attendance Summary"
+    ):
+
+        summary_col1, summary_col2 = st.columns(2)
+
+        summary_col1.write(
+            f"**Present:** {len(history[history['status'] == 'Present'])}"
+        )
+
+        summary_col1.write(
+            f"**Late:** {lates}"
+        )
+
+        summary_col2.write(
+            f"**Excused Absence:** {excused}"
+        )
+
+        summary_col2.write(
+            f"**Unexcused Absence:** {unexcused}"
+        )
 
     st.divider()
-
 
     # ========================================================
     # DISPLAY TABLE
@@ -413,83 +534,98 @@ def attendance_management():
 
     display_df = history.rename(
         columns={
-
-            "student":
-                "Student",
-
-            "session_date":
-                "Date",
-
-            "session_time":
-                "Time",
-
-            "lesson_topic":
-                "Lesson Topic",
-
-            "status":
-                "Status",
-
-            "recorded_at":
-                "Recorded At"
+            "student": "Student",
+            "session_date": "Date",
+            "session_time": "Time",
+            "lesson_topic": "Lesson Topic",
+            "status": "Status",
+            "recorded_at": "Recorded At"
         }
     )
 
+    columns_to_keep = [
+        "Student",
+        "Date",
+        "Time",
+        "Lesson Topic",
+        "Status",
+        "Recorded At"
+    ]
 
-    if "record_id" in display_df.columns:
-
-        display_df = display_df.drop(
-            columns=["record_id"]
-        )
-
+    display_df = display_df[
+        [
+            col
+            for col in columns_to_keep
+            if col in display_df.columns
+        ]
+    ]
 
     st.dataframe(
         display_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "Student": "👨‍🎓 Student",
+            "Date": "📅 Date",
+            "Time": "⏰ Time",
+            "Lesson Topic": "📖 Lesson Topic",
+            "Status": "✅ Status",
+            "Recorded At": "🕒 Recorded At"
+        }
     )
 
-
     # ========================================================
-    # PDF EXPORT
+    # EXPORT
     # ========================================================
 
     st.subheader(
         "⬇️ Export Attendance"
     )
 
+    # ========================================================
+    # CSV EXPORT
+    # ========================================================
+
+    csv_data = display_df.to_csv(
+        index=False
+    ).encode("utf-8")
+
+    st.download_button(
+        label="📊 Export Attendance CSV",
+        data=csv_data,
+        file_name=(
+            f"attendance_"
+            f"{start_date}_"
+            f"{end_date}.csv"
+        ),
+        mime="text/csv",
+        key="attendance_csv_download"
+    )
+
+    # ========================================================
+    # PDF EXPORT
+    # ========================================================
 
     pdf_buffer = io.BytesIO()
-
 
     try:
 
         # ----------------------------------------------------
-        # CREATE PDF DOCUMENT
+        # DOCUMENT
         # ----------------------------------------------------
 
         doc = SimpleDocTemplate(
-
             pdf_buffer,
-
             pagesize=landscape(letter),
-
             rightMargin=25,
-
             leftMargin=25,
-
             topMargin=25,
-
             bottomMargin=25
         )
 
-
-        styles = (
-            getSampleStyleSheet()
-        )
-
+        styles = getSampleStyleSheet()
 
         elements = []
-
 
         # ----------------------------------------------------
         # TITLE
@@ -502,6 +638,9 @@ def attendance_management():
             )
         )
 
+        elements.append(
+            Spacer(1, 8)
+        )
 
         # ----------------------------------------------------
         # REPORT INFORMATION
@@ -517,8 +656,7 @@ def attendance_management():
             )
         )
 
-
-        if selected_student_id:
+        if selected_student_id is not None:
 
             student_text = (
                 f"<b>Student:</b> "
@@ -528,10 +666,8 @@ def attendance_management():
         else:
 
             student_text = (
-                "<b>Student:</b> "
-                "All Students"
+                "<b>Student:</b> All Students"
             )
-
 
         elements.append(
             Paragraph(
@@ -539,7 +675,6 @@ def attendance_management():
                 styles["Normal"]
             )
         )
-
 
         elements.append(
             Paragraph(
@@ -551,11 +686,9 @@ def attendance_management():
             )
         )
 
-
         elements.append(
             Spacer(1, 12)
         )
-
 
         # ----------------------------------------------------
         # SUMMARY TABLE
@@ -567,6 +700,7 @@ def attendance_management():
                 "Total Sessions",
                 "Attendance Rate",
                 "Late Arrivals",
+                "Excused Absences",
                 "Unexcused Absences"
             ],
 
@@ -574,15 +708,14 @@ def attendance_management():
                 str(total_sessions),
                 f"{pct_present}%",
                 str(lates),
+                str(excused),
                 str(unexcused)
             ]
         ]
 
-
         summary_table = Table(
             summary_data
         )
-
 
         summary_table.setStyle(
             TableStyle(
@@ -628,39 +761,31 @@ def attendance_management():
                         "FONTSIZE",
                         (0, 0),
                         (-1, -1),
-                        9
+                        8
                     )
                 ]
             )
         )
 
-
         elements.append(
             summary_table
         )
-
 
         elements.append(
             Spacer(1, 15)
         )
 
-
         # ----------------------------------------------------
-        # ATTENDANCE TABLE
+        # PDF ATTENDANCE TABLE
         # ----------------------------------------------------
 
         pdf_df = display_df.copy()
 
-
         pdf_df = pdf_df.fillna("")
-
-
-        # Convert all values to strings
 
         pdf_data = [
             list(pdf_df.columns)
         ]
-
 
         for _, row in pdf_df.iterrows():
 
@@ -671,12 +796,10 @@ def attendance_management():
                 ]
             )
 
-
         attendance_table = Table(
             pdf_data,
             repeatRows=1
         )
-
 
         attendance_table.setStyle(
             TableStyle(
@@ -738,52 +861,37 @@ def attendance_management():
             )
         )
 
-
         elements.append(
             attendance_table
         )
 
-
         # ----------------------------------------------------
-        # BUILD PDF
+        # BUILD
         # ----------------------------------------------------
 
         doc.build(
             elements
         )
 
-
         pdf_buffer.seek(0)
 
-
-        pdf_bytes = (
-            pdf_buffer.getvalue()
-        )
-
+        pdf_bytes = pdf_buffer.getvalue()
 
         # ----------------------------------------------------
-        # DOWNLOAD BUTTON
+        # DOWNLOAD
         # ----------------------------------------------------
 
         st.download_button(
-
             label="📄 Export Attendance PDF",
-
             data=pdf_bytes,
-
             file_name=(
                 f"attendance_report_"
                 f"{start_date}_"
                 f"{end_date}.pdf"
             ),
-
             mime="application/pdf",
-
-            use_container_width=False,
-
             key="attendance_pdf_download"
         )
-
 
     except Exception as e:
 

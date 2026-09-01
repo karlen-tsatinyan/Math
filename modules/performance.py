@@ -5,78 +5,40 @@ from database import query_dataframe
 
 
 # ============================================================
-# PERFORMANCE PROGRESSION DASHBOARD
+# GRADE MAP
 # ============================================================
 
-def performance_dashboard():
+GRADE_MAP = {
+    "A+": 98,
+    "A": 95,
+    "A-": 92,
+    "B+": 88,
+    "B": 85,
+    "B-": 82,
+    "C+": 78,
+    "C": 75,
+    "C-": 72,
+    "D": 65,
+    "F": 50
+}
 
-    st.title("📈 Performance Progression Tracking")
 
-    # --------------------------------------------------------
-    # STUDENT SELECTION
-    # --------------------------------------------------------
+# ============================================================
+# COURSE HELPERS
+# ============================================================
 
-    students = query_dataframe(
-        """
-        SELECT
-            id,
-            first_name || ' ' || last_name AS name
-        FROM students
-        WHERE COALESCE(archived, 0) = 0
-        ORDER BY last_name, first_name
-        """
-    )
+def get_student_courses(student_id):
+    """
+    Return the courses assigned to a student.
 
-    if students.empty:
+    The students.subject field may contain:
+        Algebra
 
-        st.warning(
-            "No students available. Please enroll students first."
-        )
+    or:
+        Algebra, Geometry
+    """
 
-        return
-
-    student_options = {
-        f"{row['name']} (ID: {row['id']})": row["id"]
-        for _, row in students.iterrows()
-    }
-
-    saved_student_id = st.session_state.get(
-        "selected_student_id"
-    )
-
-    default_index = 0
-
-    if saved_student_id:
-
-        for idx, (_, s_id) in enumerate(
-            student_options.items()
-        ):
-
-            if s_id == saved_student_id:
-
-                default_index = idx
-                break
-
-    selected_label = st.selectbox(
-        "Select Student",
-        options=list(student_options.keys()),
-        index=default_index,
-        key="performance_student_select"
-    )
-
-    student_id = student_options[
-        selected_label
-    ]
-
-    st.session_state.selected_student_id = (
-        student_id
-    )
-
-    # --------------------------------------------------------
-    # GET COURSES FOR SELECTED STUDENT
-    # --------------------------------------------------------
-
-    student_course_result = query_dataframe(
+    result = query_dataframe(
         """
         SELECT
             subject
@@ -87,96 +49,69 @@ def performance_dashboard():
         (student_id,)
     )
 
+    if result.empty:
+        return []
+
+    subject = result.iloc[0]["subject"]
+
+    if subject is None:
+        return []
+
+    subject_text = str(subject).strip()
+
+    if not subject_text:
+        return []
+
+    if subject_text.lower() in [
+        "nan",
+        "none",
+        "null"
+    ]:
+        return []
+
     courses = []
 
-    if not student_course_result.empty:
+    for course in subject_text.split(","):
 
-        subject = student_course_result.iloc[0]["subject"]
+        course = course.strip()
 
-        if (
-            subject is not None
-            and str(subject).strip()
-            and str(subject).strip().lower()
-            not in ["nan", "none"]
+        if not course:
+            continue
+
+        if course.lower() in [
+            "nan",
+            "none",
+            "null"
+        ]:
+            continue
+
+        if not any(
+            course.lower() == existing.lower()
+            for existing in courses
         ):
+            courses.append(course)
 
-            courses = [
-                course.strip()
-                for course in str(subject).split(",")
-                if course.strip()
-            ]
+    return courses
 
-    # Remove duplicate course names
-    courses = list(
-        dict.fromkeys(courses)
-    )
 
-    # --------------------------------------------------------
-    # COURSE SELECTION
-    # --------------------------------------------------------
+# ============================================================
+# GRADE QUERY
+# ============================================================
 
-    selected_course = None
+def get_student_grades(
+    student_id,
+    selected_course
+):
+    """
+    Load reviewed homework grades for one student/course.
 
-    if courses:
+    Progression uses homework due_date.
+    """
 
-        saved_course = st.session_state.get(
-            "performance_selected_course"
-        )
-
-        course_index = 0
-
-        if saved_course in courses:
-
-            course_index = courses.index(
-                saved_course
-            )
-
-        selected_course = st.selectbox(
-            "Select Course",
-            courses,
-            index=course_index,
-            key="performance_course_select"
-        )
-
-        st.session_state[
-            "performance_selected_course"
-        ] = selected_course
-
-    else:
-
-        st.info(
-            "No courses are assigned to this student."
-        )
-
-        return
-
-    # --------------------------------------------------------
-    # SHOW CURRENT COURSE
-    # --------------------------------------------------------
-
-    st.info(
-        f"📚 Showing performance for **{selected_course}**"
-    )
-
-    # --------------------------------------------------------
-    # GRADED HOMEWORK
-    #
-    # IMPORTANT:
-    # Homework is filtered by BOTH:
-    #
-    #   student_id
-    #   course
-    #
-    # This keeps Algebra II and Geometry completely separate.
-    #
-    # due_date is the academic progression date.
-    # reviewed_at / submitted_at are deliberately NOT used
-    # for the progression timeline.
-    # --------------------------------------------------------
-
-    grades = query_dataframe(
+    return query_dataframe(
         """
         SELECT
+
             due_date::text AS lesson_date,
 
             COALESCE(
@@ -186,8 +121,6 @@ def performance_dashboard():
             ) AS topic,
 
             title AS homework_title,
-
-            100 AS max_score,
 
             CASE
                 WHEN grade = 'A+' THEN 98
@@ -218,7 +151,9 @@ def performance_dashboard():
           AND status = 'Reviewed'
           AND due_date IS NOT NULL
 
-        ORDER BY due_date ASC, id ASC
+        ORDER BY
+            due_date ASC,
+            id ASC
         """,
         (
             student_id,
@@ -226,18 +161,17 @@ def performance_dashboard():
         )
     )
 
+
+# ============================================================
+# CLEAN GRADES
+# ============================================================
+
+def clean_grade_data(grades):
+
     if grades.empty:
+        return grades
 
-        st.info(
-            f"No graded homework with due dates was found "
-            f"for {selected_course}."
-        )
-
-        return
-
-    # --------------------------------------------------------
-    # DATA CLEANUP / SORTING
-    # --------------------------------------------------------
+    grades = grades.copy()
 
     grades["lesson_date"] = pd.to_datetime(
         grades["lesson_date"],
@@ -254,427 +188,149 @@ def performance_dashboard():
         ascending=True
     ).reset_index(drop=True)
 
-    # --------------------------------------------------------
-    # TABS
-    # --------------------------------------------------------
+    return grades
 
-    tab1, tab2 = st.tabs(
-        [
-            "Dashboard",
-            "Grade History"
-        ]
+
+# ============================================================
+# PERFORMANCE CHART
+# ============================================================
+
+def display_progression_chart(
+    grades,
+    title="Homework Progression"
+):
+
+    chart_data = grades.dropna(
+        subset=["lesson_date"]
+    ).copy()
+
+    if chart_data.empty:
+
+        st.info(
+            "No valid due dates available to render "
+            "the progression chart."
+        )
+
+        return
+
+    chart_data["formatted_date"] = (
+        chart_data["lesson_date"]
+        .dt.strftime("%Y-%m-%d")
     )
 
-    # ========================================================
-    # TAB 1 — DASHBOARD
-    # ========================================================
+    try:
 
-    with tab1:
+        import altair as alt
 
-        average = grades["percent"].mean()
-        highest = grades["percent"].max()
-        lowest = grades["percent"].min()
+        base = alt.Chart(
+            chart_data
+        ).encode(
 
-        if len(grades) > 1:
+            x=alt.X(
+                "formatted_date:N",
+                title="Homework Due Date",
+                sort=None
+            ),
 
-            improvement = (
-                grades.iloc[-1]["percent"]
-                - grades.iloc[0]["percent"]
+            tooltip=[
+
+                alt.Tooltip(
+                    "formatted_date:N",
+                    title="Due Date"
+                ),
+
+                alt.Tooltip(
+                    "homework_title:N",
+                    title="Homework"
+                ),
+
+                alt.Tooltip(
+                    "topic:N",
+                    title="Topic"
+                ),
+
+                alt.Tooltip(
+                    "percent:Q",
+                    title="Score (%)",
+                    format=".1f"
+                ),
+
+                alt.Tooltip(
+                    "grade_letter:N",
+                    title="Grade"
+                )
+            ]
+        )
+
+        line = base.mark_line(
+            strokeWidth=3
+        ).encode(
+
+            y=alt.Y(
+                "percent:Q",
+                title="Score Percentage (%)",
+                scale=alt.Scale(
+                    domain=[0, 100]
+                )
             )
+        )
 
-            trend_str = (
-                f"{improvement:+.1f}%"
+        points = base.mark_circle(
+            size=80
+        ).encode(
+
+            y=alt.Y(
+                "percent:Q",
+                title="Score Percentage (%)",
+                scale=alt.Scale(
+                    domain=[0, 100]
+                )
             )
+        )
 
-        else:
+        chart = (
+            line + points
+        ).interactive().properties(
+            title=title,
+            height=380
+        )
 
-            trend_str = (
-                "Baseline (1 Entry)"
+        st.altair_chart(
+            chart,
+            use_container_width=True
+        )
+
+    except Exception:
+
+        fallback = (
+            chart_data[
+                [
+                    "lesson_date",
+                    "percent"
+                ]
+            ]
+            .set_index(
+                "lesson_date"
             )
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        c1.metric(
-            "Average Score",
-            f"{average:.1f}%"
         )
 
-        c2.metric(
-            "Highest Score",
-            f"{highest:.1f}%"
-        )
-
-        c3.metric(
-            "Lowest Score",
-            f"{lowest:.1f}%"
-        )
-
-        c4.metric(
-            "Overall Trend",
-            trend_str
-        )
-
-        st.divider()
-
-        st.subheader(
-            f"📊 {selected_course} Progression"
-        )
-
-        st.caption(
-            "Progression is plotted by homework due date, "
-            "not by the date the homework was submitted "
-            "or graded."
-        )
-
-        chart_data = grades.dropna(
-            subset=["lesson_date"]
-        ).copy()
-
-        chart_data["formatted_date"] = (
-            chart_data["lesson_date"]
-            .dt.strftime("%Y-%m-%d")
-        )
-
-        if not chart_data.empty:
-
-            try:
-
-                import altair as alt
-
-                base = alt.Chart(
-                    chart_data
-                ).encode(
-
-                    x=alt.X(
-                        "formatted_date:N",
-                        title="Homework Due Date",
-                        sort=None
-                    ),
-
-                    tooltip=[
-
-                        alt.Tooltip(
-                            "formatted_date:N",
-                            title="Due Date"
-                        ),
-
-                        alt.Tooltip(
-                            "homework_title:N",
-                            title="Homework"
-                        ),
-
-                        alt.Tooltip(
-                            "topic:N",
-                            title="Topic"
-                        ),
-
-                        alt.Tooltip(
-                            "percent:Q",
-                            title="Score (%)",
-                            format=".1f"
-                        ),
-
-                        alt.Tooltip(
-                            "grade_letter:N",
-                            title="Grade"
-                        )
-                    ]
-                )
-
-                line = base.mark_line(
-                    strokeWidth=3
-                ).encode(
-
-                    y=alt.Y(
-                        "percent:Q",
-                        title="Score Percentage (%)",
-                        scale=alt.Scale(
-                            domain=[0, 100]
-                        )
-                    )
-                )
-
-                points = base.mark_circle(
-                    size=80
-                ).encode(
-
-                    y=alt.Y(
-                        "percent:Q",
-                        title="Score Percentage (%)",
-                        scale=alt.Scale(
-                            domain=[0, 100]
-                        )
-                    )
-                )
-
-                chart = (
-                    line + points
-                ).interactive().properties(
-                    height=380
-                )
-
-                st.altair_chart(
-                    chart,
-                    use_container_width=True
-                )
-
-            except Exception:
-
-                fallback_df = (
-                    chart_data[
-                        [
-                            "lesson_date",
-                            "percent"
-                        ]
-                    ]
-                    .set_index(
-                        "lesson_date"
-                    )
-                )
-
-                fallback_df.rename(
-                    columns={
-                        "percent": "Score (%)"
-                    },
-                    inplace=True
-                )
-
-                st.area_chart(
-                    fallback_df
-                )
-
-        else:
-
-            st.info(
-                "No valid due dates found to render "
-                "the progression chart."
-            )
-
-    # ========================================================
-    # TAB 2 — GRADE HISTORY
-    # ========================================================
-
-    with tab2:
-
-        st.subheader(
-            f"📋 {selected_course} Grade History"
-        )
-
-        display_df = grades.copy()
-
-        if pd.api.types.is_datetime64_any_dtype(
-            display_df["lesson_date"]
-        ):
-
-            display_df["lesson_date"] = (
-                display_df["lesson_date"]
-                .dt.strftime("%Y-%m-%d")
-            )
-
-        display_df = display_df.rename(
+        fallback.rename(
             columns={
-                "lesson_date": "Due Date",
-                "homework_title": "Homework",
-                "topic": "Topic",
-                "percent": "Percentage",
-                "grade_letter": "Grade",
-                "teacher_comment": "Teacher Comments"
-            }
+                "percent": "Score (%)"
+            },
+            inplace=True
         )
 
-        columns_to_show = [
-            "Due Date",
-            "Homework",
-            "Topic",
-            "Percentage",
-            "Grade",
-            "Teacher Comments"
-        ]
-
-        display_df = display_df[
-            [
-                col
-                for col in columns_to_show
-                if col in display_df.columns
-            ]
-        ]
-
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-
-                "Percentage":
-                    st.column_config.NumberColumn(
-                        "Percentage",
-                        format="%.1f%%"
-                    )
-            }
+        st.line_chart(
+            fallback
         )
 
 
 # ============================================================
-# STUDENT PERFORMANCE VIEW
-# Used by Student Portal
+# PERFORMANCE SUMMARY
 # ============================================================
 
-def student_performance_view(student_id):
-
-    st.subheader(
-        "📈 Advanced Progression Analytics"
-    )
-
-    # --------------------------------------------------------
-    # DETERMINE CURRENT COURSE
-    #
-    # Student login stores:
-    #
-    # st.session_state.user["selected_course"]
-    #
-    # Example:
-    #
-    # Algebra II
-    # Geometry
-    # --------------------------------------------------------
-
-    user = st.session_state.get(
-        "user",
-        {}
-    )
-
-    selected_course = user.get(
-        "selected_course"
-    )
-
-    # --------------------------------------------------------
-    # FALLBACK TO SESSION STATE
-    # --------------------------------------------------------
-
-    if not selected_course:
-
-        selected_course = st.session_state.get(
-            "selected_course"
-        )
-
-    # --------------------------------------------------------
-    # IF NO COURSE IS SELECTED
-    # --------------------------------------------------------
-
-    if not selected_course:
-
-        st.warning(
-            "Please select a course before viewing "
-            "performance."
-        )
-
-        return
-
-    # --------------------------------------------------------
-    # COURSE HEADER
-    # --------------------------------------------------------
-
-    st.info(
-        f"📚 Showing performance for **{selected_course}**"
-    )
-
-    # --------------------------------------------------------
-    # GET GRADED HOMEWORK
-    #
-    # IMPORTANT:
-    #
-    # Filter by BOTH student and course.
-    #
-    # This prevents:
-    #
-    # Algebra II homework
-    #
-    # from appearing in:
-    #
-    # Geometry performance.
-    # --------------------------------------------------------
-
-    grades = query_dataframe(
-        """
-        SELECT
-            due_date::text AS lesson_date,
-
-            COALESCE(
-                curriculum_topic,
-                title,
-                'Homework Assignment'
-            ) AS topic,
-
-            title AS homework_title,
-
-            CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A'  THEN 95
-                WHEN grade = 'A-' THEN 92
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B'  THEN 85
-                WHEN grade = 'B-' THEN 82
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C'  THEN 75
-                WHEN grade = 'C-' THEN 72
-                WHEN grade = 'D'  THEN 65
-                WHEN grade = 'F'  THEN 50
-                ELSE 0
-            END AS percent,
-
-            grade AS grade_letter,
-
-            COALESCE(
-                teacher_feedback,
-                ''
-            ) AS teacher_comment
-
-        FROM homework
-
-        WHERE student_id = %s
-          AND course = %s
-          AND status = 'Reviewed'
-          AND due_date IS NOT NULL
-
-        ORDER BY due_date ASC, id ASC
-        """,
-        (
-            student_id,
-            selected_course
-        )
-    )
-
-    if grades.empty:
-
-        st.info(
-            f"No performance data available yet "
-            f"for {selected_course}."
-        )
-
-        return
-
-    # --------------------------------------------------------
-    # CLEAN DATA
-    # --------------------------------------------------------
-
-    grades["lesson_date"] = pd.to_datetime(
-        grades["lesson_date"],
-        errors="coerce"
-    )
-
-    grades["percent"] = pd.to_numeric(
-        grades["percent"],
-        errors="coerce"
-    ).fillna(0)
-
-    grades = grades.sort_values(
-        by=["lesson_date"],
-        ascending=True
-    ).reset_index(drop=True)
-
-    # --------------------------------------------------------
-    # PERFORMANCE SUMMARY
-    # --------------------------------------------------------
+def display_performance_summary(grades):
 
     average = grades["percent"].mean()
     highest = grades["percent"].max()
@@ -715,122 +371,15 @@ def student_performance_view(student_id):
         trend
     )
 
-    st.divider()
 
-    chart_data = grades.dropna(
-        subset=["lesson_date"]
-    ).copy()
+# ============================================================
+# GRADE HISTORY
+# ============================================================
 
-    if chart_data.empty:
-
-        st.info(
-            "No valid due dates available for chart."
-        )
-
-        return
-
-    chart_data["formatted_date"] = (
-        chart_data["lesson_date"]
-        .dt.strftime("%Y-%m-%d")
-    )
-
-    st.caption(
-        "Progression is plotted by homework due date, "
-        "not by submission or grading date."
-    )
-
-    # --------------------------------------------------------
-    # CHART
-    # --------------------------------------------------------
-
-    try:
-
-        import altair as alt
-
-        chart = (
-            alt.Chart(
-                chart_data
-            )
-            .mark_line(
-                point=True
-            )
-            .encode(
-
-                x=alt.X(
-                    "formatted_date:N",
-                    title="Homework Due Date",
-                    sort=None
-                ),
-
-                y=alt.Y(
-                    "percent:Q",
-                    title="Score (%)",
-                    scale=alt.Scale(
-                        domain=[0, 100]
-                    )
-                ),
-
-                tooltip=[
-
-                    alt.Tooltip(
-                        "formatted_date:N",
-                        title="Due Date"
-                    ),
-
-                    alt.Tooltip(
-                        "homework_title:N",
-                        title="Homework"
-                    ),
-
-                    alt.Tooltip(
-                        "topic:N",
-                        title="Topic"
-                    ),
-
-                    alt.Tooltip(
-                        "percent:Q",
-                        title="Score (%)",
-                        format=".1f"
-                    ),
-
-                    alt.Tooltip(
-                        "grade_letter:N",
-                        title="Grade"
-                    )
-                ]
-            )
-            .interactive()
-            .properties(
-                height=380
-            )
-        )
-
-        st.altair_chart(
-            chart,
-            use_container_width=True
-        )
-
-    except Exception:
-
-        fallback = (
-            chart_data[
-                [
-                    "lesson_date",
-                    "percent"
-                ]
-            ]
-            .set_index(
-                "lesson_date"
-            )
-        )
-
-        st.line_chart(
-            fallback
-        )
-
-    # --------------------------------------------------------
-    # GRADE HISTORY
-    # --------------------------------------------------------
+def display_grade_history(
+    grades,
+    selected_course
+):
 
     st.divider()
 
@@ -840,19 +389,35 @@ def student_performance_view(student_id):
 
     history = grades.copy()
 
-    history["lesson_date"] = (
+    if pd.api.types.is_datetime64_any_dtype(
         history["lesson_date"]
-        .dt.strftime("%Y-%m-%d")
-    )
+    ):
+
+        history["lesson_date"] = (
+            history["lesson_date"]
+            .dt.strftime("%Y-%m-%d")
+        )
 
     history = history.rename(
         columns={
-            "lesson_date": "Due Date",
-            "homework_title": "Homework",
-            "topic": "Topic",
-            "percent": "Percentage",
-            "grade_letter": "Grade",
-            "teacher_comment": "Teacher Comments"
+
+            "lesson_date":
+                "Due Date",
+
+            "homework_title":
+                "Homework",
+
+            "topic":
+                "Topic",
+
+            "percent":
+                "Percentage",
+
+            "grade_letter":
+                "Grade",
+
+            "teacher_comment":
+                "Teacher Comments"
         }
     )
 
@@ -878,10 +443,483 @@ def student_performance_view(student_id):
         use_container_width=True,
         hide_index=True,
         column_config={
+
             "Percentage":
                 st.column_config.NumberColumn(
                     "Percentage",
                     format="%.1f%%"
                 )
         }
+    )
+
+
+# ============================================================
+# PERFORMANCE PROGRESSION DASHBOARD
+# ADMIN / STANDALONE PERFORMANCE PAGE
+# ============================================================
+
+def performance_dashboard():
+
+    st.title(
+        "📈 Performance Progression Tracking"
+    )
+
+    # --------------------------------------------------------
+    # STUDENT SELECTION
+    # --------------------------------------------------------
+
+    students = query_dataframe(
+        """
+        SELECT
+            id,
+            first_name || ' ' || last_name AS name
+        FROM students
+        WHERE COALESCE(archived, 0) = 0
+        ORDER BY last_name, first_name
+        """
+    )
+
+    if students.empty:
+
+        st.warning(
+            "No students available. "
+            "Please enroll students first."
+        )
+
+        return
+
+    student_options = {
+        f"{row['name']} (ID: {row['id']})":
+            row["id"]
+        for _, row in students.iterrows()
+    }
+
+    saved_student_id = (
+        st.session_state.get(
+            "selected_student_id"
+        )
+    )
+
+    default_index = 0
+
+    if saved_student_id:
+
+        for idx, (_, s_id) in enumerate(
+            student_options.items()
+        ):
+
+            if s_id == saved_student_id:
+
+                default_index = idx
+                break
+
+    selected_label = st.selectbox(
+        "Select Student",
+        options=list(
+            student_options.keys()
+        ),
+        index=default_index,
+        key="performance_student_select"
+    )
+
+    student_id = student_options[
+        selected_label
+    ]
+
+    st.session_state.selected_student_id = (
+        student_id
+    )
+
+    # --------------------------------------------------------
+    # GET COURSES
+    # --------------------------------------------------------
+
+    courses = get_student_courses(
+        student_id
+    )
+
+    if not courses:
+
+        st.info(
+            "No courses are assigned to this student."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # COURSE SELECTION
+    # --------------------------------------------------------
+
+    saved_course = (
+        st.session_state.get(
+            "performance_selected_course"
+        )
+    )
+
+    course_index = 0
+
+    if saved_course in courses:
+
+        course_index = courses.index(
+            saved_course
+        )
+
+    selected_course = st.selectbox(
+        "Select Course",
+        courses,
+        index=course_index,
+        key="performance_course_select"
+    )
+
+    st.session_state[
+        "performance_selected_course"
+    ] = selected_course
+
+    # --------------------------------------------------------
+    # DISPLAY PERFORMANCE
+    # --------------------------------------------------------
+
+    st.info(
+        f"📚 Showing performance for "
+        f"**{selected_course}**"
+    )
+
+    grades = get_student_grades(
+        student_id,
+        selected_course
+    )
+
+    if grades.empty:
+
+        st.info(
+            f"No graded homework with due dates "
+            f"was found for {selected_course}."
+        )
+
+        return
+
+    grades = clean_grade_data(
+        grades
+    )
+
+    # --------------------------------------------------------
+    # TABS
+    # --------------------------------------------------------
+
+    tab1, tab2 = st.tabs(
+        [
+            "Dashboard",
+            "Grade History"
+        ]
+    )
+
+    # ========================================================
+    # TAB 1 — DASHBOARD
+    # ========================================================
+
+    with tab1:
+
+        display_performance_summary(
+            grades
+        )
+
+        st.divider()
+
+        st.subheader(
+            f"📊 {selected_course} Progression"
+        )
+
+        st.caption(
+            "Progression is plotted by homework due date, "
+            "not by the date the homework was submitted "
+            "or graded."
+        )
+
+        display_progression_chart(
+            grades,
+            title=f"{selected_course} Progression"
+        )
+
+    # ========================================================
+    # TAB 2 — GRADE HISTORY
+    # ========================================================
+
+    with tab2:
+
+        display_grade_history(
+            grades,
+            selected_course
+        )
+
+
+# ============================================================
+# STUDENT PERFORMANCE VIEW
+#
+# USED BY:
+#
+#   1. Student Portal
+#   2. Admin → Student Profile
+#
+# ============================================================
+
+def student_performance_view(student_id):
+
+    st.subheader(
+        "📈 Student Performance"
+    )
+
+    # ========================================================
+    # DETERMINE STUDENT COURSES
+    # ========================================================
+
+    courses = get_student_courses(
+        student_id
+    )
+
+    # --------------------------------------------------------
+    # NO COURSE
+    # --------------------------------------------------------
+
+    if not courses:
+
+        st.warning(
+            "No courses are assigned to this student."
+        )
+
+        return
+
+    # ========================================================
+    # DETERMINE WHETHER THIS IS ADMIN OR STUDENT VIEW
+    # ========================================================
+
+    user = st.session_state.get(
+        "user",
+        {}
+    )
+
+    user_role = str(
+        user.get(
+            "role",
+            ""
+        )
+    ).lower().strip()
+
+    is_admin_view = (
+        user_role in [
+            "admin",
+            "teacher",
+            "administrator"
+        ]
+    )
+
+    # ========================================================
+    # COURSE SELECTION
+    # ========================================================
+
+    selected_course = None
+
+    # --------------------------------------------------------
+    # ADMIN STUDENT PROFILE
+    #
+    # If the student has one course:
+    # automatically use it.
+    #
+    # If multiple courses:
+    # let admin select one.
+    # --------------------------------------------------------
+
+    if is_admin_view:
+
+        if len(courses) == 1:
+
+            selected_course = courses[0]
+
+            st.info(
+                f"📚 Course: **{selected_course}**"
+            )
+
+        else:
+
+            profile_course_key = (
+                f"student_profile_performance_course_"
+                f"{student_id}"
+            )
+
+            saved_course = (
+                st.session_state.get(
+                    profile_course_key
+                )
+            )
+
+            course_index = 0
+
+            if saved_course in courses:
+
+                course_index = courses.index(
+                    saved_course
+                )
+
+            selected_course = st.selectbox(
+                "Select Course",
+                courses,
+                index=course_index,
+                key=profile_course_key
+            )
+
+            st.session_state[
+                profile_course_key
+            ] = selected_course
+
+    # --------------------------------------------------------
+    # STUDENT PORTAL
+    #
+    # Continue using the student's selected course.
+    # --------------------------------------------------------
+
+    else:
+
+        user_course = user.get(
+            "selected_course"
+        )
+
+        if not user_course:
+
+            user_course = (
+                st.session_state.get(
+                    "selected_course"
+                )
+            )
+
+        # ----------------------------------------------------
+        # If there is only one course, automatically use it.
+        # This also makes the portal more robust.
+        # ----------------------------------------------------
+
+        if not user_course and len(courses) == 1:
+
+            user_course = courses[0]
+
+        # ----------------------------------------------------
+        # Validate selected course
+        # ----------------------------------------------------
+
+        if user_course in courses:
+
+            selected_course = user_course
+
+        # ----------------------------------------------------
+        # Selected course no longer exists
+        # ----------------------------------------------------
+
+        elif user_course:
+
+            matching_course = next(
+                (
+                    course
+                    for course in courses
+                    if course.lower()
+                    == str(user_course).lower()
+                ),
+                None
+            )
+
+            if matching_course:
+
+                selected_course = (
+                    matching_course
+                )
+
+        # ----------------------------------------------------
+        # Still no course
+        # ----------------------------------------------------
+
+        if not selected_course:
+
+            if len(courses) == 1:
+
+                selected_course = courses[0]
+
+            else:
+
+                st.warning(
+                    "Please select a course before "
+                    "viewing performance."
+                )
+
+                return
+
+    # ========================================================
+    # COURSE HEADER
+    # ========================================================
+
+    st.info(
+        f"📚 Showing performance for "
+        f"**{selected_course}**"
+    )
+
+    # ========================================================
+    # LOAD GRADED HOMEWORK
+    # ========================================================
+
+    grades = get_student_grades(
+        student_id,
+        selected_course
+    )
+
+    # ========================================================
+    # NO PERFORMANCE DATA
+    # ========================================================
+
+    if grades.empty:
+
+        st.info(
+            f"No performance data available yet "
+            f"for {selected_course}."
+        )
+
+        return
+
+    # ========================================================
+    # CLEAN DATA
+    # ========================================================
+
+    grades = clean_grade_data(
+        grades
+    )
+
+    # ========================================================
+    # PERFORMANCE SUMMARY
+    # ========================================================
+
+    display_performance_summary(
+        grades
+    )
+
+    st.divider()
+
+    # ========================================================
+    # PROGRESSION CHART
+    # ========================================================
+
+    st.subheader(
+        f"📊 {selected_course} Progression"
+    )
+
+    st.caption(
+        "Progression is plotted by homework due date, "
+        "not by submission or grading date."
+    )
+
+    display_progression_chart(
+        grades,
+        title=f"{selected_course} Progression"
+    )
+
+    # ========================================================
+    # GRADE HISTORY
+    # ========================================================
+
+    display_grade_history(
+        grades,
+        selected_course
     )

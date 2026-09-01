@@ -713,13 +713,11 @@ def performance_dashboard():
             f"was found for {selected_course}."
         )
     
-        st.caption(
-            "The selected student either has no homework "
-            "with a grade and due date, or the homework "
-            "is assigned to a different course."
-        )
-    
         return
+    
+    grades = clean_grade_data(
+        grades
+    )
 
     # --------------------------------------------------------
     # TABS

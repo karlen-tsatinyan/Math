@@ -658,14 +658,15 @@ def student_management():
                 "No active students found."
             )
 
+
     # ==========================================================
     # TAB 3 — ARCHIVED STUDENTS
     # ==========================================================
-    
+
     with tab3:
-    
-        st.subheader("Archive Students")
-    
+
+        st.subheader("Archived Students")
+
         archived_students = query_dataframe(
             """
             SELECT
@@ -682,19 +683,19 @@ def student_management():
             ORDER BY id DESC
             """
         )
-    
+
         if not archived_students.empty:
-    
+
             archived_students["Student Name"] = (
                 archived_students["first_name"].fillna("")
                 + " "
                 + archived_students["last_name"].fillna("")
             ).str.strip()
-    
+
             # ======================================================
             # DISPLAY ARCHIVED STUDENTS
             # ======================================================
-    
+
             display_archived = archived_students[
                 [
                     "id",
@@ -715,21 +716,21 @@ def student_management():
                     "phone": "Phone"
                 }
             )
-    
+
             st.dataframe(
                 display_archived,
                 use_container_width=True,
                 hide_index=True
             )
-    
+
             st.divider()
-    
+
             # ======================================================
             # SELECT ARCHIVED STUDENT
             # ======================================================
-    
+
             archived_options = archived_students["id"].tolist()
-    
+
             selected_archived_id = st.selectbox(
                 "Select Archived Student",
                 archived_options,
@@ -737,41 +738,40 @@ def student_management():
                     f"{archived_students.loc["
                         archived_students["id"] == x,
                         "Student Name"
-                    ].iloc[0]} "
-                    f"(ID: {x})"
+                    ].iloc[0]} (ID: {x})"
                 ),
                 key="archived_student_select"
             )
-    
+
             selected_archived_row = archived_students[
                 archived_students["id"] == selected_archived_id
             ].iloc[0]
-    
+
             selected_student_name = (
                 selected_archived_row["Student Name"]
             )
-    
+
             # ======================================================
             # RESTORE STUDENT
             # ======================================================
-    
+
             st.subheader("Restore Student")
-    
+
             st.info(
                 f"Restore **{selected_student_name}** "
                 f"(ID: {selected_archived_id}) to the active student list. "
                 "All homework, grades, attendance, sessions, payments, "
                 "login information, and other history will remain."
             )
-    
+
             if st.button(
                 "♻️ Restore Student",
                 type="primary",
                 key="restore_student_button"
             ):
-    
+
                 try:
-    
+
                     execute(
                         """
                         UPDATE students
@@ -780,130 +780,152 @@ def student_management():
                         """,
                         (int(selected_archived_id),)
                     )
-    
+
                     st.cache_data.clear()
-    
+
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
-    
+
                     st.success(
                         f"{selected_student_name} "
                         "has been restored successfully."
                     )
-    
+
                     st.rerun()
-    
+
                 except Exception as e:
-    
+
                     st.error(
                         f"Error restoring student: {e}"
                     )
-    
+
             # ======================================================
             # PERMANENT DELETE
             # ======================================================
-    
+
             st.divider()
-    
+
             st.subheader("🗑️ Permanently Delete Student")
-    
+
             st.warning(
                 f"⚠️ This will permanently delete "
                 f"**{selected_student_name}** "
                 f"(ID: {selected_archived_id}) "
                 "and the student's database records."
             )
-    
+
             st.caption(
                 "This action cannot be undone. "
-                "Use this only when you are certain that the "
-                "student and their historical records are no longer needed."
+                "The student's homework, grades, attendance, "
+                "payments, sessions, reports, login account, "
+                "and student record will be permanently deleted."
             )
-    
-            # ------------------------------------------------------
+
+            # ======================================================
             # CONFIRMATION
-            # ------------------------------------------------------
-    
+            # ======================================================
+
             confirm_delete = st.checkbox(
                 f"I understand that permanently deleting "
                 f"{selected_student_name} cannot be undone.",
                 key="confirm_delete_archived_student"
             )
-    
+
+            # ======================================================
+            # PERMANENT DELETE BUTTON
+            # ======================================================
+
             if st.button(
                 "🗑️ Permanently Delete Student",
                 type="secondary",
                 disabled=not confirm_delete,
                 key="permanent_delete_student_button"
             ):
-    
+
                 try:
-    
+
                     student_id_to_delete = int(
                         selected_archived_id
                     )
-    
+
                     # ==================================================
                     # DELETE RELATED RECORDS FIRST
                     # ==================================================
-    
+
                     # --------------------------------------------------
                     # Homework grades
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM homework_grades
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM homework_grades
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
                     # --------------------------------------------------
                     # Attendance
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM attendance
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM attendance
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
                     # --------------------------------------------------
                     # Payments
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM payments
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM payments
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
                     # --------------------------------------------------
                     # Sessions / Schedule
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM sessions
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM sessions
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
                     # --------------------------------------------------
                     # Progress Notes
-                    #
-                    # If this table exists in your database, delete
-                    # the student's records.
                     # --------------------------------------------------
-    
+
                     try:
-    
+
                         execute(
                             """
                             DELETE FROM progress_notes
@@ -911,17 +933,16 @@ def student_management():
                             """,
                             (student_id_to_delete,)
                         )
-    
+
                     except Exception:
-                        # Ignore if progress_notes does not exist
                         pass
-    
+
                     # --------------------------------------------------
                     # Reports
                     # --------------------------------------------------
-    
+
                     try:
-    
+
                         execute(
                             """
                             DELETE FROM reports
@@ -929,73 +950,82 @@ def student_management():
                             """,
                             (student_id_to_delete,)
                         )
-    
+
                     except Exception:
-                        # Ignore if reports does not exist
                         pass
-    
+
                     # --------------------------------------------------
                     # Homework
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM homework
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM homework
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
                     # --------------------------------------------------
                     # Student login account
                     # --------------------------------------------------
-    
-                    execute(
-                        """
-                        DELETE FROM users
-                        WHERE student_id = %s
-                        """,
-                        (student_id_to_delete,)
-                    )
-    
-                    # --------------------------------------------------
-                    # Finally delete the student
-                    # --------------------------------------------------
-    
+
+                    try:
+
+                        execute(
+                            """
+                            DELETE FROM users
+                            WHERE student_id = %s
+                            """,
+                            (student_id_to_delete,)
+                        )
+
+                    except Exception:
+                        pass
+
+                    # ==================================================
+                    # FINALLY DELETE STUDENT
+                    # ==================================================
+
                     execute(
                         """
                         DELETE FROM students
                         WHERE id = %s
-                        AND COALESCE(archived, 0) = 1
+                          AND COALESCE(archived, 0) = 1
                         """,
                         (student_id_to_delete,)
                     )
-    
+
                     # ==================================================
                     # CLEAR CACHE
                     # ==================================================
-    
+
                     st.cache_data.clear()
-    
+
                     if hasattr(st, "cache_resource"):
                         st.cache_resource.clear()
-    
+
                     st.success(
                         f"{selected_student_name} "
-                        "and the student's database records "
+                        "and all associated database records "
                         "have been permanently deleted."
                     )
-    
+
                     st.rerun()
-    
+
                 except Exception as e:
-    
+
                     st.error(
                         f"Error permanently deleting student: {e}"
                     )
-    
+
         else:
-    
+
             st.info(
                 "There are currently no archived students."
             )

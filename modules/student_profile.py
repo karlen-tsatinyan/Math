@@ -1245,10 +1245,8 @@ def student_profile():
                     )
 
                     attendance_marked = (
-                        int(
-                            row["attendance_marked"] or 0
-                        )
-                        == 1
+                        str(row["attendance_status"]).strip()
+                        == "Present"
                     )
 
                     # -----------------------------------------

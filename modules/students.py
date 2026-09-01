@@ -735,10 +735,8 @@ def student_management():
                 "Select Archived Student",
                 archived_options,
                 format_func=lambda x: (
-                    f"{archived_students.loc["
-                        archived_students["id"] == x,
-                        "Student Name"
-                    ].iloc[0]} (ID: {x})"
+                    f"{archived_students.loc[archived_students['id'] == x, 'Student Name'].iloc[0]} "
+                    f"(ID: {x})"
                 ),
                 key="archived_student_select"
             )

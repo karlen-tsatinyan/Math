@@ -1,1223 +1,660 @@
-import re
-from datetime import datetime, date
+from datetime import date, timedelta
+import io
 
 import pandas as pd
 import streamlit as st
 
-from database import query_dataframe, execute
-from utils.datetime_utils import today_str
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer,
+)
 
-from modules.performance import student_performance_view
+from database import execute, query_dataframe
 
-# ============================================================
-
-# CACHE SETTINGS
-
-# ============================================================
-
-CACHE_TTL = 300
-
-# ============================================================
-
-# TIME HELPERS
 
 # ============================================================
+# ATTENDANCE SCHEMA
+# ============================================================
 
-def parse_session_time(time_value):
-"""
-Convert a database/Python time value into a datetime.time.
+def ensure_attendance_schema():
+    """
+    Ensure the attendance table exists.
 
-```
-Handles examples such as:
-
-    16:15:00
-    16:15
-    4:15 PM
-    04:15 PM
-    datetime.time(...)
-"""
-
-if time_value is None:
-    return None
-
-# --------------------------------------------------------
-# Python datetime/time object
-# --------------------------------------------------------
-
-if hasattr(time_value, "hour") and hasattr(
-    time_value,
-    "minute"
-):
+    Attendance is associated with a student/date/time rather
+    than a session ID so it remains compatible with the
+    existing scheduler and student profile.
+    """
 
     try:
+        execute(
+            """
+            CREATE TABLE IF NOT EXISTS attendance (
+                id SERIAL PRIMARY KEY,
 
-        return time_value
+                student_id INTEGER NOT NULL
+                    REFERENCES students(id)
+                    ON DELETE CASCADE,
+
+                session_date DATE NOT NULL,
+
+                session_time TIME NOT NULL,
+
+                status TEXT NOT NULL,
+
+                marked_at TIMESTAMP
+                    DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        # Prevent duplicate attendance records for the same
+        # student/session combination.
+        execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            attendance_student_date_time_idx
+            ON attendance (
+                student_id,
+                session_date,
+                session_time
+            )
+            """
+        )
 
     except Exception:
-
+        # Do not prevent the application from loading if the
+        # schema already exists or the database does not support
+        # the requested operation.
         pass
 
-value = str(
-    time_value
-).strip()
 
-if not value:
+# ============================================================
+# ATTENDANCE MANAGEMENT
+# ============================================================
 
-    return None
+def attendance_management():
 
-# --------------------------------------------------------
-# Remove possible date portion
-# --------------------------------------------------------
+    st.header("📋 Attendance History & Analytics")
 
-if " " in value:
+    st.caption(
+        "View and export student attendance logs across tutoring sessions."
+    )
 
-    parts = value.split()
+    # ========================================================
+    # ENSURE DATABASE
+    # ========================================================
 
-    # Example:
-    # 2026-08-31 16:15:00
+    ensure_attendance_schema()
 
-    if len(parts) >= 2:
+    # ========================================================
+    # FILTERS
+    # ========================================================
 
-        if re.match(
-            r"^\d{4}-\d{2}-\d{2}$",
-            parts[0]
-        ):
+    col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
 
-            value = " ".join(
-                parts[1:]
+    # ========================================================
+    # STUDENT FILTER
+    # ========================================================
+
+    with col_f1:
+
+        students = query_dataframe(
+            """
+            SELECT
+                id,
+                first_name || ' ' || last_name AS student_name
+            FROM students
+            ORDER BY last_name, first_name
+            """
+        )
+
+        student_options = {
+            "All Students": None
+        }
+
+        if not students.empty:
+
+            for _, row in students.iterrows():
+
+                student_options[
+                    f"{row['student_name']} (ID: {row['id']})"
+                ] = row["id"]
+
+        selected_student_label = st.selectbox(
+            "Filter by Student",
+            list(student_options.keys()),
+            key="attendance_student_filter",
+        )
+
+        selected_student_id = student_options[
+            selected_student_label
+        ]
+
+    # ========================================================
+    # DATE FILTER
+    # ========================================================
+
+    with col_f2:
+
+        date_range = st.date_input(
+            "Filter Date Range",
+            value=(
+                date.today() - timedelta(days=30),
+                date.today(),
+            ),
+            key="attendance_date_filter",
+        )
+
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+
+            start_date, end_date = date_range
+
+        elif isinstance(date_range, list) and len(date_range) == 2:
+
+            start_date, end_date = date_range
+
+        else:
+
+            start_date = date.today() - timedelta(days=30)
+            end_date = date.today()
+
+    # ========================================================
+    # STATUS FILTER
+    # ========================================================
+
+    with col_f3:
+
+        status_filter = st.selectbox(
+            "Filter Status",
+            [
+                "All Statuses",
+                "Present",
+                "Late",
+                "Absent - Excused",
+                "Absent - Unexcused",
+            ],
+            key="attendance_status_filter",
+        )
+
+    # ========================================================
+    # BUILD QUERY
+    # ========================================================
+
+    query = """
+        SELECT
+
+            a.id AS record_id,
+
+            s.first_name || ' ' || s.last_name
+                AS student,
+
+            a.session_date::text
+                AS session_date,
+
+            a.session_time::text
+                AS session_time,
+
+            COALESCE(
+                se.topic,
+                ''
+            ) AS lesson_topic,
+
+            a.status
+                AS status,
+
+            TO_CHAR(
+                a.marked_at,
+                'YYYY-MM-DD HH24:MI'
+            ) AS recorded_at
+
+        FROM attendance a
+
+        JOIN students s
+            ON a.student_id = s.id
+
+        LEFT JOIN sessions se
+            ON se.student_id = a.student_id
+            AND se.session_date = a.session_date
+            AND se.session_time = a.session_time
+
+        WHERE
+            a.session_date BETWEEN %s AND %s
+    """
+
+    params = [
+        start_date.isoformat(),
+        end_date.isoformat(),
+    ]
+
+    # ========================================================
+    # STUDENT FILTER
+    # ========================================================
+
+    if selected_student_id is not None:
+
+        query += """
+            AND a.student_id = %s
+        """
+
+        params.append(selected_student_id)
+
+    # ========================================================
+    # STATUS FILTER
+    # ========================================================
+
+    if status_filter != "All Statuses":
+
+        query += """
+            AND a.status = %s
+        """
+
+        params.append(status_filter)
+
+    # ========================================================
+    # ORDER
+    # ========================================================
+
+    query += """
+        ORDER BY
+            a.session_date DESC,
+            a.session_time DESC
+    """
+
+    # ========================================================
+    # LOAD DATA
+    # ========================================================
+
+    history = query_dataframe(
+        query,
+        tuple(params),
+    )
+
+    # ========================================================
+    # NO RESULTS
+    # ========================================================
+
+    if history.empty:
+
+        st.info(
+            "No attendance logs found matching the selected filters."
+        )
+
+        return
+
+    # ========================================================
+    # ATTENDANCE METRICS
+    # ========================================================
+
+    total_sessions = len(history)
+
+    presents = len(
+        history[
+            history["status"].isin(
+                [
+                    "Present",
+                    "Late",
+                ]
             )
+        ]
+    )
 
-# --------------------------------------------------------
-# Try common formats
-# --------------------------------------------------------
+    lates = len(
+        history[
+            history["status"] == "Late"
+        ]
+    )
 
-formats = [
+    unexcused = len(
+        history[
+            history["status"] == "Absent - Unexcused"
+        ]
+    )
 
-    "%H:%M:%S",
-    "%H:%M",
+    pct_present = (
+        round(
+            (presents / total_sessions) * 100,
+            1,
+        )
+        if total_sessions > 0
+        else 0
+    )
 
-    "%I:%M %p",
-    "%I:%M:%S %p",
+    # ========================================================
+    # KPI DISPLAY
+    # ========================================================
 
-    "%I:%M%p",
-    "%I:%M:%S%p"
-]
+    m1, m2, m3, m4 = st.columns(4)
 
-for fmt in formats:
+    m1.metric(
+        "Total Logged Sessions",
+        total_sessions,
+    )
+
+    m2.metric(
+        "Attendance Rate",
+        f"{pct_present}%",
+    )
+
+    m3.metric(
+        "Late Arrivals",
+        lates,
+    )
+
+    m4.metric(
+        "Unexcused Absences",
+        unexcused,
+    )
+
+    st.divider()
+
+    # ========================================================
+    # DISPLAY TABLE
+    # ========================================================
+
+    display_df = history.rename(
+        columns={
+            "student": "Student",
+            "session_date": "Date",
+            "session_time": "Time",
+            "lesson_topic": "Lesson Topic",
+            "status": "Status",
+            "recorded_at": "Recorded At",
+        }
+    )
+
+    if "record_id" in display_df.columns:
+
+        display_df = display_df.drop(
+            columns=["record_id"]
+        )
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # ========================================================
+    # EXPORT
+    # ========================================================
+
+    st.subheader("⬇️ Export Attendance")
+
+    pdf_buffer = io.BytesIO()
 
     try:
 
-        return datetime.strptime(
-            value,
-            fmt
-        ).time()
-
-    except ValueError:
-
-        continue
-
-return None
-```
-
-def parse_session_datetime(
-session_date,
-session_time
-):
-"""
-Combine session date and time into a Python datetime.
-"""
-
-```
-# --------------------------------------------------------
-# Parse date
-# --------------------------------------------------------
-
-if isinstance(
-    session_date,
-    datetime
-):
-
-    date_value = (
-        session_date.date()
-    )
-
-elif isinstance(
-    session_date,
-    date
-):
-
-    date_value = session_date
-
-else:
-
-    date_text = str(
-        session_date
-    ).strip()
-
-    date_value = None
-
-    for fmt in (
-        "%Y-%m-%d",
-        "%m/%d/%Y"
-    ):
-
-        try:
-
-            date_value = datetime.strptime(
-                date_text,
-                fmt
-            ).date()
-
-            break
-
-        except ValueError:
-
-            continue
-
-    if date_value is None:
-
-        return None
-
-# --------------------------------------------------------
-# Parse time
-# --------------------------------------------------------
-
-time_value = parse_session_time(
-    session_time
-)
-
-if time_value is None:
-
-    return None
-
-return datetime.combine(
-    date_value,
-    time_value
-)
-```
-
-def format_session_time(time_value):
-"""
-Display database time as a friendly value such as:
-
-```
-    4:15 PM
-"""
-
-parsed = parse_session_time(
-    time_value
-)
-
-if parsed is None:
-
-    return str(
-        time_value
-    )
-
-return parsed.strftime(
-    "%I:%M %p"
-).lstrip("0")
-```
-
-# ============================================================
-
-# STUDENT PROFILE
-
-# ============================================================
-
-def student_profile():
-
-```
-st.title(
-    "👨‍🎓 Student Profile"
-)
-
-# ========================================================
-# LOAD STUDENTS
-# ========================================================
-
-@st.cache_data(ttl=CACHE_TTL)
-def get_students():
-
-    return query_dataframe(
-        """
-        SELECT
-            id,
-            first_name || ' ' || last_name AS name,
-            grade,
-            subject,
-            email,
-            phone,
-            zoom_link,
-            meeting_id
-        FROM students
-        ORDER BY
-            last_name,
-            first_name
-        """
-    )
-
-students = get_students()
-
-if students.empty:
-
-    st.warning(
-        "No students found."
-    )
-
-    return
-
-# ========================================================
-# STUDENT SELECTOR
-# ========================================================
-
-students = students.copy()
-
-# --------------------------------------------------------
-# Use ID in the selector so two students with the same
-# name cannot be confused.
-# --------------------------------------------------------
-
-students["selector_name"] = (
-    students["name"].astype(str)
-    + " (ID: "
-    + students["id"].astype(str)
-    + ")"
-)
-
-student_selector_map = dict(
-    zip(
-        students["selector_name"],
-        students["id"]
-    )
-)
-
-selected_label = st.selectbox(
-    "Select Student",
-    list(
-        student_selector_map.keys()
-    ),
-    key="student_profile_selector"
-)
-
-student_id = int(
-    student_selector_map[
-        selected_label
-    ]
-)
-
-selected_rows = students[
-    students["id"] == student_id
-]
-
-if selected_rows.empty:
-
-    st.error(
-        "Unable to find the selected student."
-    )
-
-    return
-
-student = selected_rows.iloc[0]
-
-# ========================================================
-# BASIC INFORMATION
-# ========================================================
-
-st.subheader(
-    "Student Information"
-)
-
-(
-    info_col1,
-    info_col2,
-    info_col3,
-    info_col4,
-    info_col5
-) = st.columns(5)
-
-with info_col1:
-
-    st.caption("Name")
-
-    st.write(
-        student["name"]
-    )
-
-with info_col2:
-
-    st.caption("Grade")
-
-    st.write(
-        student["grade"]
-    )
-
-with info_col3:
-
-    st.caption("Subject")
-
-    st.write(
-        student["subject"]
-    )
-
-with info_col4:
-
-    st.caption("Email")
-
-    st.write(
-        student["email"]
-        if pd.notna(
-            student["email"]
-        )
-        else "—"
-    )
-
-with info_col5:
-
-    st.caption("Phone")
-
-    st.write(
-        student["phone"]
-        if pd.notna(
-            student["phone"]
-        )
-        else "—"
-    )
-
-st.divider()
-
-# ========================================================
-# STUDENT OVERVIEW
-# ========================================================
-
-@st.cache_data(ttl=120)
-def get_student_overview(
-    student_id
-):
-
-    return query_dataframe(
-        """
-        SELECT
-
-            (
-                SELECT COALESCE(
-                    SUM(amount),
-                    0
-                )
-                FROM payments
-                WHERE student_id = %s
-            ) AS payment_total,
-
-            (
-                SELECT COUNT(*)
-                FROM sessions
-                WHERE student_id = %s
-            ) AS session_total,
-
-            (
-                SELECT COUNT(*)
-                FROM attendance
-                WHERE student_id = %s
-                  AND status = 'Present'
-            ) AS attendance_total,
-
-            (
-                SELECT COUNT(*)
-                FROM homework
-                WHERE student_id = %s
-            ) AS homework_total
-        """,
-        (
-            student_id,
-            student_id,
-            student_id,
-            student_id
-        )
-    )
-
-overview = get_student_overview(
-    student_id
-)
-
-if overview.empty:
-
-    payment_total = 0
-    session_total = 0
-    attendance_total = 0
-    homework_total = 0
-
-else:
-
-    row = overview.iloc[0]
-
-    payment_total = float(
-        row["payment_total"] or 0
-    )
-
-    session_total = int(
-        row["session_total"] or 0
-    )
-
-    attendance_total = int(
-        row["attendance_total"] or 0
-    )
-
-    homework_total = int(
-        row["homework_total"] or 0
-    )
-
-# ========================================================
-# OVERVIEW METRICS
-# ========================================================
-
-st.subheader(
-    "📊 Student Overview"
-)
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric(
-    "💰 Payments",
-    f"${payment_total:,.2f}"
-)
-
-col2.metric(
-    "📅 Sessions",
-    session_total
-)
-
-col3.metric(
-    "✅ Attendance",
-    attendance_total
-)
-
-col4.metric(
-    "📚 Homework",
-    homework_total
-)
-
-st.divider()
-
-# ========================================================
-# NEXT SESSION
-# ========================================================
-
-@st.cache_data(ttl=120)
-def get_next_session(
-    student_id,
-    current_date
-):
-
-    return query_dataframe(
-        """
-        SELECT
-            session_date,
-            session_time,
-            topic
-        FROM sessions
-        WHERE student_id = %s
-          AND session_date >= %s
-        ORDER BY
-            session_date ASC,
-            session_time ASC
-        LIMIT 1
-        """,
-        (
-            student_id,
-            current_date
-        )
-    )
-
-next_session = get_next_session(
-    student_id,
-    today_str()
-)
-
-if not next_session.empty:
-
-    next_row = next_session.iloc[0]
-
-    next_time = format_session_time(
-        next_row["session_time"]
-    )
-
-    next_topic = (
-        str(
-            next_row["topic"]
-        ).strip()
-        if pd.notna(
-            next_row["topic"]
-        )
-        else ""
-    )
-
-    if not next_topic:
-
-        next_topic = (
-            "No topic entered"
+        # ====================================================
+        # PDF DOCUMENT
+        # ====================================================
+
+        doc = SimpleDocTemplate(
+            pdf_buffer,
+            pagesize=landscape(letter),
+            rightMargin=25,
+            leftMargin=25,
+            topMargin=25,
+            bottomMargin=25,
         )
 
-    st.info(
-        f"""
-```
+        styles = getSampleStyleSheet()
 
-**Next Lesson**
+        elements = []
 
-📅 {next_row['session_date']}
+        # ====================================================
+        # TITLE
+        # ====================================================
 
-🕒 {next_time}
-
-📖 {next_topic}
-"""
-)
-
-```
-# ========================================================
-# LATEST HOMEWORK GRADE
-# ========================================================
-
-@st.cache_data(ttl=120)
-def get_latest_grade(
-    student_id
-):
-
-    return query_dataframe(
-        """
-        SELECT
-            assignment,
-            percentage,
-            grade_date
-        FROM homework_grades
-        WHERE student_id = %s
-          AND assignment IS NOT NULL
-          AND percentage IS NOT NULL
-          AND grade_date IS NOT NULL
-        ORDER BY
-            grade_date DESC,
-            id DESC
-        LIMIT 1
-        """,
-        (
-            student_id,
-        )
-    )
-
-latest_grade = get_latest_grade(
-    student_id
-)
-
-if not latest_grade.empty:
-
-    latest = latest_grade.iloc[0]
-
-    percentage = pd.to_numeric(
-        latest["percentage"],
-        errors="coerce"
-    )
-
-    if pd.notna(
-        percentage
-    ):
-
-        percentage_display = (
-            f"{float(percentage):.1f}%"
-        )
-
-    else:
-
-        percentage_display = (
-            str(
-                latest["percentage"]
+        elements.append(
+            Paragraph(
+                "Attendance Report",
+                styles["Title"],
             )
         )
 
-    st.success(
-        f"""
-```
-
-**Latest Homework Grade**
-
-📚 {latest['assignment']}
-
-📊 {percentage_display}
-
-📅 {latest['grade_date']}
-"""
-)
-
-```
-# ========================================================
-# TABS
-# ========================================================
-
-(
-    tab1,
-    tab2,
-    tab3,
-    tab4,
-    tab5
-) = st.tabs(
-    [
-        "💰 Payments",
-        "📚 Homework",
-        "📅 Sessions",
-        "✅ Attendance",
-        "📈 Performance"
-    ]
-)
-
-# ========================================================
-# TAB 1 — PAYMENTS
-# ========================================================
-
-with tab1:
-
-    st.subheader(
-        "💰 Payment History"
-    )
-
-    @st.cache_data(ttl=120)
-    def get_payment_history(
-        student_id
-    ):
-
-        return query_dataframe(
-            """
-            SELECT
-                amount AS "Amount",
-                payment_date AS "Payment Date",
-                period AS "Period",
-                status AS "Status"
-            FROM payments
-            WHERE student_id = %s
-            ORDER BY
-                payment_date DESC
-            """,
-            (
-                student_id,
+        elements.append(
+            Paragraph(
+                f"<b>Date Range:</b> "
+                f"{start_date} to {end_date}",
+                styles["Normal"],
             )
         )
 
-    payments = get_payment_history(
-        student_id
-    )
+        # ====================================================
+        # STUDENT
+        # ====================================================
 
-    if payments.empty:
+        if selected_student_id is not None:
 
-        st.info(
-            "No payments."
-        )
+            student_text = (
+                f"<b>Student:</b> "
+                f"{selected_student_label}"
+            )
 
-    else:
+        else:
 
-        payments["Amount"] = pd.to_numeric(
-            payments["Amount"],
-            errors="coerce"
-        ).fillna(0)
+            student_text = (
+                "<b>Student:</b> All Students"
+            )
 
-        payments["Amount"] = payments[
-            "Amount"
-        ].apply(
-            lambda x: f"${x:,.2f}"
-        )
-
-        st.dataframe(
-            payments,
-            hide_index=True,
-            use_container_width=True
-        )
-
-# ========================================================
-# TAB 2 — HOMEWORK
-# ========================================================
-
-with tab2:
-
-    st.subheader(
-        "📚 Homework History"
-    )
-
-    @st.cache_data(ttl=120)
-    def get_homework_history(
-        student_id
-    ):
-
-        return query_dataframe(
-            """
-            SELECT
-                title AS "Homework",
-                curriculum_topic AS "Curriculum Topic",
-                status AS "Status",
-                teacher_feedback AS "Teacher Feedback",
-                created_at AS "Assigned"
-            FROM homework
-            WHERE student_id = %s
-            ORDER BY
-                created_at DESC
-            """,
-            (
-                student_id,
+        elements.append(
+            Paragraph(
+                student_text,
+                styles["Normal"],
             )
         )
 
-    homework = get_homework_history(
-        student_id
-    )
+        # ====================================================
+        # STATUS
+        # ====================================================
 
-    if homework.empty:
-
-        st.info(
-            "No homework."
-        )
-
-    else:
-
-        st.dataframe(
-            homework,
-            hide_index=True,
-            use_container_width=True
-        )
-
-# ========================================================
-# TAB 3 — SESSIONS
-# ========================================================
-
-with tab3:
-
-    st.subheader(
-        "📅 Session History & Attendance"
-    )
-
-    # ----------------------------------------------------
-    # Load sessions and attendance together.
-    #
-    # Attendance is matched by:
-    #
-    # student_id
-    # session_date
-    # session_time
-    #
-    # NOT by session ID.
-    # ----------------------------------------------------
-
-    @st.cache_data(ttl=60)
-    def get_sessions_with_attendance(
-        student_id
-    ):
-
-        return query_dataframe(
-            """
-            SELECT
-
-                s.session_date,
-
-                s.session_time,
-
-                COALESCE(
-                    s.topic,
-                    ''
-                ) AS topic,
-
-                COALESCE(
-                    s.notes,
-                    ''
-                ) AS notes,
-
-                CASE
-                    WHEN a.id IS NOT NULL
-                    THEN 1
-                    ELSE 0
-                END AS attendance_marked,
-
-                COALESCE(
-                    a.status,
-                    'Pending'
-                ) AS attendance_status
-
-            FROM sessions s
-
-            LEFT JOIN attendance a
-
-                ON a.student_id =
-                    s.student_id
-
-                AND a.session_date =
-                    s.session_date
-
-                AND a.session_time =
-                    s.session_time
-
-            WHERE
-                s.student_id = %s
-
-            ORDER BY
-                s.session_date DESC,
-                s.session_time DESC
-            """,
-            (
-                student_id,
+        elements.append(
+            Paragraph(
+                f"<b>Status Filter:</b> "
+                f"{status_filter}",
+                styles["Normal"],
             )
         )
 
-    sessions = get_sessions_with_attendance(
-        student_id
-    )
-
-    if sessions.empty:
-
-        st.info(
-            "No sessions."
+        elements.append(
+            Spacer(1, 12)
         )
 
-    else:
+        # ====================================================
+        # SUMMARY TABLE
+        # ====================================================
 
-        now = datetime.now()
+        summary_data = [
+            [
+                "Total Sessions",
+                "Attendance Rate",
+                "Late Arrivals",
+                "Unexcused Absences",
+            ],
+            [
+                str(total_sessions),
+                f"{pct_present}%",
+                str(lates),
+                str(unexcused),
+            ],
+        ]
 
-        # =================================================
-        # COMPLETED LESSONS
-        # =================================================
-
-        st.markdown(
-            "### Completed Lessons"
+        summary_table = Table(
+            summary_data
         )
 
-        completed_count = 0
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.grey,
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.grey,
+                    ),
+                    (
+                        "ALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "CENTER",
+                    ),
+                    (
+                        "FONTSIZE",
+                        (0, 0),
+                        (-1, -1),
+                        9,
+                    ),
+                ]
+            )
+        )
 
-        for _, row in sessions.iterrows():
+        elements.append(
+            summary_table
+        )
 
-            session_datetime = (
-                parse_session_datetime(
-                    row["session_date"],
-                    row["session_time"]
-                )
+        elements.append(
+            Spacer(1, 15)
+        )
+
+        # ====================================================
+        # ATTENDANCE TABLE
+        # ====================================================
+
+        pdf_df = display_df.copy()
+
+        pdf_df = pdf_df.fillna("")
+
+        pdf_data = [
+            list(pdf_df.columns)
+        ]
+
+        for _, row in pdf_df.iterrows():
+
+            pdf_data.append(
+                [
+                    str(value)
+                    for value in row.tolist()
+                ]
             )
 
-            if session_datetime is None:
+        attendance_table = Table(
+            pdf_data,
+            repeatRows=1,
+        )
 
-                continue
-
-            if session_datetime <= now:
-
-                completed_count += 1
-
-                attendance_marked = (
-                    int(
-                        row[
-                            "attendance_marked"
-                        ]
-                    )
-                    == 1
-                )
-
-                topic = str(
-                    row["topic"]
-                ).strip()
-
-                if not topic:
-
-                    topic = (
-                        "No topic entered"
-                    )
-
-                formatted_time = (
-                    format_session_time(
-                        row["session_time"]
-                    )
-                )
-
-                checkbox_label = (
-                    f"📅 {row['session_date']}  |  "
-                    f"{formatted_time}  |  "
-                    f"📖 {topic}"
-                )
-
-                # ------------------------------------------------
-                # Attendance checkbox
-                #
-                # ON  = Present
-                # OFF = remove attendance record
-                #
-                # Uses date/time rather than session ID.
-                # ------------------------------------------------
-
-                mark = st.checkbox(
-                    checkbox_label,
-                    value=attendance_marked,
-                    key=(
-                        f"attendance_"
-                        f"{student_id}_"
-                        f"{row['session_date']}_"
-                        f"{formatted_time}"
-                    )
-                )
-
-                # =================================================
-                # MARK PRESENT
-                # =================================================
-
-                if (
-                    mark
-                    and not attendance_marked
-                ):
-
-                    execute(
-                        """
-                        INSERT INTO attendance
-                        (
-                            student_id,
-                            session_date,
-                            session_time,
-                            status
-                        )
-                        VALUES
-                        (
-                            %s,
-                            %s,
-                            %s,
-                            %s
-                        )
-                        ON CONFLICT
-                        (
-                            student_id,
-                            session_date,
-                            session_time
-                        )
-                        DO UPDATE SET
-                            status = EXCLUDED.status,
-                            marked_at = CURRENT_TIMESTAMP
-                        """,
-                        (
-                            student_id,
-                            row["session_date"],
-                            row["session_time"],
-                            "Present"
-                        )
-                    )
-
-                    st.cache_data.clear()
-
-                    st.success(
-                        "Attendance marked Present."
-                    )
-
-                    st.rerun()
-
-                # =================================================
-                # REMOVE ATTENDANCE
-                # =================================================
-
-                elif (
-                    not mark
-                    and attendance_marked
-                ):
-
-                    execute(
-                        """
-                        DELETE FROM attendance
-                        WHERE student_id = %s
-                          AND session_date = %s
-                          AND session_time = %s
-                        """,
-                        (
-                            student_id,
-                            row["session_date"],
-                            row["session_time"]
-                        )
-                    )
-
-                    st.cache_data.clear()
-
-                    st.warning(
-                        "Attendance removed."
-                    )
-
-                    st.rerun()
-
-        if completed_count == 0:
-
-            st.info(
-                "No completed lessons yet."
-            )
-
-        # =================================================
-        # UPCOMING LESSONS
-        # =================================================
-
-        upcoming_rows = []
-
-        for _, row in sessions.iterrows():
-
-            session_datetime = (
-                parse_session_datetime(
-                    row["session_date"],
-                    row["session_time"]
-                )
-            )
-
-            if session_datetime is None:
-
-                continue
-
-            if session_datetime > now:
-
-                topic = str(
-                    row["topic"]
-                ).strip()
-
-                if not topic:
-
-                    topic = (
-                        "No topic entered"
-                    )
-
-                upcoming_rows.append(
-                    {
-                        "Date": row[
-                            "session_date"
+        attendance_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.grey,
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.4,
+                        colors.grey,
+                    ),
+                    (
+                        "FONTSIZE",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.whitesmoke,
                         ],
-
-                        "Time": (
-                            format_session_time(
-                                row[
-                                    "session_time"
-                                ]
-                            )
-                        ),
-
-                        "Lesson Topic": topic
-                    }
-                )
-
-        if upcoming_rows:
-
-            st.divider()
-
-            st.markdown(
-                "### Upcoming Lessons"
-            )
-
-            upcoming_df = pd.DataFrame(
-                upcoming_rows
-            )
-
-            st.dataframe(
-                upcoming_df,
-                hide_index=True,
-                use_container_width=True
-            )
-
-# ========================================================
-# TAB 4 — ATTENDANCE
-# ========================================================
-
-with tab4:
-
-    st.subheader(
-        "✅ Attendance History & Analytics"
-    )
-
-    @st.cache_data(ttl=120)
-    def get_attendance_history(
-        student_id
-    ):
-
-        return query_dataframe(
-            """
-            SELECT
-
-                a.session_date AS "Date",
-
-                a.session_time AS "Time",
-
-                COALESCE(
-                    s.topic,
-                    ''
-                ) AS "Lesson Topic",
-
-                a.status AS "Status",
-
-                a.marked_at AS "Recorded At"
-
-            FROM attendance a
-
-            LEFT JOIN sessions s
-
-                ON s.student_id =
-                    a.student_id
-
-                AND s.session_date =
-                    a.session_date
-
-                AND s.session_time =
-                    a.session_time
-
-            WHERE
-                a.student_id = %s
-
-            ORDER BY
-                a.session_date DESC,
-                a.session_time DESC
-            """,
-            (
-                student_id,
+                    ),
+                ]
             )
         )
 
-    attendance = get_attendance_history(
-        student_id
-    )
-
-    if attendance.empty:
-
-        st.info(
-            "No attendance records."
+        elements.append(
+            attendance_table
         )
 
-    else:
+        # ====================================================
+        # BUILD PDF
+        # ====================================================
 
-        # ------------------------------------------------
-        # Format time
-        # ------------------------------------------------
-
-        if "Time" in attendance.columns:
-
-            attendance["Time"] = (
-                attendance["Time"]
-                .apply(
-                    format_session_time
-                )
-            )
-
-        # ------------------------------------------------
-        # Format Recorded At
-        # ------------------------------------------------
-
-        if "Recorded At" in attendance.columns:
-
-            attendance["Recorded At"] = (
-                pd.to_datetime(
-                    attendance[
-                        "Recorded At"
-                    ],
-                    errors="coerce"
-                )
-                .dt.strftime(
-                    "%Y-%m-%d %H:%M"
-                )
-            )
-
-        st.dataframe(
-            attendance,
-            hide_index=True,
-            use_container_width=True
+        doc.build(
+            elements
         )
 
-# ========================================================
-# TAB 5 — PERFORMANCE
-# ========================================================
+        pdf_buffer.seek(0)
 
-with tab5:
+        pdf_bytes = pdf_buffer.getvalue()
 
-    student_performance_view(
-        student_id
-    )
+        # ====================================================
+        # DOWNLOAD
+        # ====================================================
+
+        st.download_button(
+            label="📄 Export Attendance PDF",
+            data=pdf_bytes,
+            file_name=(
+                f"attendance_report_"
+                f"{start_date}_"
+                f"{end_date}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=False,
+            key="attendance_pdf_download",
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Unable to create PDF: {e}"
+        )

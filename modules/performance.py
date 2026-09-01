@@ -704,19 +704,21 @@ def performance_dashboard():
         student_id,
         selected_course
     )
-
+    
     if grades.empty:
-
-        st.info(
+    
+        st.warning(
             f"No graded homework with due dates "
             f"was found for {selected_course}."
         )
-
+    
+        st.caption(
+            "The selected student either has no homework "
+            "with a grade and due date, or the homework "
+            "is assigned to a different course."
+        )
+    
         return
-
-    grades = clean_grade_data(
-        grades
-    )
 
     # --------------------------------------------------------
     # TABS

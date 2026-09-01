@@ -23,18 +23,19 @@ from database import execute, query_dataframe
 # ============================================================
 
 def ensure_attendance_schema():
-    """
-    Ensure the attendance table exists.
 
-    Attendance is associated with a student/date/time rather
-    than a session ID so it remains compatible with the
-    existing scheduler and student profile.
-    """
+    """Ensure the attendance table and required constraint exist."""
 
     try:
+
+        # ----------------------------------------------------
+        # Create attendance table
+        # ----------------------------------------------------
+
         execute(
             """
             CREATE TABLE IF NOT EXISTS attendance (
+
                 id SERIAL PRIMARY KEY,
 
                 student_id INTEGER NOT NULL
@@ -49,30 +50,32 @@ def ensure_attendance_schema():
 
                 marked_at TIMESTAMP
                     DEFAULT CURRENT_TIMESTAMP
-            )
+            );
             """
         )
 
-        # Prevent duplicate attendance records for the same
-        # student/session combination.
+        # ----------------------------------------------------
+        # Ensure unique session attendance
+        # ----------------------------------------------------
+
         execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS
-            attendance_student_date_time_idx
-            ON attendance (
+            attendance_student_session_unique
+            ON attendance
+            (
                 student_id,
                 session_date,
                 session_time
-            )
+            );
             """
         )
 
-    except Exception:
-        # Do not prevent the application from loading if the
-        # schema already exists or the database does not support
-        # the requested operation.
-        pass
+    except Exception as e:
 
+        st.warning(
+            f"Unable to verify attendance schema: {e}"
+        )
 
 # ============================================================
 # ATTENDANCE MANAGEMENT

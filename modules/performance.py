@@ -1251,7 +1251,7 @@ def student_performance_view(student_id):
         st.line_chart(
             fallback
         )
-
+'''
     # ========================================================
     # GRADE HISTORY
     # ========================================================
@@ -1324,3 +1324,4 @@ def student_performance_view(student_id):
                 )
         }
     )
+'''

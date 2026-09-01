@@ -94,88 +94,48 @@ def get_student_courses(student_id):
     return courses
 
 
-# ============================================================
 # GRADE QUERY
 # ============================================================
 
-def get_student_grades(
-    student_id,
-    selected_course
-):
+def get_student_grades(student_id, selected_course):
     """
-    Load homework grades for one student.
+    Load graded homework for a student.
 
-    IMPORTANT:
-    We intentionally do NOT require homework status to be
-    'Reviewed'. If a homework record has:
-        - the correct student
-        - a grade
-        - a due date
-
-    it should appear in Performance.
-
-    Course matching is handled flexibly because existing
-    homework records may contain slightly different course
-    formatting such as:
-
-        Algebra 2
-        Algebra II
-        algebra 2
-        Algebra 2
-
+    Rules:
+    - Must belong to the selected student
+    - Must have a grade
+    - Must have a due date
+    - Course matching is flexible
+    - If course names do not match exactly, we still use the
+      student's graded homework rather than hiding the grades
     """
-
-    # --------------------------------------------------------
-    # LOAD ALL GRADED HOMEWORK FOR THE STUDENT
-    # --------------------------------------------------------
 
     grades = query_dataframe(
         """
         SELECT
-
             id,
-
             due_date::text AS lesson_date,
-
             course,
-
             COALESCE(
                 curriculum_topic,
                 title,
                 'Homework Assignment'
             ) AS topic,
-
             title AS homework_title,
-
             grade AS grade_letter,
-
             COALESCE(
                 teacher_feedback,
                 ''
             ) AS teacher_comment
-
         FROM homework
-
         WHERE student_id = %s
-
           AND due_date IS NOT NULL
-
           AND grade IS NOT NULL
-
           AND TRIM(grade) <> ''
-
-        ORDER BY
-            due_date ASC,
-            id ASC
+        ORDER BY due_date ASC, id ASC
         """,
-        (
-            student_id,
-        )
+        (student_id,)
     )
-
-    # --------------------------------------------------------
-    # NOTHING FOUND
-    # --------------------------------------------------------
 
     if grades.empty:
         return grades
@@ -183,18 +143,7 @@ def get_student_grades(
     grades = grades.copy()
 
     # --------------------------------------------------------
-    # NORMALIZE COURSE NAMES
-    #
-    # This makes comparisons more tolerant of:
-    #
-    # Algebra 2
-    # algebra 2
-    # Algebra  2
-    # ALGEBRA 2
-    #
-    # and also:
-    #
-    # Algebra II
+    # NORMALIZE COURSE NAME
     # --------------------------------------------------------
 
     def normalize_course(value):
@@ -204,15 +153,10 @@ def get_student_grades(
 
         text = str(value).strip().lower()
 
-        if text in [
-            "",
-            "nan",
-            "none",
-            "null"
-        ]:
+        if text in ["", "nan", "none", "null"]:
             return ""
 
-        # Remove spaces and punctuation
+        # Normalize spacing and punctuation
         text = (
             text
             .replace(" ", "")
@@ -220,7 +164,7 @@ def get_student_grades(
             .replace("_", "")
         )
 
-        # Common Roman numeral conversions
+        # Roman numerals
         replacements = {
             "iii": "3",
             "ii": "2",
@@ -234,8 +178,6 @@ def get_student_grades(
 
                 prefix = text[:-len(roman)]
 
-                # Only convert when the ending is clearly
-                # a course level.
                 if prefix:
                     text = prefix + number
                     break
@@ -246,61 +188,49 @@ def get_student_grades(
         selected_course
     )
 
-    # --------------------------------------------------------
-    # NORMALIZE HOMEWORK COURSE
-    # --------------------------------------------------------
-
     grades["_normalized_course"] = (
         grades["course"]
         .apply(normalize_course)
     )
 
     # --------------------------------------------------------
-    # TRY EXACT/NORMALIZED COURSE MATCH
+    # COURSE MATCH
     # --------------------------------------------------------
 
-    course_grades = grades[
+    matched = grades[
         grades["_normalized_course"]
         == selected_normalized
     ].copy()
 
     # --------------------------------------------------------
-    # COURSE MATCH FOUND
+    # IMPORTANT FALLBACK
+    #
+    # If course names don't match because of legacy homework
+    # records, don't hide the grades.
+    # The Admin already selected this student's course.
     # --------------------------------------------------------
 
-    if not course_grades.empty:
+    if not matched.empty:
 
-        grades = course_grades
+        grades = matched
 
     else:
 
-        # ----------------------------------------------------
-        # IMPORTANT FALLBACK
-        #
-        # If existing homework records do not have a matching
-        # course name, DO NOT HIDE the student's grades.
-        #
-        # The user has already selected this student's course,
-        # and these are their graded homework records.
-        #
-        # Therefore show the student's graded homework.
-        # ----------------------------------------------------
-
+        # Use all graded homework for this student.
         grades = grades.copy()
 
     # --------------------------------------------------------
     # REMOVE INTERNAL COLUMN
     # --------------------------------------------------------
 
-    if "_normalized_course" in grades.columns:
-
-        grades.drop(
-            columns=["_normalized_course"],
-            inplace=True
-        )
+    grades.drop(
+        columns=["_normalized_course"],
+        inplace=True,
+        errors="ignore"
+    )
 
     # --------------------------------------------------------
-    # CONVERT LETTER GRADE TO PERCENTAGE
+    # CONVERT LETTER GRADE → PERCENT
     # --------------------------------------------------------
 
     grades["percent"] = (
@@ -312,7 +242,7 @@ def get_student_grades(
     )
 
     # --------------------------------------------------------
-    # REMOVE RECORDS WITH UNKNOWN GRADES
+    # REMOVE UNKNOWN GRADES
     # --------------------------------------------------------
 
     grades = grades[
@@ -320,7 +250,7 @@ def get_student_grades(
     ].copy()
 
     # --------------------------------------------------------
-    # FINAL SORT
+    # SORT
     # --------------------------------------------------------
 
     grades = grades.sort_values(
@@ -628,20 +558,6 @@ def display_grade_history(
             if col in history.columns
         ]
     ]
-
-    st.dataframe(
-        history,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-
-            "Percentage":
-                st.column_config.NumberColumn(
-                    "Percentage",
-                    format="%.1f%%"
-                )
-        }
-    )
 
     st.dataframe(
         history,

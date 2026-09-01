@@ -103,36 +103,22 @@ def get_student_grades(
     selected_course
 ):
     """
-    Load graded homework for one student/course.
+    Load graded homework for the selected student/course.
 
-    We intentionally do NOT filter by homework status.
-
-    A homework record is considered graded when it has:
-        - a grade
-        - a due date
-
-    Course matching is normalized in Python so that values such as:
-
-        Algebra 2
-        Algebra II
-        algebra 2
-        Algebra   2
-
-    are treated as the same course.
+    Course and status are handled in Python so the query
+    does not accidentally exclude valid homework grades.
     """
 
     # --------------------------------------------------------
-    # GET ALL GRADED HOMEWORK FOR THIS STUDENT
+    # LOAD ALL HOMEWORK FOR STUDENT
     # --------------------------------------------------------
 
-    grades = query_dataframe(
+    homework = query_dataframe(
         """
         SELECT
-
             id,
-
+            student_id,
             course,
-
             due_date::text AS lesson_date,
 
             COALESCE(
@@ -143,26 +129,7 @@ def get_student_grades(
 
             title AS homework_title,
 
-            CASE
-                WHEN UPPER(TRIM(grade)) = 'A+' THEN 98
-                WHEN UPPER(TRIM(grade)) = 'A'  THEN 95
-                WHEN UPPER(TRIM(grade)) = 'A-' THEN 92
-
-                WHEN UPPER(TRIM(grade)) = 'B+' THEN 88
-                WHEN UPPER(TRIM(grade)) = 'B'  THEN 85
-                WHEN UPPER(TRIM(grade)) = 'B-' THEN 82
-
-                WHEN UPPER(TRIM(grade)) = 'C+' THEN 78
-                WHEN UPPER(TRIM(grade)) = 'C'  THEN 75
-                WHEN UPPER(TRIM(grade)) = 'C-' THEN 72
-
-                WHEN UPPER(TRIM(grade)) = 'D' THEN 65
-                WHEN UPPER(TRIM(grade)) = 'F' THEN 50
-
-                ELSE 0
-            END AS percent,
-
-            TRIM(grade) AS grade_letter,
+            grade,
 
             COALESCE(
                 teacher_feedback,
@@ -173,28 +140,18 @@ def get_student_grades(
 
         WHERE student_id = %s
 
-          AND grade IS NOT NULL
-
-          AND TRIM(grade) <> ''
-
-          AND due_date IS NOT NULL
-
         ORDER BY
-            due_date ASC,
+            due_date ASC NULLS LAST,
             id ASC
         """,
         (student_id,)
     )
 
-    # --------------------------------------------------------
-    # NOTHING GRADED FOR THIS STUDENT
-    # --------------------------------------------------------
-
-    if grades.empty:
-        return grades
+    if homework.empty:
+        return homework
 
     # --------------------------------------------------------
-    # COURSE NORMALIZATION
+    # NORMALIZE COURSE
     # --------------------------------------------------------
 
     def normalize_course(value):
@@ -204,51 +161,45 @@ def get_student_grades(
 
         text = str(value).strip().lower()
 
-        # Normalize repeated spaces
+        # Remove repeated spaces
         text = " ".join(text.split())
 
-        # Normalize common Roman numerals
+        # Common Roman numeral conversions
         replacements = {
+            "iv": "4",
             "iii": "3",
             "ii": "2",
-            "iv": "4",
             "i": "1"
         }
 
         words = text.split()
 
-        normalized_words = []
+        normalized = []
 
         for word in words:
 
             if word in replacements:
                 word = replacements[word]
 
-            normalized_words.append(word)
+            normalized.append(word)
 
-        text = " ".join(normalized_words)
-
-        return text.strip()
-
-    # --------------------------------------------------------
-    # NORMALIZE SELECTED COURSE
-    # --------------------------------------------------------
+        return " ".join(normalized)
 
     target_course = normalize_course(
         selected_course
     )
 
     # --------------------------------------------------------
-    # FILTER HOMEWORK BY NORMALIZED COURSE
+    # FILTER COURSE
     # --------------------------------------------------------
 
-    grades["_normalized_course"] = (
-        grades["course"]
+    homework["_normalized_course"] = (
+        homework["course"]
         .apply(normalize_course)
     )
 
-    grades = grades[
-        grades["_normalized_course"]
+    homework = homework[
+        homework["_normalized_course"]
         == target_course
     ].copy()
 
@@ -256,27 +207,71 @@ def get_student_grades(
     # REMOVE HELPER COLUMN
     # --------------------------------------------------------
 
-    if "_normalized_course" in grades.columns:
+    homework.drop(
+        columns=["_normalized_course"],
+        inplace=True,
+        errors="ignore"
+    )
 
-        grades.drop(
-            columns=["_normalized_course"],
-            inplace=True
-        )
+    if homework.empty:
+        return homework
 
     # --------------------------------------------------------
-    # SORT
+    # ONLY RECORDS WITH A GRADE
     # --------------------------------------------------------
 
-    if not grades.empty:
+    homework["grade"] = (
+        homework["grade"]
+        .astype(str)
+        .str.strip()
+    )
 
-        grades = grades.sort_values(
-            by=["lesson_date", "id"],
-            ascending=True
-        ).reset_index(
-            drop=True
+    homework = homework[
+        ~homework["grade"].isin(
+            [
+                "",
+                "nan",
+                "None",
+                "NULL"
+            ]
         )
+    ].copy()
 
-    return grades
+    if homework.empty:
+        return homework
+
+    # --------------------------------------------------------
+    # CONVERT LETTER GRADE → PERCENTAGE
+    # --------------------------------------------------------
+
+    homework["percent"] = (
+        homework["grade"]
+        .str.upper()
+        .map(GRADE_MAP)
+        .fillna(0)
+    )
+
+    homework["grade_letter"] = (
+        homework["grade"]
+        .str.upper()
+    )
+
+    # --------------------------------------------------------
+    # FINAL SORT
+    # --------------------------------------------------------
+
+    homework = homework.sort_values(
+        by=[
+            "lesson_date",
+            "id"
+        ],
+        ascending=True,
+        na_position="last"
+    ).reset_index(
+        drop=True
+    )
+
+    return homework
 
 # ============================================================
 # CLEAN GRADES
@@ -297,12 +292,19 @@ def clean_grade_data(grades):
     grades["percent"] = pd.to_numeric(
         grades["percent"],
         errors="coerce"
-    ).fillna(0)
+    )
+
+    grades = grades.dropna(
+        subset=["percent"]
+    )
 
     grades = grades.sort_values(
-        by=["lesson_date"],
-        ascending=True
-    ).reset_index(drop=True)
+        by=["lesson_date", "id"],
+        ascending=True,
+        na_position="last"
+    ).reset_index(
+        drop=True
+    )
 
     return grades
 

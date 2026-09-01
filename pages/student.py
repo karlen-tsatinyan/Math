@@ -20,6 +20,9 @@ def get_student_id():
 
     user = st.session_state.get("user", {})
 
+    if not isinstance(user, dict):
+        return None
+
     # --------------------------------------------------------
     # Preferred method
     # --------------------------------------------------------
@@ -46,7 +49,8 @@ def get_student_id():
 
             result = query_dataframe(
                 """
-                SELECT student_id
+                SELECT
+                    student_id
                 FROM users
                 WHERE id = %s
                 LIMIT 1
@@ -81,7 +85,8 @@ def get_student_id():
 
             result = query_dataframe(
                 """
-                SELECT student_id
+                SELECT
+                    student_id
                 FROM users
                 WHERE LOWER(username) = LOWER(%s)
                 LIMIT 1
@@ -126,14 +131,35 @@ def get_student_info(student_id):
             """
             SELECT
                 id,
-                COALESCE(first_name, '') AS first_name,
-                COALESCE(last_name, '') AS last_name,
-                COALESCE(grade, 'N/A') AS grade,
-                COALESCE(subject, 'N/A') AS subject,
+
+                COALESCE(
+                    first_name,
+                    ''
+                ) AS first_name,
+
+                COALESCE(
+                    last_name,
+                    ''
+                ) AS last_name,
+
+                COALESCE(
+                    grade,
+                    'N/A'
+                ) AS grade,
+
+                COALESCE(
+                    subject,
+                    'N/A'
+                ) AS subject,
+
                 zoom_link,
+
                 meeting_id
+
             FROM students
+
             WHERE id = %s
+
             LIMIT 1
             """,
             (int(student_id),)
@@ -152,27 +178,54 @@ def get_student_info(student_id):
 # DASHBOARD DATA
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
-def get_dashboard_data(student_id, today_date):
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
+def get_dashboard_data(
+    student_id,
+    today_date
+):
+
+    # --------------------------------------------------------
+    # HOMEWORK DUE
+    #
+    # COALESCE is intentional so NULL archived values
+    # are treated as active homework.
+    # --------------------------------------------------------
 
     homework_due = query_dataframe(
         """
         SELECT
             COUNT(*) AS total
+
         FROM homework
+
         WHERE student_id = %s
+
           AND status = 'Assigned'
-          AND COALESCE(archived, 0) = 0
+
+          AND COALESCE(
+              archived,
+              0
+          ) = 0
         """,
         (student_id,)
     )
+
+    # --------------------------------------------------------
+    # UPCOMING SESSIONS
+    # --------------------------------------------------------
 
     sessions_count = query_dataframe(
         """
         SELECT
             COUNT(*) AS total
+
         FROM sessions
+
         WHERE student_id = %s
+
           AND session_date >= %s
         """,
         (
@@ -181,32 +234,61 @@ def get_dashboard_data(student_id, today_date):
         )
     )
 
+    # --------------------------------------------------------
+    # PAYMENTS
+    # --------------------------------------------------------
+
     payments_summary = query_dataframe(
         """
         SELECT
-            COALESCE(SUM(amount), 0) AS total
+            COALESCE(
+                SUM(amount),
+                0
+            ) AS total
+
         FROM payments
+
         WHERE student_id = %s
         """,
         (student_id,)
     )
 
+    # --------------------------------------------------------
+    # NEXT SESSION
+    # --------------------------------------------------------
+
     next_session = query_dataframe(
         """
         SELECT
+
             s.session_date,
+
             s.session_time,
-            COALESCE(s.topic, '') AS topic,
+
+            COALESCE(
+                s.topic,
+                ''
+            ) AS topic,
+
             st.zoom_link,
+
             st.meeting_id
+
         FROM sessions s
+
         JOIN students st
             ON s.student_id = st.id
+
         WHERE s.student_id = %s
+
           AND s.session_date >= %s
+
         ORDER BY
+
             s.session_date ASC,
+
             s.session_time ASC
+
         LIMIT 1
         """,
         (
@@ -227,22 +309,41 @@ def get_dashboard_data(student_id, today_date):
 # HOMEWORK GRADES
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
 def get_grades(student_id):
 
     return query_dataframe(
         """
         SELECT
+
             title AS "Homework",
+
             due_date AS "Due Date",
+
             grade AS "Grade",
+
             teacher_feedback AS "Teacher Feedback",
+
             reviewed_at AS "Graded On"
+
         FROM homework
+
         WHERE student_id = %s
-          AND COALESCE(archived, 0) = 0
+
+          AND COALESCE(
+              archived,
+              0
+          ) = 0
+
           AND grade IS NOT NULL
-          AND TRIM(grade) <> ''
+
+          AND TRIM(
+              grade
+          ) <> ''
+
         ORDER BY
             due_date DESC
         """,
@@ -251,15 +352,451 @@ def get_grades(student_id):
 
 
 # ============================================================
+# STUDENT PROGRESSION DATA
+#
+# This intentionally uses the same grade mapping used by
+# the working Performance module.
+# ============================================================
+
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
+def get_progression_grades(student_id):
+
+    grades = query_dataframe(
+        """
+        SELECT
+
+            due_date::text AS lesson_date,
+
+            COALESCE(
+                curriculum_topic,
+                title,
+                'Homework Assignment'
+            ) AS topic,
+
+            title AS homework_title,
+
+            CASE
+
+                WHEN grade = 'A+' THEN 98
+
+                WHEN grade = 'A' THEN 95
+
+                WHEN grade = 'A-' THEN 92
+
+                WHEN grade = 'B+' THEN 88
+
+                WHEN grade = 'B' THEN 85
+
+                WHEN grade = 'B-' THEN 82
+
+                WHEN grade = 'C+' THEN 78
+
+                WHEN grade = 'C' THEN 75
+
+                WHEN grade = 'C-' THEN 72
+
+                WHEN grade = 'D' THEN 65
+
+                WHEN grade = 'F' THEN 50
+
+                ELSE NULL
+
+            END AS percent,
+
+            grade AS grade_letter,
+
+            COALESCE(
+                teacher_feedback,
+                ''
+            ) AS teacher_comment
+
+        FROM homework
+
+        WHERE student_id = %s
+
+          AND COALESCE(
+              archived,
+              0
+          ) = 0
+
+          AND grade IS NOT NULL
+
+          AND TRIM(
+              grade
+          ) <> ''
+
+          AND due_date IS NOT NULL
+
+        ORDER BY
+            due_date ASC,
+            id ASC
+        """,
+        (student_id,)
+    )
+
+    if grades.empty:
+        return grades
+
+    grades["lesson_date"] = pd.to_datetime(
+        grades["lesson_date"],
+        errors="coerce"
+    )
+
+    grades["percent"] = pd.to_numeric(
+        grades["percent"],
+        errors="coerce"
+    )
+
+    grades = grades.dropna(
+        subset=[
+            "lesson_date",
+            "percent"
+        ]
+    )
+
+    grades = grades.sort_values(
+        by=[
+            "lesson_date"
+        ],
+        ascending=True
+    ).reset_index(
+        drop=True
+    )
+
+    return grades
+
+
+# ============================================================
+# ADVANCED PROGRESSION ANALYTICS
+# ============================================================
+
+def display_student_progression(
+    student_id
+):
+
+    st.subheader(
+        "📈 Advanced Progression Analytics"
+    )
+
+    grades = get_progression_grades(
+        student_id
+    )
+
+    # --------------------------------------------------------
+    # NO DATA
+    # --------------------------------------------------------
+
+    if grades.empty:
+
+        st.info(
+            "No graded homework with a valid due date "
+            "is available yet."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # SUMMARY METRICS
+    # --------------------------------------------------------
+
+    average_score = grades[
+        "percent"
+    ].mean()
+
+    highest_score = grades[
+        "percent"
+    ].max()
+
+    lowest_score = grades[
+        "percent"
+    ].min()
+
+    # --------------------------------------------------------
+    # TREND
+    # --------------------------------------------------------
+
+    if len(grades) >= 2:
+
+        first_score = float(
+            grades.iloc[0]["percent"]
+        )
+
+        last_score = float(
+            grades.iloc[-1]["percent"]
+        )
+
+        difference = (
+            last_score
+            - first_score
+        )
+
+        if difference > 2:
+
+            trend = "Improving ↑"
+
+        elif difference < -2:
+
+            trend = "Declining ↓"
+
+        else:
+
+            trend = "Stable →"
+
+    else:
+
+        trend = "Not enough data"
+
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        st.metric(
+            "Average",
+            f"{average_score:.1f}%"
+        )
+
+    with c2:
+
+        st.metric(
+            "Highest",
+            f"{highest_score:.1f}%"
+        )
+
+    with c3:
+
+        st.metric(
+            "Lowest",
+            f"{lowest_score:.1f}%"
+        )
+
+    with c4:
+
+        st.metric(
+            "Trend",
+            trend
+        )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # CHART
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 📈 Grade Progression"
+    )
+
+    st.caption(
+        "Progression is plotted by homework due date, "
+        "not by submission or grading date."
+    )
+
+    chart_data = grades.copy()
+
+    chart_data[
+        "formatted_date"
+    ] = chart_data[
+        "lesson_date"
+    ].dt.strftime(
+        "%Y-%m-%d"
+    )
+
+    try:
+
+        import altair as alt
+
+        base = alt.Chart(
+            chart_data
+        )
+
+        line = base.mark_line(
+            point=True
+        ).encode(
+
+            x=alt.X(
+                "formatted_date:N",
+                title="Homework Due Date",
+                sort=None
+            ),
+
+            y=alt.Y(
+                "percent:Q",
+                title="Score (%)",
+                scale=alt.Scale(
+                    domain=[0, 100]
+                )
+            ),
+
+            tooltip=[
+
+                alt.Tooltip(
+                    "formatted_date:N",
+                    title="Due Date"
+                ),
+
+                alt.Tooltip(
+                    "homework_title:N",
+                    title="Homework"
+                ),
+
+                alt.Tooltip(
+                    "topic:N",
+                    title="Topic"
+                ),
+
+                alt.Tooltip(
+                    "percent:Q",
+                    title="Score (%)",
+                    format=".1f"
+                ),
+
+                alt.Tooltip(
+                    "grade_letter:N",
+                    title="Grade"
+                )
+            ]
+        )
+
+        chart = (
+            line
+            .interactive()
+            .properties(
+                height=380
+            )
+        )
+
+        st.altair_chart(
+            chart,
+            use_container_width=True
+        )
+
+    except Exception:
+
+        fallback = chart_data[
+            [
+                "lesson_date",
+                "percent"
+            ]
+        ].copy()
+
+        fallback = fallback.set_index(
+            "lesson_date"
+        )
+
+        fallback.rename(
+            columns={
+                "percent": "Score (%)"
+            },
+            inplace=True
+        )
+
+        st.line_chart(
+            fallback
+        )
+
+    # --------------------------------------------------------
+    # GRADE HISTORY
+    # --------------------------------------------------------
+
+    st.divider()
+
+    st.markdown(
+        "### 📋 Grade History"
+    )
+
+    display_df = grades.copy()
+
+    display_df[
+        "lesson_date"
+    ] = display_df[
+        "lesson_date"
+    ].dt.strftime(
+        "%Y-%m-%d"
+    )
+
+    display_df = display_df.rename(
+        columns={
+
+            "lesson_date":
+                "Due Date",
+
+            "homework_title":
+                "Homework",
+
+            "topic":
+                "Topic",
+
+            "percent":
+                "Percentage",
+
+            "grade_letter":
+                "Grade",
+
+            "teacher_comment":
+                "Teacher Comments"
+        }
+    )
+
+    columns_to_show = [
+
+        "Due Date",
+
+        "Homework",
+
+        "Topic",
+
+        "Percentage",
+
+        "Grade",
+
+        "Teacher Comments"
+    ]
+
+    display_df = display_df[
+        [
+            column
+            for column in columns_to_show
+            if column in display_df.columns
+        ]
+    ]
+
+    st.dataframe(
+
+        display_df,
+
+        use_container_width=True,
+
+        hide_index=True,
+
+        column_config={
+
+            "Percentage":
+                st.column_config.NumberColumn(
+                    "Percentage",
+                    format="%.1f%%"
+                )
+        }
+    )
+
+
+# ============================================================
 # SESSION HISTORY
 #
 # Attendance is matched by:
 # student_id + session_date + session_time
-#
-# This matches the attendance.py structure.
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
 def get_session_history(student_id):
 
     return query_dataframe(
@@ -283,7 +820,9 @@ def get_session_history(student_id):
         FROM sessions s
 
         LEFT JOIN attendance a
-            ON a.student_id = s.student_id
+
+            ON a.student_id =
+                s.student_id
 
             AND a.session_date =
                 s.session_date
@@ -291,8 +830,7 @@ def get_session_history(student_id):
             AND a.session_time =
                 s.session_time
 
-        WHERE
-            s.student_id = %s
+        WHERE s.student_id = %s
 
         ORDER BY
 
@@ -308,17 +846,26 @@ def get_session_history(student_id):
 # FINANCIAL DATA
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
 def get_payment_history(student_id):
 
     return query_dataframe(
         """
         SELECT
+
             amount,
+
             payment_date,
+
             period
+
         FROM payments
+
         WHERE student_id = %s
+
         ORDER BY
             payment_date DESC
         """,
@@ -330,15 +877,21 @@ def get_payment_history(student_id):
 # PARENT PIN
 # ============================================================
 
-@st.cache_data(ttl=CACHE_TTL)
+@st.cache_data(
+    ttl=CACHE_TTL,
+    show_spinner=False
+)
 def get_parent_pin(student_id):
 
     return query_dataframe(
         """
         SELECT
             parent_pin
+
         FROM students
+
         WHERE id = %s
+
         LIMIT 1
         """,
         (student_id,)
@@ -367,15 +920,43 @@ def student_page():
         return
 
     # ========================================================
+    # IMPORTANT
+    #
+    # Keep the resolved student ID explicitly synchronized
+    # with session_state so modules/homework.py always sees
+    # the same student.
+    # ========================================================
+
+    user = st.session_state.get(
+        "user",
+        {}
+    )
+
+    if isinstance(user, dict):
+
+        user["student_id"] = int(
+            student_id
+        )
+
+        st.session_state.user = user
+
+    st.session_state[
+        "student_id"
+    ] = int(student_id)
+
+    # ========================================================
     # STUDENT INFORMATION
     # ========================================================
 
-    student_df = get_student_info(student_id)
+    student_df = get_student_info(
+        student_id
+    )
 
     if student_df.empty:
 
         st.error(
-            f"No student record found for Student ID: {student_id}"
+            f"No student record found for Student ID: "
+            f"{student_id}"
         )
 
         return
@@ -403,7 +984,6 @@ def student_page():
             line-height: 1.1;
         }
 
-
         .student-section {
 
             font-size: 0.72rem;
@@ -421,18 +1001,15 @@ def student_page():
                 1px solid rgba(128,128,128,0.30);
         }
 
-
         .student-section.first {
 
             margin-top: 0px;
         }
 
-
         [data-testid="stSidebar"] .stButton {
 
             margin-bottom: 0px !important;
         }
-
 
         [data-testid="stSidebar"] .stButton > button {
 
@@ -448,7 +1025,6 @@ def student_page():
 
             border-radius: 5px !important;
         }
-
 
         [data-testid="stSidebar"] .element-container {
 
@@ -491,7 +1067,10 @@ def student_page():
 
     ]
 
-    if "student_portal_menu" not in st.session_state:
+    if (
+        "student_portal_menu"
+        not in st.session_state
+    ):
 
         st.session_state.student_portal_menu = (
             "🏠 Dashboard"
@@ -510,7 +1089,10 @@ def student_page():
     # NAVIGATION
     # ========================================================
 
-    def student_nav_button(label, value):
+    def student_nav_button(
+        label,
+        value
+    ):
 
         if st.sidebar.button(
             label,
@@ -518,7 +1100,9 @@ def student_page():
             key=f"student_nav_{value}"
         ):
 
-            st.session_state.student_portal_menu = value
+            st.session_state.student_portal_menu = (
+                value
+            )
 
             st.rerun()
 
@@ -584,9 +1168,13 @@ def student_page():
     # CLASSROOM INFORMATION
     # ========================================================
 
-    z_link = student.get("zoom_link")
+    z_link = student.get(
+        "zoom_link"
+    )
 
-    m_id = student.get("meeting_id")
+    m_id = student.get(
+        "meeting_id"
+    )
 
     if z_link or m_id:
 
@@ -600,7 +1188,11 @@ def student_page():
         if (
             z_link
             and str(z_link).strip()
-            not in ["", "nan", "None"]
+            not in [
+                "",
+                "nan",
+                "None"
+            ]
         ):
 
             st.sidebar.markdown(
@@ -610,7 +1202,11 @@ def student_page():
         if (
             m_id
             and str(m_id).strip()
-            not in ["", "nan", "None"]
+            not in [
+                "",
+                "nan",
+                "None"
+            ]
         ):
 
             st.sidebar.caption(
@@ -739,7 +1335,11 @@ def student_page():
             if (
                 zoom_url
                 and str(zoom_url).strip()
-                not in ["", "nan", "None"]
+                not in [
+                    "",
+                    "nan",
+                    "None"
+                ]
             ):
 
                 st.markdown(
@@ -749,7 +1349,11 @@ def student_page():
             elif (
                 meeting_id
                 and str(meeting_id).strip()
-                not in ["", "nan", "None"]
+                not in [
+                    "",
+                    "nan",
+                    "None"
+                ]
             ):
 
                 st.caption(
@@ -775,9 +1379,36 @@ def student_page():
 
     elif option == "📚 Homework":
 
-        from modules.homework import student_homework
+        st.title(
+            "📚 My Homework"
+        )
 
-        student_homework()
+        st.caption(
+            "Homework assigned to your student account."
+        )
+
+        # ----------------------------------------------------
+        # IMPORTANT:
+        #
+        # Keep the existing homework module because it
+        # contains the complete assignment/submission system.
+        # ----------------------------------------------------
+
+        try:
+
+            from modules.homework import (
+                student_homework
+            )
+
+            student_homework()
+
+        except Exception as e:
+
+            st.error(
+                "Unable to load your homework."
+            )
+
+            st.exception(e)
 
     # ========================================================
     # PERFORMANCE
@@ -804,7 +1435,10 @@ def student_page():
         # HOMEWORK GRADES
         # ====================================================
 
-        if performance_section == "📚 Homework Grades":
+        if (
+            performance_section
+            == "📚 Homework Grades"
+        ):
 
             st.subheader(
                 "Homework Grades"
@@ -837,21 +1471,9 @@ def student_page():
             == "📈 Advanced Progression Analytics"
         ):
 
-            try:
-
-                from modules.performance import (
-                    student_performance_view
-                )
-
-                student_performance_view(
-                    int(student_id)
-                )
-
-            except Exception as e:
-
-                st.error(
-                    "Unable to load Performance Analytics."
-                )
+            display_student_progression(
+                student_id
+            )
 
         # ====================================================
         # SESSION HISTORY
@@ -866,8 +1488,10 @@ def student_page():
                 "Session History"
             )
 
-            sessions_history = get_session_history(
-                student_id
+            sessions_history = (
+                get_session_history(
+                    student_id
+                )
             )
 
             if sessions_history.empty:
@@ -878,7 +1502,9 @@ def student_page():
 
             else:
 
-                for index, row in sessions_history.iterrows():
+                for index, row in (
+                    sessions_history.iterrows()
+                ):
 
                     session_date = row[
                         "Date"
@@ -896,8 +1522,15 @@ def student_page():
                         "Attendance"
                     ]
 
-                    col1, col2, col3, col4 = st.columns(
-                        [1.2, 1.1, 3, 1.3]
+                    col1, col2, col3, col4 = (
+                        st.columns(
+                            [
+                                1.2,
+                                1.1,
+                                3,
+                                1.3
+                            ]
+                        )
                     )
 
                     with col1:
@@ -936,7 +1569,8 @@ def student_page():
                         ):
 
                             st.warning(
-                                "Attendance: Excused Absence"
+                                "Attendance: "
+                                "Excused Absence"
                             )
 
                         elif (
@@ -945,7 +1579,8 @@ def student_page():
                         ):
 
                             st.error(
-                                "Attendance: Unexcused Absence"
+                                "Attendance: "
+                                "Unexcused Absence"
                             )
 
                         else:
@@ -959,13 +1594,14 @@ def student_page():
                         if st.button(
                             "📖 Review Topic",
                             key=(
-                                f"review_session_topic_"
+                                "review_session_topic_"
                                 f"{student_id}_{index}"
                             )
                         ):
 
                             with st.spinner(
-                                "🤖 Creating your topic reference..."
+                                "🤖 Creating your "
+                                "topic reference..."
                             ):
 
                                 from modules.ai_learning_reference import (
@@ -1053,18 +1689,6 @@ def student_page():
 
     # ========================================================
     # SCHEDULE
-    #
-    # IMPORTANT:
-    # The student schedule is read directly from the
-    # sessions table.
-    #
-    # Attendance is linked using:
-    #
-    # student_id
-    # session_date
-    # session_time
-    #
-    # This matches the scheduler/attendance design.
     # ========================================================
 
     elif option == "📅 Schedule":
@@ -1138,12 +1762,15 @@ def student_page():
                     ]
 
                     .sort_values(
-                        ["Date", "Time"]
+                        [
+                            "Date",
+                            "Time"
+                        ]
                     )
                 )
 
             # ------------------------------------------------
-            # DEFAULT
+            # RECENT + UPCOMING
             # ------------------------------------------------
 
             elif (
@@ -1158,7 +1785,10 @@ def student_page():
                     ]
 
                     .sort_values(
-                        ["Date", "Time"],
+                        [
+                            "Date",
+                            "Time"
+                        ],
                         ascending=False
                     )
 
@@ -1172,7 +1802,10 @@ def student_page():
                     ]
 
                     .sort_values(
-                        ["Date", "Time"]
+                        [
+                            "Date",
+                            "Time"
+                        ]
                     )
 
                     .head(3)
@@ -1200,7 +1833,10 @@ def student_page():
                     sessions
 
                     .sort_values(
-                        ["Date", "Time"],
+                        [
+                            "Date",
+                            "Time"
+                        ],
                         ascending=False
                     )
 
@@ -1218,7 +1854,9 @@ def student_page():
 
                 start_date = (
                     today
-                    - pd.Timedelta(days=30)
+                    - pd.Timedelta(
+                        days=30
+                    )
                 )
 
                 sessions_display = (
@@ -1229,7 +1867,10 @@ def student_page():
                     ]
 
                     .sort_values(
-                        ["Date", "Time"],
+                        [
+                            "Date",
+                            "Time"
+                        ],
                         ascending=False
                     )
                 )
@@ -1245,7 +1886,10 @@ def student_page():
                     sessions
 
                     .sort_values(
-                        ["Date", "Time"],
+                        [
+                            "Date",
+                            "Time"
+                        ],
                         ascending=False
                     )
                 )
@@ -1295,21 +1939,25 @@ def student_page():
 
                     column_config={
 
-                        "Date": st.column_config.TextColumn(
-                            "📅 Date"
-                        ),
+                        "Date":
+                            st.column_config.TextColumn(
+                                "📅 Date"
+                            ),
 
-                        "Time": st.column_config.TextColumn(
-                            "⏰ Time"
-                        ),
+                        "Time":
+                            st.column_config.TextColumn(
+                                "⏰ Time"
+                            ),
 
-                        "Topic": st.column_config.TextColumn(
-                            "📘 Topic"
-                        ),
+                        "Topic":
+                            st.column_config.TextColumn(
+                                "📘 Topic"
+                            ),
 
-                        "Attendance": st.column_config.TextColumn(
-                            "✅ Attendance"
-                        )
+                        "Attendance":
+                            st.column_config.TextColumn(
+                                "✅ Attendance"
+                            )
                     }
                 )
 
@@ -1324,7 +1972,10 @@ def student_page():
                     ]
 
                     .sort_values(
-                        ["Date", "Time"]
+                        [
+                            "Date",
+                            "Time"
+                        ]
                     )
                 )
 
@@ -1362,8 +2013,14 @@ def student_page():
                             border=True
                         ):
 
-                            c1, c2, c3 = st.columns(
-                                [1.5, 1.5, 4]
+                            c1, c2, c3 = (
+                                st.columns(
+                                    [
+                                        1.5,
+                                        1.5,
+                                        4
+                                    ]
+                                )
                             )
 
                             with c1:
@@ -1391,7 +2048,8 @@ def student_page():
                                     + (
                                         str(topic)
                                         if topic
-                                        else "Tutoring Session"
+                                        else
+                                        "Tutoring Session"
                                     )
                                 )
 
@@ -1416,20 +2074,18 @@ def student_page():
                     # ZOOM
                     # ------------------------------------------------
 
-                    next_session = (
-                        upcoming_sessions.iloc[0]
-                    )
-
-                    # Retrieve Zoom information specifically
-                    # for the student's next session.
-
                     zoom_result = query_dataframe(
                         """
                         SELECT
+
                             zoom_link,
+
                             meeting_id
+
                         FROM students
+
                         WHERE id = %s
+
                         LIMIT 1
                         """,
                         (student_id,)
@@ -1437,17 +2093,23 @@ def student_page():
 
                     if not zoom_result.empty:
 
-                        zoom_link = zoom_result.iloc[0][
-                            "zoom_link"
-                        ]
+                        zoom_link = (
+                            zoom_result.iloc[0][
+                                "zoom_link"
+                            ]
+                        )
 
-                        meeting_id = zoom_result.iloc[0][
-                            "meeting_id"
-                        ]
+                        meeting_id = (
+                            zoom_result.iloc[0][
+                                "meeting_id"
+                            ]
+                        )
 
                         if (
                             zoom_link
-                            and str(zoom_link).strip()
+                            and str(
+                                zoom_link
+                            ).strip()
                             not in [
                                 "",
                                 "nan",
@@ -1463,7 +2125,9 @@ def student_page():
 
                         elif (
                             meeting_id
-                            and str(meeting_id).strip()
+                            and str(
+                                meeting_id
+                            ).strip()
                             not in [
                                 "",
                                 "nan",

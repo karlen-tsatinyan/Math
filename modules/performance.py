@@ -575,56 +575,6 @@ def display_grade_history(
 # PERFORMANCE PROGRESSION DASHBOARD
 # ADMIN / STANDALONE PERFORMANCE PAGE
 # ============================================================
-# ============================================================
-# DEBUG HOMEWORK RECORDS
-# TEMPORARY - REMOVE AFTER FIXING PERFORMANCE
-# ============================================================
-
-def debug_student_homework(student_id):
-
-    st.subheader("🔎 Homework Performance Debug")
-
-    debug_df = query_dataframe(
-        """
-        SELECT
-            id,
-            student_id,
-            course,
-            title,
-            grade,
-            status,
-            due_date,
-            curriculum_topic,
-            teacher_feedback
-        FROM homework
-        WHERE student_id = %s
-        ORDER BY due_date DESC NULLS LAST, id DESC
-        """,
-        (student_id,)
-    )
-
-    if debug_df.empty:
-
-        st.error(
-            f"No homework records were found for "
-            f"student_id = {student_id}"
-        )
-
-        return
-
-    st.write(
-        f"Found **{len(debug_df)} homework records** "
-        f"for student_id = `{student_id}`."
-    )
-
-    st.dataframe(
-        debug_df,
-        use_container_width=True,
-        hide_index=True
-    )
-#end of debug
-
-
 def performance_dashboard():
 
     st.title(
@@ -750,9 +700,6 @@ def performance_dashboard():
         f"📚 Showing performance for "
         f"**{selected_course}**"
     )
-    #DEBUGGING
-    debug_student_homework(student_id)
-    #end of debug
     
     grades = get_student_grades(
         student_id,

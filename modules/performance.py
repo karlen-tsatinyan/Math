@@ -98,17 +98,24 @@ def get_student_courses(student_id):
 # GRADE QUERY
 # ============================================================
 
+# ============================================================
+# GRADE QUERY
+# ============================================================
+
 def get_student_grades(
     student_id,
     selected_course
 ):
     """
-    Load graded/reviewed homework for one student/course.
+    Load graded homework for one student/course.
 
-    Course matching is case-insensitive and ignores
-    accidental spaces.
+    Course matching is tolerant of:
+        Algebra 2
+        Algebra II
+        ALGEBRA 2
+        algebra   2
 
-    Status matching accepts:
+    Status matching is tolerant of:
         Reviewed
         Graded
         Completed
@@ -136,18 +143,22 @@ def get_student_grades(
                 WHEN UPPER(TRIM(grade)) = 'A+' THEN 98
                 WHEN UPPER(TRIM(grade)) = 'A'  THEN 95
                 WHEN UPPER(TRIM(grade)) = 'A-' THEN 92
+
                 WHEN UPPER(TRIM(grade)) = 'B+' THEN 88
                 WHEN UPPER(TRIM(grade)) = 'B'  THEN 85
                 WHEN UPPER(TRIM(grade)) = 'B-' THEN 82
+
                 WHEN UPPER(TRIM(grade)) = 'C+' THEN 78
                 WHEN UPPER(TRIM(grade)) = 'C'  THEN 75
                 WHEN UPPER(TRIM(grade)) = 'C-' THEN 72
-                WHEN UPPER(TRIM(grade)) = 'D'  THEN 65
-                WHEN UPPER(TRIM(grade)) = 'F'  THEN 50
+
+                WHEN UPPER(TRIM(grade)) = 'D' THEN 65
+                WHEN UPPER(TRIM(grade)) = 'F' THEN 50
+
                 ELSE 0
             END AS percent,
 
-            grade AS grade_letter,
+            TRIM(grade) AS grade_letter,
 
             COALESCE(
                 teacher_feedback,
@@ -158,21 +169,69 @@ def get_student_grades(
 
         WHERE student_id = %s
 
-          AND LOWER(TRIM(course))
-              = LOWER(TRIM(%s))
+          -- ==================================================
+          -- NORMALIZED COURSE MATCH
+          -- ==================================================
+          --
+          -- Converts Roman numeral II to 2.
+          --
+          -- Therefore:
+          --
+          -- Algebra II
+          -- Algebra 2
+          --
+          -- will match.
+          --
+          -- Also removes repeated spaces and ignores case.
+          --
+          AND REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                    LOWER(TRIM(course)),
+                    '\\bii\\b',
+                    '2',
+                    'g'
+                ),
+                '\\s+',
+                ' ',
+                'g'
+              )
+              =
+              REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                    LOWER(TRIM(%s)),
+                    '\\bii\\b',
+                    '2',
+                    'g'
+                ),
+                '\\s+',
+                ' ',
+                'g'
+              )
 
-          AND LOWER(TRIM(status))
+          -- ==================================================
+          -- GRADED HOMEWORK
+          -- ==================================================
+
+          AND LOWER(TRIM(COALESCE(status, '')))
               IN (
                   'reviewed',
                   'graded',
                   'completed'
               )
 
-          AND due_date IS NOT NULL
+          -- ==================================================
+          -- MUST HAVE A GRADE
+          -- ==================================================
 
           AND grade IS NOT NULL
 
           AND TRIM(grade) <> ''
+
+          -- ==================================================
+          -- MUST HAVE DUE DATE
+          -- ==================================================
+
+          AND due_date IS NOT NULL
 
         ORDER BY
             due_date ASC,
@@ -183,7 +242,6 @@ def get_student_grades(
             selected_course
         )
     )
-
 
 # ============================================================
 # CLEAN GRADES

@@ -103,7 +103,15 @@ def get_student_grades(
     selected_course
 ):
     """
-    Load reviewed homework grades for one student/course.
+    Load graded/reviewed homework for one student/course.
+
+    Course matching is case-insensitive and ignores
+    accidental spaces.
+
+    Status matching accepts:
+        Reviewed
+        Graded
+        Completed
 
     Progression uses homework due_date.
     """
@@ -122,18 +130,20 @@ def get_student_grades(
 
             title AS homework_title,
 
+            100 AS max_score,
+
             CASE
-                WHEN grade = 'A+' THEN 98
-                WHEN grade = 'A'  THEN 95
-                WHEN grade = 'A-' THEN 92
-                WHEN grade = 'B+' THEN 88
-                WHEN grade = 'B'  THEN 85
-                WHEN grade = 'B-' THEN 82
-                WHEN grade = 'C+' THEN 78
-                WHEN grade = 'C'  THEN 75
-                WHEN grade = 'C-' THEN 72
-                WHEN grade = 'D'  THEN 65
-                WHEN grade = 'F'  THEN 50
+                WHEN UPPER(TRIM(grade)) = 'A+' THEN 98
+                WHEN UPPER(TRIM(grade)) = 'A'  THEN 95
+                WHEN UPPER(TRIM(grade)) = 'A-' THEN 92
+                WHEN UPPER(TRIM(grade)) = 'B+' THEN 88
+                WHEN UPPER(TRIM(grade)) = 'B'  THEN 85
+                WHEN UPPER(TRIM(grade)) = 'B-' THEN 82
+                WHEN UPPER(TRIM(grade)) = 'C+' THEN 78
+                WHEN UPPER(TRIM(grade)) = 'C'  THEN 75
+                WHEN UPPER(TRIM(grade)) = 'C-' THEN 72
+                WHEN UPPER(TRIM(grade)) = 'D'  THEN 65
+                WHEN UPPER(TRIM(grade)) = 'F'  THEN 50
                 ELSE 0
             END AS percent,
 
@@ -147,9 +157,22 @@ def get_student_grades(
         FROM homework
 
         WHERE student_id = %s
-          AND course = %s
-          AND status = 'Reviewed'
+
+          AND LOWER(TRIM(course))
+              = LOWER(TRIM(%s))
+
+          AND LOWER(TRIM(status))
+              IN (
+                  'reviewed',
+                  'graded',
+                  'completed'
+              )
+
           AND due_date IS NOT NULL
+
+          AND grade IS NOT NULL
+
+          AND TRIM(grade) <> ''
 
         ORDER BY
             due_date ASC,

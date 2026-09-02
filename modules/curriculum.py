@@ -93,7 +93,7 @@ def curriculum_management():
                     '1st Grade General Math'
                 ) AS current_track
             FROM students
-            WHERE COALESCE(active, TRUE) = TRUE
+            WHERE COALESCE(archived, FALSE) = FALSE
             ORDER BY last_name, first_name
             """
         )

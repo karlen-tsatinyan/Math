@@ -88,8 +88,12 @@ def curriculum_management():
                 first_name || ' ' || last_name AS student_name,
                 grade,
                 subject,
-                COALESCE(curriculum_track, '1st Grade General Math') AS current_track
+                COALESCE(
+                    curriculum_track,
+                    '1st Grade General Math'
+                ) AS current_track
             FROM students
+            WHERE COALESCE(active, TRUE) = TRUE
             ORDER BY last_name, first_name
             """
         )

@@ -35,17 +35,14 @@ st.set_option(
 
 REMEMBER_COOKIE_NAME = "advanced_math_remember_me"
 REMEMBER_ME_DAYS = 30
+REMEMBER_ME_MAX_AGE = REMEMBER_ME_DAYS * 24 * 60 * 60
 
 
 # ==========================================
 # COOKIE MANAGER
 #
 # IMPORTANT:
-# DO NOT cache CookieManager().
-#
-# CookieManager creates a Streamlit custom
-# component/widget, so putting it inside
-# @st.cache_resource causes CachedWidgetWarning.
+# DO NOT CACHE THIS COMPONENT.
 # ==========================================
 
 cookie_manager = stx.CookieManager(
@@ -62,10 +59,6 @@ st.markdown(
     """
     <style>
 
-    /* =====================================================
-       HIDE STREAMLIT AUTOMATIC PAGE NAVIGATION
-       ===================================================== */
-
     [data-testid="stSidebarNav"],
     [data-testid="stSidebarNavItems"],
     nav[data-testid="stSidebarNav"],
@@ -73,37 +66,17 @@ st.markdown(
         display: none !important;
     }
 
-
-    /* =====================================================
-       HIDE STATUS / RUNNING INDICATOR
-       ===================================================== */
-
     [data-testid="stStatusWidget"] {
         display: none !important;
     }
-
-
-    /* =====================================================
-       HIDE TOP DECORATION
-       ===================================================== */
 
     header [data-testid="stDecoration"] {
         display: none !important;
     }
 
-
-    /* =====================================================
-       HIDE FOOTER
-       ===================================================== */
-
     footer {
         visibility: hidden;
     }
-
-
-    /* =====================================================
-       COURSE BUTTONS
-       ===================================================== */
 
     .course-title {
         text-align: center;
@@ -131,19 +104,21 @@ if "user" not in st.session_state:
 if "selected_course" not in st.session_state:
     st.session_state.selected_course = None
 
-# Prevent repeatedly checking the remember-me
-# cookie during the same Streamlit session.
-if "remember_login_checked" not in st.session_state:
-    st.session_state.remember_login_checked = False
+if "remember_cookie_checked" not in st.session_state:
+    st.session_state.remember_cookie_checked = False
 
-# Used so expired-token cleanup happens only once
-# per Streamlit session.
+if "remember_cookie_waiting" not in st.session_state:
+    st.session_state.remember_cookie_waiting = False
+
+if "remember_cookie_pending_token" not in st.session_state:
+    st.session_state.remember_cookie_pending_token = None
+
 if "remember_tokens_cleaned" not in st.session_state:
     st.session_state.remember_tokens_cleaned = False
 
 
 # ==========================================
-# REMEMBER-ME TOKEN CLEANUP
+# CLEAN EXPIRED TOKENS
 # ==========================================
 
 def cleanup_remember_tokens():
@@ -154,8 +129,6 @@ def cleanup_remember_tokens():
     try:
         cleanup_expired_tokens()
     except Exception:
-        # Cleanup should never prevent the portal
-        # from opening.
         pass
 
     st.session_state.remember_tokens_cleaned = True
@@ -168,55 +141,63 @@ def cleanup_remember_tokens():
 def restore_remembered_login():
 
     """
-    Check the browser for the Remember Me token.
+    Restore the login from the persistent browser cookie.
 
-    The browser stores the random token.
-    The database stores only its SHA-256 hash.
-
-    If the token is valid, the user is automatically
-    logged in without entering a password.
+    The function deliberately waits for the CookieManager
+    component to initialize before treating a missing cookie
+    as a real "no cookie" result.
     """
 
-    if st.session_state.remember_login_checked:
-        return
-
-    st.session_state.remember_login_checked = True
+    if st.session_state.remember_cookie_checked:
+        return True
 
     try:
 
-        token = cookie_manager.get(
+        # --------------------------------------------------
+        # Read all cookies.
+        #
+        # CookieManager may return None while its component
+        # is still initializing.
+        # --------------------------------------------------
+
+        cookies = cookie_manager.get_all()
+
+        if cookies is None:
+
+            return False
+
+        # --------------------------------------------------
+        # Component is now responding.
+        # --------------------------------------------------
+
+        st.session_state.remember_cookie_checked = True
+
+        token = cookies.get(
             REMEMBER_COOKIE_NAME
         )
 
         if not token:
-            return
+            return True
+
+        # --------------------------------------------------
+        # Validate token against PostgreSQL.
+        # --------------------------------------------------
 
         user = login_from_token(token)
 
         if user:
 
-            # ------------------------------------------
-            # Restore user
-            # ------------------------------------------
-
             st.session_state.user = user
-
-            # ------------------------------------------
-            # Restore selected course
-            #
-            # authentication.py may already determine
-            # selected_course when there is only one.
-            # ------------------------------------------
 
             st.session_state.selected_course = (
                 user.get("selected_course")
             )
 
-            return
+            return True
 
-        # ----------------------------------------------
-        # Invalid / expired token
-        # ----------------------------------------------
+        # --------------------------------------------------
+        # Invalid/expired/revoked token.
+        # --------------------------------------------------
 
         try:
 
@@ -227,9 +208,59 @@ def restore_remembered_login():
         except Exception:
             pass
 
+        return True
+
     except Exception:
-        # A cookie problem should never prevent the
-        # normal login screen from appearing.
+        # Cookie component is not ready yet.
+        return False
+
+
+# ==========================================
+# SET REMEMBER-ME COOKIE
+# ==========================================
+
+def set_remember_me_cookie(token):
+
+    """
+    Put the persistent token into the browser.
+
+    Returns True when the cookie command has been issued.
+    """
+
+    if not token:
+        return False
+
+    try:
+
+        cookie_manager.set(
+            REMEMBER_COOKIE_NAME,
+            token,
+            path="/",
+            max_age=REMEMBER_ME_MAX_AGE,
+            secure=True,
+            same_site="strict"
+        )
+
+        return True
+
+    except Exception:
+
+        return False
+
+
+# ==========================================
+# REMOVE REMEMBER-ME COOKIE
+# ==========================================
+
+def remove_remember_me_cookie():
+
+    try:
+
+        cookie_manager.delete(
+            REMEMBER_COOKIE_NAME
+        )
+
+    except Exception:
         pass
 
 
@@ -253,13 +284,6 @@ def login_screen():
             "Password",
             type="password"
         )
-
-        # ----------------------------------------------
-        # REMEMBER ME
-        #
-        # This is the ONLY new visible item on the
-        # existing login interface.
-        # ----------------------------------------------
 
         remember_me = st.checkbox(
             "Remember me on this device",
@@ -298,102 +322,115 @@ def login_screen():
 
                     return
 
-            if user:
+            if not user:
 
-                # ------------------------------------------
-                # SAVE USER
-                # ------------------------------------------
-
-                st.session_state.user = user
-
-                # ------------------------------------------
-                # SAVE AUTOMATICALLY SELECTED COURSE
-                #
-                # If there is only one course,
-                # authentication.py already selected it.
-                # ------------------------------------------
-
-                st.session_state.selected_course = (
-                    user.get("selected_course")
+                st.error(
+                    "Incorrect username or password."
                 )
 
-                # ------------------------------------------
-                # REMEMBER ME
-                # ------------------------------------------
+                return
 
-                if remember_me:
+            # ==========================================
+            # NORMAL SESSION LOGIN
+            # ==========================================
 
-                    try:
+            st.session_state.user = user
 
-                        # Create secure random token.
-                        token = create_login_token(
-                            user
+            st.session_state.selected_course = (
+                user.get("selected_course")
+            )
+
+            # ==========================================
+            # REMEMBER ME
+            # ==========================================
+
+            if remember_me:
+
+                try:
+
+                    token = create_login_token(
+                        user
+                    )
+
+                    if not token:
+
+                        raise RuntimeError(
+                            "Unable to create login token."
                         )
 
-                        # Store token in browser.
-                        #
-                        # secure=True:
-                        # Only send cookie over HTTPS.
-                        #
-                        # same_site="strict":
-                        # Restricts cross-site cookie use.
-                        #
-                        # max_age:
-                        # 30 days.
-                        #
-                        cookie_manager.set(
-                            REMEMBER_COOKIE_NAME,
-                            token,
-                            path="/",
-                            max_age=(
-                                REMEMBER_ME_DAYS
-                                * 24
-                                * 60
-                                * 60
-                            ),
-                            secure=True,
-                            same_site="strict"
-                        )
-
-                    except Exception:
-
-                        # Login still works even if the
-                        # persistent cookie cannot be created.
-                        st.warning(
-                            "You are logged in, but "
-                            "Remember Me could not be enabled "
-                            "on this browser."
-                        )
-
-                else:
-
-                    # --------------------------------------
-                    # User did NOT select Remember Me.
+                    # ----------------------------------
+                    # Store token in session temporarily.
                     #
-                    # If an older remembered cookie exists,
-                    # revoke it and remove it.
-                    # --------------------------------------
+                    # This allows us to complete the
+                    # browser-component round trip before
+                    # proceeding.
+                    # ----------------------------------
 
-                    try:
+                    st.session_state.remember_cookie_pending_token = (
+                        token
+                    )
 
-                        existing_token = (
-                            cookie_manager.get(
-                                REMEMBER_COOKIE_NAME
-                            )
+                    st.session_state.remember_cookie_waiting = (
+                        True
+                    )
+
+                    # Issue browser cookie.
+                    set_remember_me_cookie(token)
+
+                    st.success(
+                        "Welcome!"
+                    )
+
+                    # ----------------------------------
+                    # Give CookieManager its own
+                    # Streamlit/component cycle.
+                    # ----------------------------------
+
+                    st.rerun()
+
+                except Exception:
+
+                    st.warning(
+                        "You are logged in, but "
+                        "Remember Me could not be enabled "
+                        "on this browser."
+                    )
+
+                    st.session_state.remember_cookie_pending_token = (
+                        None
+                    )
+
+                    st.session_state.remember_cookie_waiting = (
+                        False
+                    )
+
+                    st.rerun()
+
+            else:
+
+                # --------------------------------------
+                # User did not select Remember Me.
+                #
+                # Remove any existing remembered token
+                # for this browser.
+                # --------------------------------------
+
+                try:
+
+                    existing_token = cookie_manager.get(
+                        REMEMBER_COOKIE_NAME
+                    )
+
+                    if existing_token:
+
+                        revoke_login_token(
+                            existing_token
                         )
 
-                        if existing_token:
+                except Exception:
+                    pass
 
-                            revoke_login_token(
-                                existing_token
-                            )
-
-                            cookie_manager.delete(
-                                REMEMBER_COOKIE_NAME
-                            )
-
-                    except Exception:
-                        pass
+                remove_remember_me_cookie()
 
                 st.success(
                     "Welcome!"
@@ -401,11 +438,69 @@ def login_screen():
 
                 st.rerun()
 
-            else:
 
-                st.error(
-                    "Incorrect username or password."
-                )
+# ==========================================
+# FINISH PENDING REMEMBER-ME COOKIE
+# ==========================================
+
+def finish_pending_remember_me():
+
+    """
+    After login, allow CookieManager to complete its browser
+    operation, then verify that the cookie is actually visible.
+
+    This prevents the application from assuming that a cookie
+    has been stored before the browser has processed it.
+    """
+
+    pending_token = (
+        st.session_state.remember_cookie_pending_token
+    )
+
+    if not pending_token:
+        st.session_state.remember_cookie_waiting = False
+        return True
+
+    try:
+
+        cookies = cookie_manager.get_all()
+
+        if cookies is None:
+            return False
+
+        saved_token = cookies.get(
+            REMEMBER_COOKIE_NAME
+        )
+
+        if saved_token == pending_token:
+
+            # ------------------------------------------
+            # Cookie is now visible to the component.
+            # ------------------------------------------
+
+            st.session_state.remember_cookie_pending_token = (
+                None
+            )
+
+            st.session_state.remember_cookie_waiting = (
+                False
+            )
+
+            return True
+
+        # --------------------------------------------------
+        # Cookie has not reached the browser yet.
+        # --------------------------------------------------
+
+        set_remember_me_cookie(
+            pending_token
+        )
+
+        return False
+
+    except Exception:
+
+        return False
 
 
 # ==========================================
@@ -420,10 +515,6 @@ def course_selection_screen():
         "courses",
         []
     )
-
-    # ======================================================
-    # SAFETY
-    # ======================================================
 
     if not courses:
 
@@ -440,14 +531,6 @@ def course_selection_screen():
 
         return
 
-
-    # ======================================================
-    # ONE COURSE
-    #
-    # This should normally already be handled by
-    # authentication.py, but this protects the application.
-    # ======================================================
-
     if len(courses) == 1:
 
         st.session_state.selected_course = courses[0]
@@ -455,11 +538,6 @@ def course_selection_screen():
         st.rerun()
 
         return
-
-
-    # ======================================================
-    # MULTIPLE COURSES
-    # ======================================================
 
     st.markdown(
         '<h2 class="course-title">📚 Choose Your Course</h2>',
@@ -473,18 +551,9 @@ def course_selection_screen():
         unsafe_allow_html=True
     )
 
-
-    # ======================================================
-    # COURSE BUTTONS
-    # ======================================================
-
-    # Create up to 3 columns at a time.
-    # This keeps the layout clean if more courses are added.
-
     columns = st.columns(
         min(len(courses), 3)
     )
-
 
     for index, course in enumerate(courses):
 
@@ -503,20 +572,11 @@ def course_selection_screen():
 
                 st.session_state.selected_course = course
 
-                # ------------------------------------------
-                # ALSO SAVE IT INSIDE USER
-                # ------------------------------------------
-
                 st.session_state.user[
                     "selected_course"
                 ] = course
 
                 st.rerun()
-
-
-    # ======================================================
-    # LOGOUT
-    # ======================================================
 
     st.divider()
 
@@ -536,18 +596,9 @@ def sidebar_footer(user):
 
     st.sidebar.divider()
 
-    # ======================================================
-    # USERNAME
-    # ======================================================
-
     st.sidebar.markdown(
         f"👤 **{user['username']}**"
     )
-
-
-    # ======================================================
-    # COURSE
-    # ======================================================
 
     selected_course = st.session_state.get(
         "selected_course"
@@ -559,13 +610,7 @@ def sidebar_footer(user):
             f"📘 Course: {selected_course}"
         )
 
-
-    # ======================================================
-    # BUTTONS
-    # ======================================================
-
     col1, col2 = st.sidebar.columns(2)
-
 
     with col1:
 
@@ -592,7 +637,6 @@ def sidebar_footer(user):
 
             st.rerun()
 
-
     with col2:
 
         if st.button(
@@ -602,11 +646,6 @@ def sidebar_footer(user):
         ):
 
             logout_user()
-
-
-    # ======================================================
-    # REFRESH MESSAGE
-    # ======================================================
 
     if "refresh_message" in st.session_state:
 
@@ -626,16 +665,9 @@ def sidebar_footer(user):
 def logout_user():
 
     """
-    Normal logout.
-
-    The current Streamlit session is cleared and,
-    if a Remember Me cookie exists, its database
-    token is revoked and the browser cookie is deleted.
+    Revoke the current browser token and delete the
+    persistent browser cookie.
     """
-
-    # ----------------------------------------------
-    # Get existing remember-me token
-    # ----------------------------------------------
 
     try:
 
@@ -652,35 +684,25 @@ def logout_user():
     except Exception:
         pass
 
+    remove_remember_me_cookie()
 
-    # ----------------------------------------------
-    # Delete browser cookie
-    # ----------------------------------------------
-
-    try:
-
-        cookie_manager.delete(
-            REMEMBER_COOKIE_NAME
-        )
-
-    except Exception:
-        pass
-
-
-    # ----------------------------------------------
-    # Clear current session
-    # ----------------------------------------------
+    # ==========================================
+    # CLEAR SESSION
+    # ==========================================
 
     st.session_state.user = None
 
     st.session_state.selected_course = None
 
-    st.session_state.remember_login_checked = False
+    st.session_state.remember_cookie_checked = False
 
+    st.session_state.remember_cookie_waiting = False
 
-    # ----------------------------------------------
-    # Clear cached application data
-    # ----------------------------------------------
+    st.session_state.remember_cookie_pending_token = None
+
+    # ==========================================
+    # CLEAR APPLICATION CACHE
+    # ==========================================
 
     st.cache_data.clear()
 
@@ -691,11 +713,6 @@ def logout_user():
 
         st.cache_resource.clear()
 
-
-    # ----------------------------------------------
-    # Return to login
-    # ----------------------------------------------
-
     st.rerun()
 
 
@@ -705,27 +722,60 @@ def logout_user():
 
 def main():
 
-    # ======================================================
-    # CLEAN EXPIRED REMEMBER-ME TOKENS
-    # ======================================================
+    # ==========================================
+    # CLEAN EXPIRED TOKENS
+    # ==========================================
 
     cleanup_remember_tokens()
 
+    # ==========================================
+    # COMPLETE A COOKIE SET DURING LOGIN
+    # ==========================================
 
-    # ======================================================
+    if st.session_state.remember_cookie_waiting:
+
+        cookie_ready = finish_pending_remember_me()
+
+        if not cookie_ready:
+
+            # --------------------------------------
+            # CookieManager has not completed its
+            # browser round-trip yet.
+            # --------------------------------------
+
+            st.info(
+                "Signing you in..."
+            )
+
+            st.rerun()
+
+            return
+
+    # ==========================================
     # TRY REMEMBERED LOGIN
-    #
-    # This happens before displaying the login screen.
-    # ======================================================
+    # ==========================================
 
     if st.session_state.user is None:
 
-        restore_remembered_login()
+        cookie_ready = restore_remembered_login()
 
+        if not cookie_ready:
 
-    # ======================================================
+            # --------------------------------------
+            # Wait for CookieManager to initialize.
+            # --------------------------------------
+
+            st.info(
+                "Checking your saved login..."
+            )
+
+            st.rerun()
+
+            return
+
+    # ==========================================
     # NOT LOGGED IN
-    # ======================================================
+    # ==========================================
 
     if st.session_state.user is None:
 
@@ -733,17 +783,15 @@ def main():
 
         return
 
-
-    # ======================================================
+    # ==========================================
     # CURRENT USER
-    # ======================================================
+    # ==========================================
 
     user = st.session_state.user
 
-
-    # ======================================================
+    # ==========================================
     # ADMIN
-    # ======================================================
+    # ==========================================
 
     if user["role"] == "admin":
 
@@ -753,10 +801,9 @@ def main():
 
         return
 
-
-    # ======================================================
+    # ==========================================
     # STUDENT
-    # ======================================================
+    # ==========================================
 
     courses = user.get(
         "courses",
@@ -767,17 +814,9 @@ def main():
         "selected_course"
     )
 
-
-    # ======================================================
-    # STUDENT WITH MULTIPLE COURSES
-    #
-    # Example:
-    #
-    # courses = ["Algebra", "Geometry"]
-    # selected_course = None
-    #
-    # Show course selection screen.
-    # ======================================================
+    # ==========================================
+    # MULTIPLE COURSES
+    # ==========================================
 
     if len(courses) > 1 and not selected_course:
 
@@ -785,10 +824,9 @@ def main():
 
         return
 
-
-    # ======================================================
-    # STUDENT WITH ONE COURSE
-    # ======================================================
+    # ==========================================
+    # ONE COURSE
+    # ==========================================
 
     if len(courses) == 1 and not selected_course:
 
@@ -800,10 +838,9 @@ def main():
 
         return
 
-
-    # ======================================================
-    # NO COURSE ASSIGNED
-    # ======================================================
+    # ==========================================
+    # NO COURSE
+    # ==========================================
 
     if not selected_course:
 
@@ -815,22 +852,9 @@ def main():
 
         return
 
-
-    # ======================================================
+    # ==========================================
     # STUDENT PORTAL
-    #
-    # At this point:
-    #
-    # student_id = user["student_id"]
-    # selected_course = "Algebra"
-    #
-    # or:
-    #
-    # selected_course = "Geometry"
-    # ======================================================
-
-    # Keep the selected course available to all
-    # student-page modules.
+    # ==========================================
 
     user["selected_course"] = selected_course
 
@@ -838,10 +862,9 @@ def main():
 
     student_page()
 
-
-    # ======================================================
-    # SIDEBAR FOOTER
-    # ======================================================
+    # ==========================================
+    # SIDEBAR
+    # ==========================================
 
     sidebar_footer(user)
 
@@ -851,5 +874,4 @@ def main():
 # ==========================================
 
 if __name__ == "__main__":
-
     main()

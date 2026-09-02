@@ -10,3 +10,4 @@ pypdf
 reportlab
 google-genai
 pydantic
+extra-streamlit-components

@@ -35,14 +35,14 @@ REMEMBER_ME_DAYS = 30
 
 # ============================================================
 # COOKIE MANAGER
+# IMPORTANT:
+# DO NOT put CookieManager() inside @st.cache_resource
+# because CookieManager creates a Streamlit widget.
 # ============================================================
 
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager(
+    key="advanced_math_cookie_manager"
+)
 
 
 # ============================================================
@@ -63,6 +63,9 @@ def initialize_session_state():
     if "selected_course" not in st.session_state:
         st.session_state.selected_course = None
 
+    if "tokens_cleaned" not in st.session_state:
+        st.session_state.tokens_cleaned = False
+
 
 # ============================================================
 # CLEANUP EXPIRED TOKENS
@@ -70,30 +73,32 @@ def initialize_session_state():
 
 def cleanup_tokens_once():
 
-    if "tokens_cleaned" not in st.session_state:
+    if st.session_state.tokens_cleaned:
+        return
 
-        try:
-            cleanup_expired_tokens()
-        except Exception:
-            # Do not prevent the application from opening
-            # if cleanup encounters a database issue.
-            pass
+    try:
 
-        st.session_state.tokens_cleaned = True
+        cleanup_expired_tokens()
+
+    except Exception:
+        # Token cleanup should never prevent the application
+        # from loading.
+        pass
+
+    st.session_state.tokens_cleaned = True
 
 
 # ============================================================
-# RESTORE LOGIN FROM COOKIE
+# RESTORE REMEMBERED LOGIN
 # ============================================================
 
 def restore_remembered_login():
 
     """
-    Attempts to restore a previous login using the secure
-    remember-me token stored in the browser cookie.
+    Try to restore the user's login from the browser cookie.
 
-    The actual token is never stored in the database.
-    The database stores only its SHA-256 hash.
+    The browser contains the raw token.
+    The database contains only the SHA-256 hash.
     """
 
     if st.session_state.login_checked:
@@ -103,7 +108,9 @@ def restore_remembered_login():
 
     try:
 
-        token = cookie_manager.get(REMEMBER_COOKIE_NAME)
+        token = cookie_manager.get(
+            REMEMBER_COOKIE_NAME
+        )
 
         if not token:
             return
@@ -115,27 +122,42 @@ def restore_remembered_login():
             st.session_state.user = user
             st.session_state.remember_me = True
 
-            # If the student has only one course, automatically
-            # select it.
+            # ------------------------------------------------
+            # Automatically select a course if the student
+            # only has one course.
+            # ------------------------------------------------
+
             if user.get("role") == "student":
 
-                courses = user.get("courses", [])
+                courses = user.get(
+                    "courses",
+                    []
+                )
 
                 if len(courses) == 1:
-                    st.session_state.selected_course = courses[0]
+
+                    st.session_state.selected_course = (
+                        courses[0]
+                    )
 
             return
 
-        # Token was invalid or expired.
-        # Remove it from the browser.
+        # ----------------------------------------------------
+        # Token is invalid or expired.
+        # Remove it from browser.
+        # ----------------------------------------------------
+
         try:
-            cookie_manager.delete(REMEMBER_COOKIE_NAME)
+
+            cookie_manager.delete(
+                REMEMBER_COOKIE_NAME
+            )
+
         except Exception:
             pass
 
     except Exception:
-        # Never prevent the login screen from loading because
-        # of a cookie/database restoration issue.
+        # Do not prevent the login screen from opening.
         pass
 
 
@@ -192,10 +214,18 @@ def login_screen():
         unsafe_allow_html=True,
     )
 
+    # --------------------------------------------------------
+    # USERNAME
+    # --------------------------------------------------------
+
     username = st.text_input(
         "Username",
         key="login_username",
     )
+
+    # --------------------------------------------------------
+    # PASSWORD
+    # --------------------------------------------------------
 
     password = st.text_input(
         "Password",
@@ -203,11 +233,19 @@ def login_screen():
         key="login_password",
     )
 
+    # --------------------------------------------------------
+    # REMEMBER ME
+    # --------------------------------------------------------
+
     remember_me = st.checkbox(
         "Remember me on this device",
         value=False,
         key="login_remember_me",
     )
+
+    # --------------------------------------------------------
+    # LOGIN BUTTON
+    # --------------------------------------------------------
 
     login_button = st.button(
         "🔐 Login",
@@ -225,7 +263,16 @@ def login_screen():
                 "Please enter both username and password."
             )
 
+            st.markdown(
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
             return
+
+        # ----------------------------------------------------
+        # AUTHENTICATE
+        # ----------------------------------------------------
 
         try:
 
@@ -234,18 +281,32 @@ def login_screen():
                 password,
             )
 
-        except Exception as e:
+        except Exception:
 
             st.error(
                 "Unable to log in. Please try again."
             )
 
+            st.markdown(
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
             return
+
+        # ----------------------------------------------------
+        # INVALID LOGIN
+        # ----------------------------------------------------
 
         if not user:
 
             st.error(
                 "Invalid username or password."
+            )
+
+            st.markdown(
+                "</div>",
+                unsafe_allow_html=True,
             )
 
             return
@@ -258,35 +319,41 @@ def login_screen():
         st.session_state.remember_me = remember_me
 
         # ----------------------------------------------------
-        # COURSE SELECTION
+        # STUDENT COURSE
         # ----------------------------------------------------
 
         if user.get("role") == "student":
 
-            courses = user.get("courses", [])
+            courses = user.get(
+                "courses",
+                []
+            )
 
             if len(courses) == 1:
 
-                st.session_state.selected_course = courses[0]
+                st.session_state.selected_course = (
+                    courses[0]
+                )
 
             else:
 
                 st.session_state.selected_course = None
 
         # ----------------------------------------------------
-        # REMEMBER ME
+        # REMEMBER ME ENABLED
         # ----------------------------------------------------
 
         if remember_me:
 
             try:
 
-                token = create_login_token(user)
+                token = create_login_token(
+                    user
+                )
 
                 cookie_manager.set(
                     REMEMBER_COOKIE_NAME,
                     token,
-                    expires_at=None,
                     max_age=REMEMBER_ME_DAYS * 24 * 60 * 60,
                     secure=True,
                     same_site="strict",
@@ -294,18 +361,17 @@ def login_screen():
 
             except Exception:
 
-                # Login itself should still work even if the
-                # persistent cookie cannot be created.
                 st.warning(
-                    "You are logged in, but Remember Me could "
-                    "not be enabled on this browser."
+                    "You are logged in, but Remember Me "
+                    "could not be enabled on this browser."
                 )
+
+        # ----------------------------------------------------
+        # REMEMBER ME NOT ENABLED
+        # ----------------------------------------------------
 
         else:
 
-            # If the user previously had a remembered login,
-            # revoke it when they intentionally log in without
-            # Remember Me.
             try:
 
                 existing_token = cookie_manager.get(
@@ -325,6 +391,10 @@ def login_screen():
             except Exception:
                 pass
 
+        # ----------------------------------------------------
+        # GO TO PORTAL
+        # ----------------------------------------------------
+
         st.rerun()
 
     st.markdown(
@@ -340,11 +410,13 @@ def login_screen():
 def logout():
 
     """
-    Completely log out the current user.
-
-    This removes the session and also revokes the persistent
+    Log the user out of the current session and revoke the
     Remember Me token if one exists.
     """
+
+    # --------------------------------------------------------
+    # Revoke persistent login token
+    # --------------------------------------------------------
 
     try:
 
@@ -354,10 +426,16 @@ def logout():
 
         if token:
 
-            revoke_login_token(token)
+            revoke_login_token(
+                token
+            )
 
     except Exception:
         pass
+
+    # --------------------------------------------------------
+    # Delete browser cookie
+    # --------------------------------------------------------
 
     try:
 
@@ -368,12 +446,18 @@ def logout():
     except Exception:
         pass
 
-    # Clear important session-state values.
+    # --------------------------------------------------------
+    # Clear session
+    # --------------------------------------------------------
+
     st.session_state.user = None
     st.session_state.remember_me = False
     st.session_state.selected_course = None
 
-    # Force the application back to the login screen.
+    # --------------------------------------------------------
+    # Return to login
+    # --------------------------------------------------------
+
     st.rerun()
 
 
@@ -383,7 +467,9 @@ def logout():
 
 def show_user_sidebar():
 
-    user = st.session_state.get("user")
+    user = st.session_state.get(
+        "user"
+    )
 
     if not user:
         return
@@ -415,7 +501,7 @@ def show_user_sidebar():
         )
 
         # ----------------------------------------------------
-        # STUDENT COURSE
+        # STUDENT COURSE SELECTION
         # ----------------------------------------------------
 
         if role == "student":
@@ -425,19 +511,30 @@ def show_user_sidebar():
                 []
             )
 
+            # ------------------------------------------------
+            # Multiple courses
+            # ------------------------------------------------
+
             if len(courses) > 1:
+
+                current_course = (
+                    st.session_state.selected_course
+                )
+
+                if current_course in courses:
+
+                    default_index = courses.index(
+                        current_course
+                    )
+
+                else:
+
+                    default_index = 0
 
                 selected_course = st.selectbox(
                     "Course",
                     courses,
-                    index=(
-                        courses.index(
-                            st.session_state.selected_course
-                        )
-                        if st.session_state.selected_course
-                        in courses
-                        else 0
-                    ),
+                    index=default_index,
                     key="sidebar_course_selector",
                 )
 
@@ -445,9 +542,15 @@ def show_user_sidebar():
                     selected_course
                 )
 
+            # ------------------------------------------------
+            # One course
+            # ------------------------------------------------
+
             elif len(courses) == 1:
 
-                st.session_state.selected_course = courses[0]
+                st.session_state.selected_course = (
+                    courses[0]
+                )
 
                 st.caption(
                     f"Course: {courses[0]}"
@@ -473,16 +576,20 @@ def show_user_sidebar():
 
 def main():
 
+    # --------------------------------------------------------
+    # Initialize session state
+    # --------------------------------------------------------
+
     initialize_session_state()
 
     # --------------------------------------------------------
-    # CLEANUP OLD TOKENS
+    # Clean old remember-me tokens
     # --------------------------------------------------------
 
     cleanup_tokens_once()
 
     # --------------------------------------------------------
-    # TRY TO RESTORE REMEMBERED LOGIN
+    # Attempt automatic login
     # --------------------------------------------------------
 
     if st.session_state.user is None:
@@ -490,7 +597,7 @@ def main():
         restore_remembered_login()
 
     # --------------------------------------------------------
-    # LOGIN SCREEN
+    # Show login screen if not authenticated
     # --------------------------------------------------------
 
     if st.session_state.user is None:
@@ -500,7 +607,7 @@ def main():
         return
 
     # --------------------------------------------------------
-    # USER IS LOGGED IN
+    # USER IS AUTHENTICATED
     # --------------------------------------------------------
 
     show_user_sidebar()
@@ -529,7 +636,7 @@ def main():
         student_page()
 
     # --------------------------------------------------------
-    # UNKNOWN ROLE
+    # INVALID ROLE
     # --------------------------------------------------------
 
     else:

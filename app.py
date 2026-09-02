@@ -1,418 +1,497 @@
 import streamlit as st
+import extra_streamlit_components as stx
 
-from authentication import login
-from pages.student import student_page
 from pages.admin import admin_page
+from pages.student import student_page
+
+from authentication import (
+    login,
+    create_login_token,
+    login_from_token,
+    revoke_login_token,
+    cleanup_expired_tokens,
+)
 
 
-# ==========================================
+# ============================================================
 # PAGE CONFIG
-# ==========================================
+# ============================================================
 
 st.set_page_config(
     page_title="Advanced Math Tutoring Portal",
-    page_icon="📚",
-    layout="wide"
-)
-
-st.set_option(
-    "client.showErrorDetails",
-    False
+    page_icon="📐",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
-# ==========================================
-# HIDE STREAMLIT RUNNING INDICATORS
-# + COMPACT SIDEBAR
-# ==========================================
+# ============================================================
+# CONSTANTS
+# ============================================================
 
-st.markdown(
+REMEMBER_COOKIE_NAME = "advanced_math_remember_me"
+REMEMBER_ME_DAYS = 30
+
+
+# ============================================================
+# COOKIE MANAGER
+# ============================================================
+
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+
+cookie_manager = get_cookie_manager()
+
+
+# ============================================================
+# SESSION STATE INITIALIZATION
+# ============================================================
+
+def initialize_session_state():
+
+    if "user" not in st.session_state:
+        st.session_state.user = None
+
+    if "remember_me" not in st.session_state:
+        st.session_state.remember_me = False
+
+    if "login_checked" not in st.session_state:
+        st.session_state.login_checked = False
+
+    if "selected_course" not in st.session_state:
+        st.session_state.selected_course = None
+
+
+# ============================================================
+# CLEANUP EXPIRED TOKENS
+# ============================================================
+
+def cleanup_tokens_once():
+
+    if "tokens_cleaned" not in st.session_state:
+
+        try:
+            cleanup_expired_tokens()
+        except Exception:
+            # Do not prevent the application from opening
+            # if cleanup encounters a database issue.
+            pass
+
+        st.session_state.tokens_cleaned = True
+
+
+# ============================================================
+# RESTORE LOGIN FROM COOKIE
+# ============================================================
+
+def restore_remembered_login():
+
     """
-    <style>
+    Attempts to restore a previous login using the secure
+    remember-me token stored in the browser cookie.
 
-    /* =====================================================
-       HIDE STREAMLIT AUTOMATIC PAGE NAVIGATION
-       ===================================================== */
+    The actual token is never stored in the database.
+    The database stores only its SHA-256 hash.
+    """
 
-    [data-testid="stSidebarNav"],
-    [data-testid="stSidebarNavItems"],
-    nav[data-testid="stSidebarNav"],
-    section[data-testid="stSidebarNav"] {
-        display: none !important;
-    }
+    if st.session_state.login_checked:
+        return
 
+    st.session_state.login_checked = True
 
-    /* =====================================================
-       HIDE STATUS / RUNNING INDICATOR
-       ===================================================== */
+    try:
 
-    [data-testid="stStatusWidget"] {
-        display: none !important;
-    }
+        token = cookie_manager.get(REMEMBER_COOKIE_NAME)
 
+        if not token:
+            return
 
-    /* =====================================================
-       HIDE TOP DECORATION
-       ===================================================== */
+        user = login_from_token(token)
 
-    header [data-testid="stDecoration"] {
-        display: none !important;
-    }
+        if user:
 
+            st.session_state.user = user
+            st.session_state.remember_me = True
 
-    /* =====================================================
-       HIDE FOOTER
-       ===================================================== */
+            # If the student has only one course, automatically
+            # select it.
+            if user.get("role") == "student":
 
-    footer {
-        visibility: hidden;
-    }
+                courses = user.get("courses", [])
 
+                if len(courses) == 1:
+                    st.session_state.selected_course = courses[0]
 
-    /* =====================================================
-       COURSE BUTTONS
-       ===================================================== */
+            return
 
-    .course-title {
-        text-align: center;
-        margin-bottom: 10px;
-    }
+        # Token was invalid or expired.
+        # Remove it from the browser.
+        try:
+            cookie_manager.delete(REMEMBER_COOKIE_NAME)
+        except Exception:
+            pass
 
-    .course-subtitle {
-        text-align: center;
-        margin-bottom: 30px;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+    except Exception:
+        # Never prevent the login screen from loading because
+        # of a cookie/database restoration issue.
+        pass
 
 
-# ==========================================
-# SESSION STATE
-# ==========================================
-
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-if "selected_course" not in st.session_state:
-    st.session_state.selected_course = None
-
-
-# ==========================================
+# ============================================================
 # LOGIN SCREEN
-# ==========================================
+# ============================================================
 
 def login_screen():
 
-    st.title(
-        "📚 Advanced Math Tutoring Portal"
+    st.markdown(
+        """
+        <style>
+
+        .login-container {
+            max-width: 500px;
+            margin: 80px auto 0 auto;
+            padding: 35px;
+            border-radius: 15px;
+            border: 1px solid rgba(128,128,128,0.25);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .login-title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            font-size: 16px;
+            color: #777;
+            margin-bottom: 30px;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    with st.form("login_form"):
+    st.markdown(
+        '<div class="login-container">',
+        unsafe_allow_html=True,
+    )
 
-        username = st.text_input(
-            "Username"
-        )
+    st.markdown(
+        '<div class="login-title">📐 Math Tutoring Portal</div>',
+        unsafe_allow_html=True,
+    )
 
-        password = st.text_input(
-            "Password",
-            type="password"
-        )
+    st.markdown(
+        '<div class="login-subtitle">Sign in to continue</div>',
+        unsafe_allow_html=True,
+    )
 
-        submitted = st.form_submit_button(
-            "Login",
-            type="primary"
-        )
+    username = st.text_input(
+        "Username",
+        key="login_username",
+    )
 
-        if submitted:
+    password = st.text_input(
+        "Password",
+        type="password",
+        key="login_password",
+    )
 
-            if not username.strip() or not password:
+    remember_me = st.checkbox(
+        "Remember me on this device",
+        value=False,
+        key="login_remember_me",
+    )
 
-                st.error(
-                    "Please enter your username and password."
-                )
+    login_button = st.button(
+        "🔐 Login",
+        use_container_width=True,
+        type="primary",
+    )
 
-                return
+    if login_button:
 
-            with st.spinner("Signing in..."):
+        username_clean = username.strip()
 
-                user = login(
-                    username,
-                    password
-                )
+        if not username_clean or not password:
 
-            if user:
+            st.error(
+                "Please enter both username and password."
+            )
 
-                # ------------------------------------------
-                # SAVE USER
-                # ------------------------------------------
+            return
 
-                st.session_state.user = user
+        try:
 
-                # ------------------------------------------
-                # SAVE AUTOMATICALLY SELECTED COURSE
-                #
-                # If there is only one course,
-                # authentication.py already selected it.
-                # ------------------------------------------
+            user = login(
+                username_clean,
+                password,
+            )
 
-                st.session_state.selected_course = (
-                    user.get("selected_course")
-                )
+        except Exception as e:
 
-                st.success(
-                    "Welcome!"
-                )
+            st.error(
+                "Unable to log in. Please try again."
+            )
 
-                st.rerun()
+            return
+
+        if not user:
+
+            st.error(
+                "Invalid username or password."
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # LOGIN SUCCESSFUL
+        # ----------------------------------------------------
+
+        st.session_state.user = user
+        st.session_state.remember_me = remember_me
+
+        # ----------------------------------------------------
+        # COURSE SELECTION
+        # ----------------------------------------------------
+
+        if user.get("role") == "student":
+
+            courses = user.get("courses", [])
+
+            if len(courses) == 1:
+
+                st.session_state.selected_course = courses[0]
 
             else:
 
-                st.error(
-                    "Incorrect username or password."
+                st.session_state.selected_course = None
+
+        # ----------------------------------------------------
+        # REMEMBER ME
+        # ----------------------------------------------------
+
+        if remember_me:
+
+            try:
+
+                token = create_login_token(user)
+
+                cookie_manager.set(
+                    REMEMBER_COOKIE_NAME,
+                    token,
+                    expires_at=None,
+                    max_age=REMEMBER_ME_DAYS * 24 * 60 * 60,
+                    secure=True,
+                    same_site="strict",
                 )
 
+            except Exception:
 
-# ==========================================
-# COURSE SELECTION
-# ==========================================
+                # Login itself should still work even if the
+                # persistent cookie cannot be created.
+                st.warning(
+                    "You are logged in, but Remember Me could "
+                    "not be enabled on this browser."
+                )
 
-def course_selection_screen():
+        else:
 
-    user = st.session_state.user
+            # If the user previously had a remembered login,
+            # revoke it when they intentionally log in without
+            # Remember Me.
+            try:
 
-    courses = user.get(
-        "courses",
-        []
-    )
+                existing_token = cookie_manager.get(
+                    REMEMBER_COOKIE_NAME
+                )
 
-    # ======================================================
-    # SAFETY
-    # ======================================================
+                if existing_token:
 
-    if not courses:
+                    revoke_login_token(
+                        existing_token
+                    )
 
-        st.error(
-            "No course has been assigned to this student."
-        )
+                    cookie_manager.delete(
+                        REMEMBER_COOKIE_NAME
+                    )
 
-        if st.button(
-            "Logout",
-            key="logout_no_course"
-        ):
-
-            st.session_state.user = None
-            st.session_state.selected_course = None
-
-            st.rerun()
-
-        return
-
-
-    # ======================================================
-    # ONE COURSE
-    #
-    # This should normally already be handled by
-    # authentication.py, but this protects the application.
-    # ======================================================
-
-    if len(courses) == 1:
-
-        st.session_state.selected_course = courses[0]
+            except Exception:
+                pass
 
         st.rerun()
 
-        return
-
-
-    # ======================================================
-    # MULTIPLE COURSES
-    # ======================================================
-
     st.markdown(
-        '<h2 class="course-title">📚 Choose Your Course</h2>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<p class="course-subtitle">'
-        'Please select the course you would like to enter.'
-        '</p>',
-        unsafe_allow_html=True
+        "</div>",
+        unsafe_allow_html=True,
     )
 
 
-    # ======================================================
-    # COURSE BUTTONS
-    # ======================================================
+# ============================================================
+# LOGOUT
+# ============================================================
 
-    # Create up to 3 columns at a time.
-    # This keeps the layout clean if more courses are added.
-    
-    columns = st.columns(
-        min(len(courses), 3)
-    )
+def logout():
 
+    """
+    Completely log out the current user.
 
-    for index, course in enumerate(courses):
+    This removes the session and also revokes the persistent
+    Remember Me token if one exists.
+    """
 
-        column = columns[
-            index % len(columns)
-        ]
+    try:
 
-        with column:
-
-            if st.button(
-                f"📘 {course}",
-                use_container_width=True,
-                type="primary",
-                key=f"course_select_{index}"
-            ):
-
-                st.session_state.selected_course = course
-
-                # ------------------------------------------
-                # ALSO SAVE IT INSIDE USER
-                # ------------------------------------------
-
-                st.session_state.user[
-                    "selected_course"
-                ] = course
-
-                st.rerun()
-
-
-    # ======================================================
-    # LOGOUT
-    # ======================================================
-
-    st.divider()
-
-    if st.button(
-        "Logout",
-        key="course_selection_logout"
-    ):
-
-        st.session_state.user = None
-        st.session_state.selected_course = None
-
-        st.rerun()
-
-
-# ==========================================
-# COMPACT SIDEBAR FOOTER
-# ==========================================
-
-def sidebar_footer(user):
-
-    st.sidebar.divider()
-
-    # ======================================================
-    # USERNAME
-    # ======================================================
-
-    st.sidebar.markdown(
-        f"👤 **{user['username']}**"
-    )
-
-
-    # ======================================================
-    # COURSE
-    # ======================================================
-
-    selected_course = st.session_state.get(
-        "selected_course"
-    )
-
-    if selected_course:
-
-        st.sidebar.caption(
-            f"📘 Course: {selected_course}"
+        token = cookie_manager.get(
+            REMEMBER_COOKIE_NAME
         )
 
+        if token:
 
-    # ======================================================
-    # BUTTONS
-    # ======================================================
+            revoke_login_token(token)
 
-    col1, col2 = st.sidebar.columns(2)
+    except Exception:
+        pass
+
+    try:
+
+        cookie_manager.delete(
+            REMEMBER_COOKIE_NAME
+        )
+
+    except Exception:
+        pass
+
+    # Clear important session-state values.
+    st.session_state.user = None
+    st.session_state.remember_me = False
+    st.session_state.selected_course = None
+
+    # Force the application back to the login screen.
+    st.rerun()
 
 
-    with col1:
+# ============================================================
+# SIDEBAR USER INFORMATION
+# ============================================================
 
-        if st.button(
-            "🔄 Refresh",
-            use_container_width=True,
-            key="global_refresh"
-        ):
+def show_user_sidebar():
 
-            st.cache_data.clear()
+    user = st.session_state.get("user")
 
-            if hasattr(
-                st,
-                "cache_resource"
-            ):
+    if not user:
+        return
 
-                st.cache_resource.clear()
+    with st.sidebar:
 
-            st.session_state[
-                "refresh_message"
-            ] = (
-                "✅ Data refreshed successfully."
+        st.markdown("---")
+
+        st.markdown(
+            "### 👤 Current User"
+        )
+
+        username = user.get(
+            "username",
+            ""
+        )
+
+        role = user.get(
+            "role",
+            ""
+        )
+
+        st.write(
+            f"**Username:** {username}"
+        )
+
+        st.write(
+            f"**Role:** {role.title()}"
+        )
+
+        # ----------------------------------------------------
+        # STUDENT COURSE
+        # ----------------------------------------------------
+
+        if role == "student":
+
+            courses = user.get(
+                "courses",
+                []
             )
 
-            st.rerun()
+            if len(courses) > 1:
 
+                selected_course = st.selectbox(
+                    "Course",
+                    courses,
+                    index=(
+                        courses.index(
+                            st.session_state.selected_course
+                        )
+                        if st.session_state.selected_course
+                        in courses
+                        else 0
+                    ),
+                    key="sidebar_course_selector",
+                )
 
-    with col2:
+                st.session_state.selected_course = (
+                    selected_course
+                )
+
+            elif len(courses) == 1:
+
+                st.session_state.selected_course = courses[0]
+
+                st.caption(
+                    f"Course: {courses[0]}"
+                )
+
+        # ----------------------------------------------------
+        # LOGOUT
+        # ----------------------------------------------------
+
+        st.markdown("")
 
         if st.button(
-            "Logout",
+            "🚪 Logout",
             use_container_width=True,
-            key="global_logout"
         ):
 
-            st.session_state.user = None
-            st.session_state.selected_course = None
-
-            st.cache_data.clear()
-
-            if hasattr(
-                st,
-                "cache_resource"
-            ):
-
-                st.cache_resource.clear()
-
-            st.rerun()
+            logout()
 
 
-    # ======================================================
-    # REFRESH MESSAGE
-    # ======================================================
-
-    if "refresh_message" in st.session_state:
-
-        st.sidebar.success(
-            st.session_state["refresh_message"]
-        )
-
-        del st.session_state[
-            "refresh_message"
-        ]
-
-
-# ==========================================
-# MAIN
-# ==========================================
+# ============================================================
+# MAIN APPLICATION
+# ============================================================
 
 def main():
 
-    # ======================================================
-    # NOT LOGGED IN
-    # ======================================================
+    initialize_session_state()
+
+    # --------------------------------------------------------
+    # CLEANUP OLD TOKENS
+    # --------------------------------------------------------
+
+    cleanup_tokens_once()
+
+    # --------------------------------------------------------
+    # TRY TO RESTORE REMEMBERED LOGIN
+    # --------------------------------------------------------
+
+    if st.session_state.user is None:
+
+        restore_remembered_login()
+
+    # --------------------------------------------------------
+    # LOGIN SCREEN
+    # --------------------------------------------------------
 
     if st.session_state.user is None:
 
@@ -420,123 +499,57 @@ def main():
 
         return
 
+    # --------------------------------------------------------
+    # USER IS LOGGED IN
+    # --------------------------------------------------------
 
-    # ======================================================
-    # CURRENT USER
-    # ======================================================
+    show_user_sidebar()
 
     user = st.session_state.user
 
+    role = user.get(
+        "role",
+        ""
+    ).lower()
 
-    # ======================================================
+    # --------------------------------------------------------
     # ADMIN
-    # ======================================================
+    # --------------------------------------------------------
 
-    if user["role"] == "admin":
+    if role == "admin":
 
         admin_page()
 
-        sidebar_footer(user)
-
-        return
-
-
-    # ======================================================
+    # --------------------------------------------------------
     # STUDENT
-    # ======================================================
+    # --------------------------------------------------------
 
-    courses = user.get(
-        "courses",
-        []
-    )
+    elif role == "student":
 
-    selected_course = st.session_state.get(
-        "selected_course"
-    )
+        student_page()
 
+    # --------------------------------------------------------
+    # UNKNOWN ROLE
+    # --------------------------------------------------------
 
-    # ======================================================
-    # STUDENT WITH MULTIPLE COURSES
-    #
-    # Example:
-    #
-    # courses = ["Algebra", "Geometry"]
-    # selected_course = None
-    #
-    # Show course selection screen.
-    # ======================================================
-
-    if len(courses) > 1 and not selected_course:
-
-        course_selection_screen()
-
-        return
-
-
-    # ======================================================
-    # STUDENT WITH ONE COURSE
-    # ======================================================
-
-    if len(courses) == 1 and not selected_course:
-
-        st.session_state.selected_course = courses[0]
-
-        user["selected_course"] = courses[0]
-
-        st.rerun()
-
-        return
-
-
-    # ======================================================
-    # NO COURSE ASSIGNED
-    # ======================================================
-
-    if not selected_course:
+    else:
 
         st.error(
-            "No course has been assigned to this student."
+            "Your account has an invalid role. "
+            "Please contact the administrator."
         )
 
-        sidebar_footer(user)
+        if st.button(
+            "🚪 Logout",
+            type="primary",
+        ):
 
-        return
-
-
-    # ======================================================
-    # STUDENT PORTAL
-    #
-    # At this point:
-    #
-    # student_id = user["student_id"]
-    # selected_course = "Algebra"
-    #
-    # or:
-    #
-    # selected_course = "Geometry"
-    # ======================================================
-
-    # Keep the selected course available to all
-    # student-page modules.
-
-    user["selected_course"] = selected_course
-
-    st.session_state.user = user
-
-    student_page()
+            logout()
 
 
-    # ======================================================
-    # SIDEBAR FOOTER
-    # ======================================================
-
-    sidebar_footer(user)
-
-
-# ==========================================
-# START
-# ==========================================
+# ============================================================
+# RUN APPLICATION
+# ============================================================
 
 if __name__ == "__main__":
-
     main()

@@ -1475,240 +1475,350 @@ def student_page():
                 student_id
             )
 
+   
         # ====================================================
         # SESSION HISTORY
         # ====================================================
-
+        
         elif (
             performance_section
             == "📅 Session History"
         ):
-    
+        
             st.subheader(
                 "Session History"
             )
-    
+        
             sessions_history = get_session_history(
                 student_id
             )
-    
+        
             if sessions_history.empty:
-    
+        
                 st.info(
                     "No session history available."
                 )
-    
+        
             else:
-    
+        
                 # ------------------------------------------------
                 # CLEAN / FORMAT DATE
                 # ------------------------------------------------
-    
+        
                 sessions_history = sessions_history.copy()
-    
+        
+                # Keep Date as a real datetime for filtering.
+                #
+                # First try normal datetime conversion.
                 sessions_history["Date"] = pd.to_datetime(
                     sessions_history["Date"],
-                    errors="coerce",
-                    unit="ms"
+                    errors="coerce"
                 )
-    
-                # If the database already returned a normal
-                # date string, retry without milliseconds.
+        
+                # If the database returned Unix milliseconds,
+                # try converting those values.
                 if sessions_history["Date"].isna().all():
-    
+        
                     sessions_history["Date"] = pd.to_datetime(
                         sessions_history["Date"],
-                        errors="coerce"
+                        errors="coerce",
+                        unit="ms"
                     )
-    
-                sessions_history["Date"] = (
-                    sessions_history["Date"]
-                    .dt.strftime("%Y-%m-%d")
-                )
-    
+        
                 # ------------------------------------------------
-                # COMPACT SESSION ROWS
+                # FILTER RECENT + UPCOMING SESSIONS
                 # ------------------------------------------------
-    
-                for index, row in sessions_history.iterrows():
-    
-                    session_date = row["Date"]
-    
-                    session_time = row["Time"]
-    
-                    topic = str(
-                        row["Topic"]
-                    ).strip()
-    
-                    attendance = str(
-                        row["Attendance"]
-                    ).strip()
-    
-                    # --------------------------------------------
-                    # SESSION ROW
-                    # --------------------------------------------
-    
-                    col1, col2, col3, col4 = st.columns(
-                        [
-                            1.2,
-                            1.1,
-                            3.5,
-                            1.3
-                        ]
-                    )
-    
-                    # --------------------------------------------
-                    # DATE
-                    # --------------------------------------------
-    
-                    with col1:
-    
-                        st.write(
-                            f"📅 {session_date}"
-                        )
-    
-                    # --------------------------------------------
-                    # TIME
-                    # --------------------------------------------
-    
-                    with col2:
-    
-                        st.write(
-                            f"⏰ {session_time}"
-                        )
-    
-                    # --------------------------------------------
-                    # TOPIC + ATTENDANCE
-                    # --------------------------------------------
-    
-                    with col3:
-    
-                        st.write(
-                            f"📘 {topic}"
-                        )
-    
-                        if attendance == "Present":
-    
-                            st.caption(
-                                "✅ Present"
+        
+                today = pd.Timestamp.today().normalize()
+        
+                # -----------------------------------------------
+                # PAST SESSIONS
+                # -----------------------------------------------
+                #
+                # Most recent 5 completed sessions.
+                #
+        
+                past_sessions = sessions_history[
+                    sessions_history["Date"] < today
+                ].sort_values(
+                    "Date",
+                    ascending=False
+                ).head(5)
+        
+                # -----------------------------------------------
+                # UPCOMING SESSIONS
+                # -----------------------------------------------
+                #
+                # Next 3 scheduled sessions.
+                #
+        
+                upcoming_sessions = sessions_history[
+                    sessions_history["Date"] >= today
+                ].sort_values(
+                    "Date",
+                    ascending=True
+                ).head(3)
+        
+                # ------------------------------------------------
+                # HELPER FUNCTION FOR DISPLAYING SESSION ROWS
+                # ------------------------------------------------
+        
+                def display_session_rows(
+                    session_dataframe
+                ):
+        
+                    for index, row in session_dataframe.iterrows():
+        
+                        # ----------------------------------------
+                        # DATE
+                        # ----------------------------------------
+        
+                        if pd.notna(row["Date"]):
+        
+                            session_date = (
+                                row["Date"]
+                                .strftime("%Y-%m-%d")
                             )
-    
-                        elif attendance == "Late":
-    
-                            st.caption(
-                                "⚠️ Late"
-                            )
-    
-                        elif (
-                            attendance
-                            == "Absent - Excused"
-                        ):
-    
-                            st.caption(
-                                "⚠️ Excused Absence"
-                            )
-    
-                        elif (
-                            attendance
-                            == "Absent - Unexcused"
-                        ):
-    
-                            st.caption(
-                                "❌ Unexcused Absence"
-                            )
-    
+        
                         else:
-    
-                            st.caption(
-                                "⏳ Attendance Pending"
+        
+                            session_date = "Unknown"
+        
+                        # ----------------------------------------
+                        # TIME
+                        # ----------------------------------------
+        
+                        session_time = str(
+                            row["Time"]
+                        ).strip()
+        
+                        # ----------------------------------------
+                        # TOPIC
+                        # ----------------------------------------
+        
+                        topic = str(
+                            row["Topic"]
+                        ).strip()
+        
+                        # ----------------------------------------
+                        # ATTENDANCE
+                        # ----------------------------------------
+        
+                        attendance = str(
+                            row["Attendance"]
+                        ).strip()
+        
+                        # ----------------------------------------
+                        # SESSION ROW
+                        # ----------------------------------------
+        
+                        col1, col2, col3, col4 = st.columns(
+                            [
+                                1.2,
+                                1.1,
+                                3.5,
+                                1.3
+                            ]
+                        )
+        
+                        # ----------------------------------------
+                        # DATE
+                        # ----------------------------------------
+        
+                        with col1:
+        
+                            st.write(
+                                f"📅 {session_date}"
                             )
-    
-                    # --------------------------------------------
-                    # AI REVIEW BUTTON
-                    # --------------------------------------------
-    
-                    with col4:
-    
-                        if st.button(
-                            "📖 Review",
-                            key=(
-                                "review_session_topic_"
-                                f"{student_id}_{index}"
-                            ),
-                            use_container_width=True
-                        ):
-    
-                            with st.spinner(
-                                "🤖 Creating your topic reference..."
-                            ):
-    
-                                from modules.ai_learning_reference import (
-                                    generate_learning_reference
+        
+                        # ----------------------------------------
+                        # TIME
+                        # ----------------------------------------
+        
+                        with col2:
+        
+                            st.write(
+                                f"⏰ {session_time}"
+                            )
+        
+                        # ----------------------------------------
+                        # TOPIC + ATTENDANCE
+                        # ----------------------------------------
+        
+                        with col3:
+        
+                            st.write(
+                                f"📘 {topic}"
+                            )
+        
+                            if attendance == "Present":
+        
+                                st.caption(
+                                    "✅ Present"
                                 )
-    
-                                result = (
-                                    generate_learning_reference(
-    
-                                        curriculum_topic=topic,
-    
-                                        homework_title="",
-    
-                                        instructions="",
-    
-                                        student_grade=str(
-                                            student["grade"]
+        
+                            elif attendance == "Late":
+        
+                                st.caption(
+                                    "⚠️ Late"
+                                )
+        
+                            elif (
+                                attendance
+                                == "Absent - Excused"
+                            ):
+        
+                                st.caption(
+                                    "⚠️ Excused Absence"
+                                )
+        
+                            elif (
+                                attendance
+                                == "Absent - Unexcused"
+                            ):
+        
+                                st.caption(
+                                    "❌ Unexcused Absence"
+                                )
+        
+                            else:
+        
+                                st.caption(
+                                    "⏳ Attendance Pending"
+                                )
+        
+                        # ----------------------------------------
+                        # AI REVIEW BUTTON
+                        # ----------------------------------------
+        
+                        with col4:
+        
+                            if st.button(
+                                "📖 Review",
+                                key=(
+                                    "review_session_topic_"
+                                    f"{student_id}_{index}"
+                                ),
+                                use_container_width=True
+                            ):
+        
+                                with st.spinner(
+                                    "🤖 Creating your topic reference..."
+                                ):
+        
+                                    from modules.ai_learning_reference import (
+                                        generate_learning_reference
+                                    )
+        
+                                    result = (
+                                        generate_learning_reference(
+        
+                                            curriculum_topic=topic,
+        
+                                            homework_title="",
+        
+                                            instructions="",
+        
+                                            student_grade=str(
+                                                student["grade"]
+                                            )
                                         )
                                     )
-                                )
-    
-                            if result.get("success"):
-    
-                                st.session_state[
-                                    f"session_learning_"
-                                    f"{student_id}_{index}"
-                                ] = result
-    
-                            else:
-    
-                                st.error(
-                                    result.get(
-                                        "error",
-                                        "Unable to create topic reference."
+        
+                                if result.get("success"):
+        
+                                    st.session_state[
+                                        f"session_learning_"
+                                        f"{student_id}_{index}"
+                                    ] = result
+        
+                                else:
+        
+                                    st.error(
+                                        result.get(
+                                            "error",
+                                            "Unable to create topic reference."
+                                        )
                                     )
+        
+                        # ----------------------------------------
+                        # DISPLAY AI REFERENCE
+                        # ----------------------------------------
+        
+                        session_learning = (
+                            st.session_state.get(
+                                f"session_learning_"
+                                f"{student_id}_{index}"
+                            )
+                        )
+        
+                        if session_learning:
+        
+                            from modules.ai_learning_reference import (
+                                display_learning_reference
+                            )
+        
+                            with st.container(
+                                border=True
+                            ):
+        
+                                display_learning_reference(
+                                    session_learning
                                 )
-    
-                    # --------------------------------------------
-                    # DISPLAY AI REFERENCE
-                    # --------------------------------------------
-    
-                    session_learning = (
-                        st.session_state.get(
-                            f"session_learning_"
-                            f"{student_id}_{index}"
+        
+                        # ----------------------------------------
+                        # SMALL SEPARATOR
+                        # ----------------------------------------
+        
+                        st.markdown(
+                            "<hr style='margin:4px 0 8px 0;'>",
+                            unsafe_allow_html=True
+                        )
+        
+                # =================================================
+                # PAST SESSIONS
+                # =================================================
+        
+                if not past_sessions.empty:
+        
+                    st.markdown(
+                        "### 🕘 Recent Sessions"
+                    )
+        
+                    # Display oldest → newest within
+                    # the selected 5 recent sessions.
+                    display_session_rows(
+                        past_sessions.sort_values(
+                            "Date",
+                            ascending=True
                         )
                     )
-    
-                    if session_learning:
-    
-                        from modules.ai_learning_reference import (
-                            display_learning_reference
-                        )
-    
-                        with st.container(
-                            border=True
-                        ):
-    
-                            display_learning_reference(
-                                session_learning
-                            )
-    
-                    # --------------------------------------------
-                    # SMALL SEPARATOR
-                    # --------------------------------------------
-    
+        
+                # =================================================
+                # UPCOMING SESSIONS
+                # =================================================
+        
+                if not upcoming_sessions.empty:
+        
                     st.markdown(
-                        "<hr style='margin:4px 0 8px 0;'>",
-                        unsafe_allow_html=True
+                        "### 📅 Upcoming Sessions"
+                    )
+        
+                    display_session_rows(
+                        upcoming_sessions
+                    )
+        
+                # =================================================
+                # NOTHING AFTER FILTERING
+                # =================================================
+        
+                if (
+                    past_sessions.empty
+                    and upcoming_sessions.empty
+                ):
+        
+                    st.info(
+                        "No session history available."
                     )
 
     # ========================================================

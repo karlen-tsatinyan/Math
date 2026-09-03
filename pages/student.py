@@ -1483,193 +1483,88 @@ def student_page():
             performance_section
             == "📅 Session History"
         ):
-
+        
             st.subheader(
                 "Session History"
             )
-
-            sessions_history = (
-                get_session_history(
-                    student_id
-                )
+        
+            sessions_history = get_session_history(
+                student_id
             )
-
+        
             if sessions_history.empty:
-
+        
                 st.info(
                     "No session history available."
                 )
-
+        
             else:
-
-                for index, row in (
-                    sessions_history.iterrows()
-                ):
-
-                    session_date = row[
-                        "Date"
-                    ]
-
-                    session_time = row[
-                        "Time"
-                    ]
-
-                    topic = row[
-                        "Topic"
-                    ]
-
-                    attendance = row[
+        
+                # ----------------------------------------------------
+                # SESSION HISTORY TABLE
+                # ----------------------------------------------------
+        
+                sessions_display = sessions_history[
+                    [
+                        "Date",
+                        "Time",
+                        "Topic",
                         "Attendance"
                     ]
-
-                    col1, col2, col3, col4 = (
-                        st.columns(
-                            [
-                                1.2,
-                                1.1,
-                                3,
-                                1.3
-                            ]
-                        )
+                ].copy()
+        
+                # Make topic easier to read
+                sessions_display["Topic"] = (
+                    sessions_display["Topic"]
+                    .fillna("")
+                    .astype(str)
+                    .replace(
+                        ["nan", "None"],
+                        ""
                     )
-
-                    with col1:
-
-                        st.write(
-                            f"📅 {session_date}"
+                )
+        
+                # ----------------------------------------------------
+                # FRIENDLY COLUMN CONFIGURATION
+                # ----------------------------------------------------
+        
+                st.dataframe(
+                    sessions_display,
+        
+                    use_container_width=True,
+        
+                    hide_index=True,
+        
+                    height=420,
+        
+                    column_config={
+        
+                        "Date": st.column_config.TextColumn(
+                            "📅 Date",
+                            width="medium"
+                        ),
+        
+                        "Time": st.column_config.TextColumn(
+                            "⏰ Time",
+                            width="medium"
+                        ),
+        
+                        "Topic": st.column_config.TextColumn(
+                            "📘 Topic",
+                            width="large"
+                        ),
+        
+                        "Attendance": st.column_config.TextColumn(
+                            "✅ Attendance",
+                            width="medium"
                         )
-
-                    with col2:
-
-                        st.write(
-                            f"⏰ {session_time}"
-                        )
-
-                    with col3:
-
-                        st.write(
-                            f"📘 {topic}"
-                        )
-
-                        if attendance == "Present":
-
-                            st.success(
-                                "Attendance: Present"
-                            )
-
-                        elif attendance == "Late":
-
-                            st.warning(
-                                "Attendance: Late"
-                            )
-
-                        elif (
-                            attendance
-                            == "Absent - Excused"
-                        ):
-
-                            st.warning(
-                                "Attendance: "
-                                "Excused Absence"
-                            )
-
-                        elif (
-                            attendance
-                            == "Absent - Unexcused"
-                        ):
-
-                            st.error(
-                                "Attendance: "
-                                "Unexcused Absence"
-                            )
-
-                        else:
-
-                            st.caption(
-                                "Attendance: Pending"
-                            )
-
-                    with col4:
-
-                        if st.button(
-                            "📖 Review Topic",
-                            key=(
-                                "review_session_topic_"
-                                f"{student_id}_{index}"
-                            )
-                        ):
-
-                            with st.spinner(
-                                "🤖 Creating your "
-                                "topic reference..."
-                            ):
-
-                                from modules.ai_learning_reference import (
-                                    generate_learning_reference
-                                )
-
-                                result = (
-                                    generate_learning_reference(
-
-                                        curriculum_topic=str(
-                                            topic
-                                        ),
-
-                                        homework_title="",
-
-                                        instructions="",
-
-                                        student_grade=str(
-                                            student["grade"]
-                                        )
-                                    )
-                                )
-
-                            if result.get(
-                                "success"
-                            ):
-
-                                st.session_state[
-                                    f"session_learning_"
-                                    f"{student_id}_{index}"
-                                ] = result
-
-                            else:
-
-                                st.error(
-                                    result.get(
-                                        "error",
-                                        "Unable to create "
-                                        "topic reference."
-                                    )
-                                )
-
-                    # ----------------------------------------
-                    # AI TOPIC REFERENCE
-                    # ----------------------------------------
-
-                    session_learning = (
-                        st.session_state.get(
-                            f"session_learning_"
-                            f"{student_id}_{index}"
-                        )
-                    )
-
-                    if session_learning:
-
-                        from modules.ai_learning_reference import (
-                            display_learning_reference
-                        )
-
-                        with st.container(
-                            border=True
-                        ):
-
-                            display_learning_reference(
-                                session_learning
-                            )
-
-                    st.divider()
+                    }
+                )
+        
+                st.caption(
+                    f"Showing {len(sessions_display)} session(s). "
+                    "Scroll inside the table to view older sessions."
+                )
 
     # ========================================================
     # FINANCIAL STATEMENTS

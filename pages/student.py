@@ -1790,7 +1790,7 @@ def student_page():
                             recent_past_display
                             .sort_values(
                                 "Date",
-                                ascending=True
+                                ascending=False
                             )
                         )
         

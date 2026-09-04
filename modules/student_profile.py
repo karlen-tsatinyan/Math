@@ -470,7 +470,6 @@ def get_homework_history(student_id):
     ttl=60,
     show_spinner=False
 )
-
 def get_sessions_with_attendance(student_id):
 
     return query_dataframe(
@@ -493,9 +492,20 @@ def get_sessions_with_attendance(student_id):
                 ''
             ) AS notes,
 
+            s.duration AS duration,
+
+            COALESCE(
+                s.repeat_type,
+                ''
+            ) AS repeat_type,
+
+            COALESCE(
+                s.status,
+                'Scheduled'
+            ) AS session_status,
+
             CASE
                 WHEN a.id IS NOT NULL
-                     AND a.status = 'Present'
                 THEN 1
                 ELSE 0
             END AS attendance_marked,
@@ -577,8 +587,9 @@ def get_attendance_history(student_id):
     )
 
 
+
 # ============================================================
-# ATTENDANCE UPDATE
+# MARK ATTENDANCE
 # ============================================================
 
 def mark_attendance(
@@ -586,6 +597,10 @@ def mark_attendance(
     session_date,
     session_time
 ):
+
+    # --------------------------------------------------------
+    # Record attendance
+    # --------------------------------------------------------
 
     execute(
         """
@@ -617,6 +632,25 @@ def mark_attendance(
             session_date,
             session_time,
             "Present"
+        )
+    )
+
+    # --------------------------------------------------------
+    # Mark the corresponding session as completed
+    # --------------------------------------------------------
+
+    execute(
+        """
+        UPDATE sessions
+        SET status = 'Completed'
+        WHERE student_id = %s
+          AND session_date = %s
+          AND session_time = %s
+        """,
+        (
+            int(student_id),
+            session_date,
+            session_time
         )
     )
 
@@ -1243,6 +1277,19 @@ def student_profile():
                         row.get("session_status"),
                         "Scheduled"
                     )
+                    
+                    attendance_status = clean_value(
+                        row.get("attendance_status"),
+                        "Pending"
+                    )
+                    
+                    # If the student attended, the lesson is completed.
+                    if attendance_status in [
+                        "Present",
+                        "Late"
+                    ]:
+                    
+                        session_status = "Completed"
 
                     attendance_marked = (
                         str(row["attendance_status"]).strip()

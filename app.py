@@ -432,21 +432,13 @@ def login_screen():
                     pass
 
         # ==================================================
-        # IMPORTANT
+        # LOGIN COMPLETE
         #
-        # DO NOT call st.rerun() here.
-        #
-        # The cookie is a browser-side operation.
-        # We allow this Streamlit execution to finish
-        # so the browser has time to receive the cookie.
-        #
-        # The current user is already in session_state,
-        # so we can continue directly into the portal.
+        # Immediately rerun so main() sees the authenticated
+        # user and opens the correct portal.
         # ==================================================
 
-        st.success(
-            "Welcome!"
-        )
+        st.rerun()
 
 
 # ==========================================

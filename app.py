@@ -1,7 +1,7 @@
 import time
 
 import streamlit as st
-import extra_streamlit_components as stx
+from streamlit_cookies_controller import CookieController
 
 from authentication import (
     login,
@@ -36,6 +36,7 @@ st.set_option(
 # ==========================================================
 
 REMEMBER_COOKIE_NAME = "advanced_math_remember_me"
+
 REMEMBER_ME_DAYS = 30
 
 REMEMBER_ME_SECONDS = (
@@ -45,30 +46,19 @@ REMEMBER_ME_SECONDS = (
     * 60
 )
 
-# CookieManager component keys.
-#
-# IMPORTANT:
-# The SET and DELETE operations use the same explicit key.
-# This avoids duplicate CookieManager widget problems.
-REMEMBER_COOKIE_SET_KEY = "advanced_math_remember_cookie"
-REMEMBER_COOKIE_DELETE_KEY = "advanced_math_remember_cookie"
-
 
 # ==========================================================
-# COOKIE MANAGER
+# COOKIE CONTROLLER
 #
-# IMPORTANT:
-# Create CookieManager only once per Streamlit session.
-# Do NOT put this in @st.cache_resource.
+# streamlit-cookies-controller is used for the persistent
+# browser cookie.
+#
+# Do NOT use extra-streamlit-components here.
 # ==========================================================
 
 if "cookie_manager" not in st.session_state:
 
-    st.session_state.cookie_manager = (
-        stx.CookieManager(
-            key="advanced_math_cookie_manager"
-        )
-    )
+    st.session_state.cookie_manager = CookieController()
 
 
 cookie_manager = st.session_state.cookie_manager
@@ -157,10 +147,6 @@ if "remember_cookie_checked" not in st.session_state:
     st.session_state.remember_cookie_checked = False
 
 
-if "remember_cookie_waiting" not in st.session_state:
-    st.session_state.remember_cookie_waiting = False
-
-
 if "remember_tokens_cleaned" not in st.session_state:
     st.session_state.remember_tokens_cleaned = False
 
@@ -173,10 +159,8 @@ def set_remember_cookie(token):
     """
     Store the Remember-Me token in the browser.
 
-    The CookieManager component communicates asynchronously
-    with the browser. We therefore give the browser a short
-    amount of time to complete the operation before the
-    application reruns.
+    The token itself is stored in the browser.
+    Only its SHA-256 hash is stored in the database.
     """
 
     if not token:
@@ -187,55 +171,54 @@ def set_remember_cookie(token):
         cookie_manager.set(
             REMEMBER_COOKIE_NAME,
             token,
-            key=REMEMBER_COOKIE_SET_KEY,
             path="/",
             max_age=REMEMBER_ME_SECONDS,
             secure=True,
             same_site="strict",
         )
 
-        # --------------------------------------------------
-        # IMPORTANT:
-        #
-        # CookieManager communicates with the browser
-        # asynchronously. Give it time to finish before
-        # Streamlit reruns the application.
-        # --------------------------------------------------
-
-        time.sleep(1.5)
+        # Give the browser component time to process
+        # the cookie operation.
+        time.sleep(1)
 
         return True
 
-    except Exception:
+    except Exception as e:
+
+        print(
+            f"Remember-Me cookie set error: {e}"
+        )
 
         return False
 
 
 def delete_remember_cookie():
     """
-    Delete the Remember-Me browser cookie.
+    Remove the Remember-Me cookie from the browser.
     """
 
     try:
 
-        cookie_manager.delete(
-            REMEMBER_COOKIE_NAME,
-            key=REMEMBER_COOKIE_DELETE_KEY,
+        cookie_manager.remove(
+            REMEMBER_COOKIE_NAME
         )
 
-        # Give the browser time to process the deletion.
         time.sleep(0.5)
 
         return True
 
-    except Exception:
+    except Exception as e:
+
+        print(
+            f"Remember-Me cookie removal error: {e}"
+        )
 
         return False
 
 
 def get_remember_cookie():
     """
-    Read the Remember-Me cookie from the browser.
+    Read the Remember-Me token from the browser.
     """
 
     try:
@@ -246,7 +229,11 @@ def get_remember_cookie():
 
         return token
 
-    except Exception:
+    except Exception as e:
+
+        print(
+            f"Remember-Me cookie read error: {e}"
+        )
 
         return None
 
@@ -279,19 +266,22 @@ def cleanup_remember_tokens():
 def restore_remembered_login():
 
     """
-    Restore the user from the browser Remember-Me cookie.
+    Restore the user from the persistent browser cookie.
 
-    CookieManager is a browser component.
+    If a valid Remember-Me token exists:
 
-    On a brand-new Streamlit browser session, the first
-    execution may happen before the browser component has
-    returned its cookies.
+        browser cookie
+              ↓
+        login_tokens
+              ↓
+        user
+              ↓
+        Streamlit session
 
-    We therefore allow multiple browser round trips.
     """
 
     # ------------------------------------------------------
-    # Already successfully checked
+    # Already checked during this Streamlit session
     # ------------------------------------------------------
 
     if st.session_state.remember_cookie_checked:
@@ -307,148 +297,71 @@ def restore_remembered_login():
 
 
     # ======================================================
-    # COOKIE FOUND
+    # NO COOKIE
     # ======================================================
 
-    if token:
-
-        try:
-
-            user = login_from_token(
-                token
-            )
-
-        except Exception:
-
-            user = None
-
-
-        # --------------------------------------------------
-        # VALID TOKEN
-        # --------------------------------------------------
-
-        if user:
-
-            st.session_state.user = user
-
-            st.session_state.selected_course = (
-                user.get("selected_course")
-            )
-
-            st.session_state.remember_cookie_checked = True
-            st.session_state.remember_cookie_waiting = False
-
-            return True
-
-
-        # --------------------------------------------------
-        # INVALID TOKEN
-        # --------------------------------------------------
-
-        try:
-
-            revoke_login_token(
-                token
-            )
-
-        except Exception:
-
-            pass
-
-
-        delete_remember_cookie()
-
+    if not token:
 
         st.session_state.remember_cookie_checked = True
-        st.session_state.remember_cookie_waiting = False
 
         return True
 
 
     # ======================================================
-    # COOKIE NOT YET AVAILABLE
+    # VALIDATE TOKEN
     # ======================================================
 
-    if not st.session_state.remember_cookie_waiting:
+    try:
 
-        st.session_state.remember_cookie_waiting = True
+        user = login_from_token(
+            token
+        )
 
-        # --------------------------------------------------
-        # Give the browser component time to initialize.
-        # --------------------------------------------------
+    except Exception as e:
 
-        time.sleep(1.5)
+        print(
+            f"Remember-Me restore error: {e}"
+        )
 
-        st.rerun()
-
-        return False
+        user = None
 
 
     # ======================================================
-    # SECOND / ADDITIONAL CHECK
+    # VALID TOKEN
     # ======================================================
 
-    # Give CookieManager another moment before the final
-    # decision that no cookie exists.
+    if user:
 
-    time.sleep(0.75)
+        st.session_state.user = user
 
-    token = get_remember_cookie()
+        st.session_state.selected_course = (
+            user.get("selected_course")
+        )
 
+        st.session_state.remember_cookie_checked = True
 
-    # ------------------------------------------------------
-    # Cookie appeared during the second browser round trip
-    # ------------------------------------------------------
-
-    if token:
-
-        try:
-
-            user = login_from_token(
-                token
-            )
-
-        except Exception:
-
-            user = None
+        return True
 
 
-        if user:
+    # ======================================================
+    # INVALID / EXPIRED / REVOKED TOKEN
+    # ======================================================
 
-            st.session_state.user = user
+    try:
 
-            st.session_state.selected_course = (
-                user.get("selected_course")
-            )
+        revoke_login_token(
+            token
+        )
 
-            st.session_state.remember_cookie_checked = True
-            st.session_state.remember_cookie_waiting = False
+    except Exception:
 
-            return True
-
-
-        # Invalid cookie
-
-        try:
-
-            revoke_login_token(
-                token
-            )
-
-        except Exception:
-
-            pass
+        pass
 
 
-        delete_remember_cookie()
+    delete_remember_cookie()
 
-
-    # ------------------------------------------------------
-    # No cookie
-    # ------------------------------------------------------
 
     st.session_state.remember_cookie_checked = True
-    st.session_state.remember_cookie_waiting = False
 
     return True
 
@@ -494,6 +407,7 @@ def login_screen():
 
 
         if not submitted:
+
             return
 
 
@@ -525,7 +439,11 @@ def login_screen():
                     password,
                 )
 
-            except Exception:
+            except Exception as e:
+
+                print(
+                    f"Login error: {e}"
+                )
 
                 user = None
 
@@ -563,7 +481,7 @@ def login_screen():
             try:
 
                 # ------------------------------------------
-                # Create secure random database token
+                # Create secure database token
                 # ------------------------------------------
 
                 token = create_login_token(
@@ -594,20 +512,17 @@ def login_screen():
                     )
 
 
-                # ------------------------------------------
-                # Mark that the Remember-Me cookie is being
-                # used for this login.
-                # ------------------------------------------
-
-                st.session_state.remember_cookie_checked = True
-                st.session_state.remember_cookie_waiting = False
-
-            except Exception:
+            except Exception as e:
 
                 # ------------------------------------------
-                # Login itself still succeeds.
+                # Normal login still succeeds.
+                #
                 # Only persistent Remember Me failed.
                 # ------------------------------------------
+
+                print(
+                    f"Remember-Me login error: {e}"
+                )
 
                 st.warning(
                     "You are logged in, but "
@@ -621,12 +536,13 @@ def login_screen():
             # ==================================================
             # REMEMBER ME NOT SELECTED
             #
-            # Remove an old cookie if one exists.
+            # Remove an old Remember-Me cookie if one exists.
             # ==================================================
 
             try:
 
                 old_token = get_remember_cookie()
+
 
                 if old_token:
 
@@ -658,15 +574,7 @@ def login_screen():
 
 
         st.session_state.remember_cookie_checked = True
-        st.session_state.remember_cookie_waiting = False
 
-
-        # --------------------------------------------------
-        # IMPORTANT:
-        #
-        # The cookie has already been given time to reach
-        # the browser before this rerun.
-        # --------------------------------------------------
 
         time.sleep(0.5)
 
@@ -914,10 +822,10 @@ def logout_user():
     """
     Logout the current browser/device.
 
-    This revokes ONLY the Remember-Me token belonging
-    to this browser.
+    Only the Remember-Me token belonging to this browser
+    is revoked.
 
-    Other devices remain logged in.
+    Other browsers/devices remain logged in.
     """
 
 
@@ -929,7 +837,7 @@ def logout_user():
 
 
     # ======================================================
-    # REVOKE TOKEN
+    # REVOKE CURRENT TOKEN
     # ======================================================
 
     if token:
@@ -961,7 +869,6 @@ def logout_user():
     st.session_state.selected_course = None
 
     st.session_state.remember_cookie_checked = False
-    st.session_state.remember_cookie_waiting = False
 
 
     # ======================================================
@@ -1008,10 +915,6 @@ def main():
         restore_finished = (
             restore_remembered_login()
         )
-
-        # ----------------------------------------------
-        # CookieManager is waiting for browser response.
-        # ----------------------------------------------
 
         if not restore_finished:
 

@@ -55,8 +55,6 @@ REMEMBER_ME_SECONDS = (
 cookie_manager = stx.CookieManager(
     key="advanced_math_cookie_manager"
 )
-# delete later
-st.write("COOKIE TEST:", cookie_manager.get("advanced_math_remember_me"))
 
 
 # ==========================================================

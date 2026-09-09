@@ -77,7 +77,7 @@ def _build_user(username, role, student_id):
             subject
         FROM students
         WHERE id = %s
-          AND COALESCE(archived, FALSE) = FALSE
+          AND COALESCE(archived, 0) = 0
         LIMIT 1
     """
 

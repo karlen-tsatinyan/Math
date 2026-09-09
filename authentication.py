@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from database import query_dataframe, execute
 
@@ -20,11 +20,14 @@ def _hash_token(token):
     """
     Hash the browser token before storing it in the database.
 
-    The actual token is never stored in the database.
+    The actual token is never stored in PostgreSQL.
     """
 
+    if not token:
+        return None
+
     return hashlib.sha256(
-        token.encode("utf-8")
+        str(token).encode("utf-8")
     ).hexdigest()
 
 
@@ -34,18 +37,18 @@ def _hash_token(token):
 
 def _build_user(username, role, student_id):
     """
-    Build the same user structure used by the existing portal.
+    Build the user structure used by the portal.
     """
 
     user = {
         "username": username,
         "role": role,
-        "student_id": student_id
+        "student_id": student_id,
     }
 
-    # ------------------------------------------------------
+    # ======================================================
     # ADMIN
-    # ------------------------------------------------------
+    # ======================================================
 
     if role == "admin":
 
@@ -54,9 +57,9 @@ def _build_user(username, role, student_id):
 
         return user
 
-    # ------------------------------------------------------
-    # STUDENT COURSES
-    # ------------------------------------------------------
+    # ======================================================
+    # STUDENT WITHOUT STUDENT ID
+    # ======================================================
 
     if student_id is None:
 
@@ -65,11 +68,16 @@ def _build_user(username, role, student_id):
 
         return user
 
+    # ======================================================
+    # GET STUDENT COURSES
+    # ======================================================
+
     course_query = """
         SELECT
             subject
         FROM students
         WHERE id = %s
+          AND COALESCE(active, TRUE) = TRUE
         LIMIT 1
     """
 
@@ -91,11 +99,11 @@ def _build_user(username, role, student_id):
             if (
                 subject_text
                 and subject_text.lower()
-                not in [
+                not in {
                     "nan",
                     "none",
-                    "null"
-                ]
+                    "null",
+                }
             ):
 
                 courses = [
@@ -103,22 +111,26 @@ def _build_user(username, role, student_id):
                     for course in subject_text.split(",")
                     if course.strip()
                     and course.strip().lower()
-                    not in [
+                    not in {
                         "nan",
                         "none",
-                        "null"
-                    ]
+                        "null",
+                    }
                 ]
 
-    # ------------------------------------------------------
+    # ======================================================
     # REMOVE DUPLICATES
-    # ------------------------------------------------------
+    # ======================================================
 
     courses = list(
         dict.fromkeys(courses)
     )
 
     user["courses"] = courses
+
+    # ======================================================
+    # AUTOMATIC COURSE SELECTION
+    # ======================================================
 
     if len(courses) == 1:
 
@@ -155,7 +167,8 @@ def login(username, password):
             u.role,
             u.student_id
         FROM users u
-        WHERE LOWER(TRIM(u.username)) = LOWER(TRIM(%s))
+        WHERE LOWER(TRIM(u.username))
+                = LOWER(TRIM(%s))
           AND u.password = %s
         LIMIT 1
     """
@@ -164,7 +177,7 @@ def login(username, password):
         query,
         (
             username,
-            password
+            password,
         )
     )
 
@@ -182,7 +195,7 @@ def login(username, password):
     return _build_user(
         username=result.iloc[0]["username"],
         role=result.iloc[0]["role"],
-        student_id=result.iloc[0]["student_id"]
+        student_id=result.iloc[0]["student_id"],
     )
 
 
@@ -192,10 +205,9 @@ def login(username, password):
 
 def create_login_token(user):
     """
-    Create a secure random browser login token.
+    Create a secure persistent-login token.
 
-    The raw token is returned to app.py so it can be placed
-    in the browser cookie.
+    The raw token is returned to app.py.
 
     Only the SHA-256 hash is stored in PostgreSQL.
     """
@@ -208,22 +220,39 @@ def create_login_token(user):
     if not username:
         return None
 
-    # ------------------------------------------------------
-    # Generate cryptographically secure random token
-    # ------------------------------------------------------
+    username = str(username).strip()
+
+    if not username:
+        return None
+
+    # ======================================================
+    # GENERATE SECURE RANDOM TOKEN
+    # ======================================================
 
     token = secrets.token_urlsafe(48)
 
     token_hash = _hash_token(token)
 
+    # ======================================================
+    # UTC EXPIRATION
+    # ======================================================
+
     expires_at = (
-        datetime.utcnow()
-        + timedelta(days=REMEMBER_ME_DAYS)
+        datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )
+        + timedelta(
+            days=REMEMBER_ME_DAYS
+        )
     )
 
-    # ------------------------------------------------------
-    # Remove old expired/revoked tokens for this username
-    # ------------------------------------------------------
+    # ======================================================
+    # REMOVE OLD TOKENS
+    #
+    # We remove only expired/revoked tokens.
+    #
+    # Active tokens on other devices remain valid.
+    # ======================================================
 
     try:
 
@@ -232,7 +261,7 @@ def create_login_token(user):
             DELETE FROM login_tokens
             WHERE username = %s
               AND (
-                    expires_at < CURRENT_TIMESTAMP
+                    expires_at <= CURRENT_TIMESTAMP
                     OR revoked_at IS NOT NULL
                   )
             """,
@@ -242,9 +271,9 @@ def create_login_token(user):
     except Exception:
         pass
 
-    # ------------------------------------------------------
-    # Store token hash
-    # ------------------------------------------------------
+    # ======================================================
+    # INSERT NEW TOKEN
+    # ======================================================
 
     execute(
         """
@@ -262,7 +291,7 @@ def create_login_token(user):
         (
             username,
             token_hash,
-            expires_at
+            expires_at,
         )
     )
 
@@ -275,11 +304,11 @@ def create_login_token(user):
 
 def login_from_token(token):
     """
-    Validate a persistent browser token and rebuild the user.
+    Validate a persistent browser token.
 
     Returns:
         user dictionary
-        or None if the token is invalid/expired/revoked
+        or None
     """
 
     if not token:
@@ -293,6 +322,10 @@ def login_from_token(token):
             return None
 
         token_hash = _hash_token(token)
+
+        # ==================================================
+        # VALIDATE TOKEN
+        # ==================================================
 
         result = query_dataframe(
             """
@@ -313,13 +346,16 @@ def login_from_token(token):
 
         username = result.iloc[0]["username"]
 
-        # --------------------------------------------------
-        # Re-read current user information.
+        if not username:
+            return None
+
+        # ==================================================
+        # RE-READ CURRENT USER
         #
-        # This is important because role/student/course
-        # information may have changed since the cookie
-        # was created.
-        # --------------------------------------------------
+        # This means changes to the user's role/student
+        # information are reflected when Remember Me
+        # restores the session.
+        # ==================================================
 
         user_result = query_dataframe(
             """
@@ -329,7 +365,7 @@ def login_from_token(token):
                 student_id
             FROM users
             WHERE LOWER(TRIM(username))
-                = LOWER(TRIM(%s))
+                    = LOWER(TRIM(%s))
             LIMIT 1
             """,
             (username,)
@@ -338,15 +374,20 @@ def login_from_token(token):
         if user_result.empty:
             return None
 
+        # ==================================================
+        # BUILD USER
+        # ==================================================
+
         user = _build_user(
             username=user_result.iloc[0]["username"],
             role=user_result.iloc[0]["role"],
-            student_id=user_result.iloc[0]["student_id"]
+            student_id=user_result.iloc[0]["student_id"],
         )
 
         return user
 
     except Exception:
+
         return None
 
 
@@ -364,20 +405,25 @@ def revoke_login_token(token):
 
     try:
 
-        token_hash = _hash_token(
-            str(token).strip()
-        )
+        token = str(token).strip()
+
+        if not token:
+            return
+
+        token_hash = _hash_token(token)
 
         execute(
             """
             UPDATE login_tokens
             SET revoked_at = CURRENT_TIMESTAMP
             WHERE token_hash = %s
+              AND revoked_at IS NULL
             """,
             (token_hash,)
         )
 
     except Exception:
+
         pass
 
 
@@ -387,10 +433,10 @@ def revoke_login_token(token):
 
 def revoke_all_login_tokens(username):
     """
-    Optional helper.
+    Revoke every Remember-Me token belonging to a user.
 
-    This can be used later if you want an administrator to
-    force a user to log in again on every device.
+    Useful later if an administrator wants to force
+    the user to log in again on every device.
     """
 
     if not username:
@@ -398,28 +444,34 @@ def revoke_all_login_tokens(username):
 
     try:
 
+        username = str(username).strip()
+
+        if not username:
+            return
+
         execute(
             """
             UPDATE login_tokens
             SET revoked_at = CURRENT_TIMESTAMP
             WHERE LOWER(TRIM(username))
-                = LOWER(TRIM(%s))
+                    = LOWER(TRIM(%s))
               AND revoked_at IS NULL
             """,
             (username,)
         )
 
     except Exception:
+
         pass
 
 
 # ==========================================================
-# CLEAN EXPIRED TOKENS
+# CLEAN EXPIRED / REVOKED TOKENS
 # ==========================================================
 
 def cleanup_expired_tokens():
     """
-    Remove expired tokens periodically.
+    Remove expired or revoked Remember-Me tokens.
     """
 
     try:
@@ -427,10 +479,11 @@ def cleanup_expired_tokens():
         execute(
             """
             DELETE FROM login_tokens
-            WHERE expires_at < CURRENT_TIMESTAMP
+            WHERE expires_at <= CURRENT_TIMESTAMP
                OR revoked_at IS NOT NULL
             """
         )
 
     except Exception:
+
         pass

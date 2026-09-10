@@ -1936,30 +1936,30 @@ def scheduler_management():
     # =========================================================
     # DELETE SECTION
     # =========================================================
-
+    
     if (
         active_action == "eventClick"
         and "selected_session_id"
         in st.session_state
     ):
-
+    
         selected_id = (
             st.session_state.selected_session_id
         )
-
+    
         selected_rows = sessions[
             sessions["id"].astype(str)
             == str(selected_id)
         ]
-
+    
         if not selected_rows.empty:
-
+    
             event = selected_rows.iloc[0]
-
+    
             recurring_group = (
                 event["recurring_group"]
             )
-
+    
             is_recurring = (
                 recurring_group is not None
                 and str(
@@ -1973,15 +1973,15 @@ def scheduler_management():
                     "null"
                 ]
             )
-
+    
             st.divider()
-
+    
             st.subheader(
                 "🗑️ Remove Selected Session"
             )
-
+    
             if is_recurring:
-
+    
                 delete_option = st.radio(
                     "Delete options",
                     [
@@ -1993,13 +1993,13 @@ def scheduler_management():
                         f"{selected_id}"
                     )
                 )
-
+    
             else:
-
+    
                 delete_option = (
                     "Delete only this session"
                 )
-
+    
             if st.button(
                 "🗑️ Confirm Delete",
                 type="primary",
@@ -2008,15 +2008,48 @@ def scheduler_management():
                     f"{selected_id}"
                 )
             ):
-
+    
                 try:
-
+    
+                    # =================================================
+                    # DELETE ENTIRE RECURRING SERIES
+                    # =================================================
+    
                     if (
                         is_recurring
                         and delete_option
                         == "Delete entire recurring series"
                     ):
-
+    
+                        # -------------------------------------------------
+                        # First remove attendance records belonging to
+                        # every session in this recurring series.
+                        #
+                        # Attendance is identified by:
+                        # student_id + session_date + session_time
+                        # -------------------------------------------------
+    
+                        execute(
+                            """
+                            DELETE FROM attendance a
+                            WHERE EXISTS (
+                                SELECT 1
+                                FROM sessions s
+                                WHERE s.recurring_group = %s
+                                  AND a.student_id = s.student_id
+                                  AND a.session_date = s.session_date
+                                  AND a.session_time = s.session_time
+                            )
+                            """,
+                            (
+                                recurring_group,
+                            )
+                        )
+    
+                        # -------------------------------------------------
+                        # Now delete all sessions in the series.
+                        # -------------------------------------------------
+    
                         execute(
                             """
                             DELETE FROM sessions
@@ -2026,13 +2059,58 @@ def scheduler_management():
                                 recurring_group,
                             )
                         )
-
+    
                         delete_message = (
                             "Entire recurring series deleted."
                         )
-
+    
+                    # =================================================
+                    # DELETE ONLY THIS SESSION
+                    # =================================================
+    
                     else:
-
+    
+                        # -------------------------------------------------
+                        # Get the exact session identity BEFORE deleting it.
+                        # -------------------------------------------------
+    
+                        session_student_id = int(
+                            event["student_id"]
+                        )
+    
+                        session_date = (
+                            event["session_date"]
+                        )
+    
+                        session_time = (
+                            event["session_time"]
+                        )
+    
+                        # -------------------------------------------------
+                        # Delete matching attendance FIRST.
+                        #
+                        # This prevents an orphaned attendance record from
+                        # remaining after the scheduled session is removed.
+                        # -------------------------------------------------
+    
+                        execute(
+                            """
+                            DELETE FROM attendance
+                            WHERE student_id = %s
+                              AND session_date = %s
+                              AND session_time = %s
+                            """,
+                            (
+                                session_student_id,
+                                session_date,
+                                session_time
+                            )
+                        )
+    
+                        # -------------------------------------------------
+                        # Then delete the scheduled session.
+                        # -------------------------------------------------
+    
                         execute(
                             """
                             DELETE FROM sessions
@@ -2042,37 +2120,37 @@ def scheduler_management():
                                 selected_id,
                             )
                         )
-
+    
                         delete_message = (
                             "Selected session deleted."
                         )
-
-                    # -----------------------------------------
-                    # Refresh scheduler
-                    # -----------------------------------------
-
+    
+                    # =================================================
+                    # REFRESH SCHEDULER
+                    # =================================================
+    
                     refresh_scheduler_data()
-
+    
                     st.session_state.pop(
                         "selected_session_id",
                         None
                     )
-
+    
                     st.session_state.pop(
                         "selected_group",
                         None
                     )
-
+    
                     st.session_state.active_action = None
-
+    
                     st.success(
                         delete_message
                     )
-
+    
                     st.rerun()
-
+    
                 except Exception as e:
-
+    
                     st.error(
                         f"Unable to delete session: {e}"
                     )

@@ -188,91 +188,95 @@ def attendance_management():
     # ========================================================
     # BUILD QUERY
     # ========================================================
-
+    
     query = """
         SELECT
-
+    
             a.id AS record_id,
-
+    
             s.first_name || ' ' || s.last_name
                 AS student,
-
+    
             a.session_date::text
                 AS session_date,
-
+    
             a.session_time::text
                 AS session_time,
-
+    
             COALESCE(
                 se.topic,
                 ''
             ) AS lesson_topic,
-
+    
             a.status
                 AS status,
-
+    
             TO_CHAR(
                 a.marked_at,
                 'YYYY-MM-DD HH24:MI'
             ) AS recorded_at
-
+    
         FROM attendance a
-
+    
         JOIN students s
             ON a.student_id = s.id
-
-        LEFT JOIN sessions se
+    
+        JOIN sessions se
             ON se.student_id = a.student_id
             AND se.session_date = a.session_date
             AND se.session_time = a.session_time
-
+    
         WHERE
             a.session_date BETWEEN %s AND %s
     """
-
+    
     params = [
         start_date.isoformat(),
         end_date.isoformat(),
     ]
-
+    
     # ========================================================
     # STUDENT FILTER
     # ========================================================
-
+    
     if selected_student_id is not None:
-
+    
         query += """
             AND a.student_id = %s
         """
-
-        params.append(selected_student_id)
-
+    
+        params.append(
+            selected_student_id
+        )
+    
     # ========================================================
     # STATUS FILTER
     # ========================================================
-
+    
     if status_filter != "All Statuses":
-
+    
         query += """
             AND a.status = %s
         """
-
-        params.append(status_filter)
-
+    
+        params.append(
+            status_filter
+        )
+    
     # ========================================================
     # ORDER
     # ========================================================
-
+    
     query += """
         ORDER BY
             a.session_date DESC,
             a.session_time DESC
     """
-
+    
     # ========================================================
     # LOAD DATA
     # ========================================================
-
+    
     history = query_dataframe(
         query,
         tuple(params),
